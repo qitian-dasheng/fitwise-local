@@ -17,7 +17,9 @@ export function normalizePurchase(pick: Pick<PurchaseDraft,"amount"|"unit"|"pack
 }
 export function purchaseSpecification(p:Pick<PurchaseDraft,"amount"|"unit"|"packaging">) {
   const prefix=`${quantityText(p.amount)} ${purchaseUnitLabels[p.unit]}`;
-  return p.packaging ? `${prefix} · ${quantityText(p.packaging.contentAmount)} ${purchaseUnitLabels[p.packaging.contentUnit]} × ${p.packaging.count} ${purchaseUnitLabels[p.packaging.container]}/${purchaseUnitLabels[p.unit]}` : prefix;
+  if(!p.packaging)return prefix;
+  const content=`${quantityText(p.packaging.contentAmount)} ${purchaseUnitLabels[p.packaging.contentUnit]}`;
+  return p.packaging.count===1&&p.packaging.container===p.unit?`${prefix} · 每${purchaseUnitLabels[p.unit]} ${content}`:`${prefix} · ${content} × ${p.packaging.count} ${purchaseUnitLabels[p.packaging.container]}/${purchaseUnitLabels[p.unit]}`;
 }
 export function receivedQuantity(p:PurchaseDraft){return p.receipts?.reduce((sum,r)=>sum+r.quantity,0)??(p.status==="received"?p.amount:0);}
 export function outstandingQuantity(p:PurchaseDraft){return Math.max(0,p.amount-receivedQuantity(p)-(p.closedQuantity??0));}

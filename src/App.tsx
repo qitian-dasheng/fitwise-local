@@ -1,6 +1,8 @@
 import { Archive, Bot, ChartNoAxesCombined, ChevronLeft, ChevronRight, ClipboardList, CookingPot, Dumbbell, Inbox, LayoutDashboard, Settings, Wheat } from "lucide-react";
 import { Component, lazy, Suspense, useEffect, useLayoutEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import { useAppStore } from "./store/appStore";
+import { listen } from "@tauri-apps/api/event";
+import { notifyInputs, useInputReceipts } from "./data/artifacts";
 
 const TodayPage = lazy(() => import("./pages/TodayPage").then((module) => ({ default: module.TodayPage })));
 const FoodPage = lazy(() => import("./pages/FoodPage").then((module) => ({ default: module.FoodPage })));
@@ -52,11 +54,18 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
 export default function App() {
   const [page, setPage] = useState("today");
   const [collapsed, setCollapsed] = useState(false);
-  const inboxCount = useAppStore((state) => state.inbox.filter((item) => item.status === "unreviewed").length);
+  const intake=useInputReceipts();
+  const inboxCount = useAppStore((state) => state.inbox.filter((item) => item.status === "unreviewed").length)+intake.data.unreviewedCount;
   const profile = useAppStore((state) => state.profile);
   const hydrated = useAppStore.persist.hasHydrated();
   const [, forceRender] = useState(0);
   useEffect(() => useAppStore.persist.onFinishHydration(() => forceRender((value) => value + 1)), []);
+  useEffect(()=>{
+    if(!("__TAURI_INTERNALS__" in window))return;
+    let disposed=false;let unlisten:(()=>void)|undefined;
+    void listen("mobile-inbox-changed",notifyInputs).then(stop=>{if(disposed)stop();else unlisten=stop;}).catch(()=>undefined);
+    return()=>{disposed=true;unlisten?.();};
+  },[]);
   useLayoutEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [page]);
@@ -83,7 +92,9 @@ export default function App() {
         <div className="sidebar-bottom"><button className={page === "settings" ? "active" : ""} onClick={() => setPage("settings")}><Settings size={19}/><span>设置</span></button><div className="profile-mini"><div>{profile.name.slice(0, 1)}</div><span><strong>{profile.name}</strong><small>本地账户</small></span></div></div>
         <button className="collapse-button" onClick={() => setCollapsed((value) => !value)}>{collapsed ? <ChevronRight size={16}/> : <ChevronLeft size={16}/>}</button>
       </aside>
-      <main className="main-content"><PageErrorBoundary><Suspense fallback={<div className="page page-loading"><Wheat size={28}/><span>正在加载页面…</span></div>}>{content}</Suspense></PageErrorBoundary></main>
+      <main className="main-content"><PageErrorBoundary><Suspense fallback={<div className="page page-loading"><Wheat size={28}/><span>正在加载页面…</span></div>}><PageScrollReset key={page}/>{content}</Suspense></PageErrorBoundary></main>
     </div>
   );
 }
+
+function PageScrollReset(){useLayoutEffect(()=>{window.scrollTo({top:0,left:0,behavior:"auto"});const frame=requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:"auto"}));return()=>cancelAnimationFrame(frame);},[]);return null;}

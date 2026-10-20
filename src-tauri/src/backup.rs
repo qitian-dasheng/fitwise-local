@@ -221,6 +221,7 @@ fn verify_sqlite_file(path: &Path) -> Result<String> {
     if app_state_exists != 1 {
         bail!("备份不包含轻衡核心数据表");
     }
+    crate::artifacts::verify(&connection).map_err(|e| anyhow!(e))?;
     Ok(result)
 }
 
@@ -560,7 +561,7 @@ mod tests {
         let source_path = directory.join("source.db");
         let snapshot_path = directory.join("snapshot.db");
         let restored_path = directory.join("restored.db");
-        let source = Connection::open(&source_path).unwrap();
+        let mut source = Connection::open(&source_path).unwrap();
         source
             .execute_batch(
                 "CREATE TABLE app_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);\
@@ -568,6 +569,22 @@ mod tests {
             )
             .unwrap();
         crate::domain_store::ensure_repository_schema(&source).unwrap();
+        let mut image_bytes = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(8, 8)
+            .write_to(&mut image_bytes, image::ImageFormat::Png)
+            .unwrap();
+        let image_bytes = image_bytes.into_inner();
+        crate::artifacts::receive(
+            &mut source,
+            "backup-artifact-001",
+            "backup note",
+            vec![crate::artifacts::InputFile {
+                name: "backup.png".into(),
+                bytes: image_bytes.clone(),
+            }],
+            "desktop",
+        )
+        .unwrap();
         let food_payload = serde_json::json!({"id":"food-backup-test","name":"燕麦","activeVersionId":"food-version-backup-test"}).to_string();
         let version_payload = serde_json::json!({"id":"food-version-backup-test","foodId":"food-backup-test","version":1,"basis":{"quantity":100,"unit":"g"},"nutrition":{"calories":{"state":"known","value":400},"fiber":{"state":"unknown"}}}).to_string();
         for (collection, id, payload) in [
@@ -594,6 +611,13 @@ mod tests {
             "ok"
         );
         let restored_connection = Connection::open(&restored_path).unwrap();
+        crate::artifacts::verify(&restored_connection).unwrap();
+        let original: Vec<u8> = restored_connection
+            .query_row("SELECT original FROM input_artifact_objects", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(original, image_bytes);
         let value: String = restored_connection
             .query_row("SELECT value FROM app_kv WHERE key = 'state'", [], |row| {
                 row.get(0)

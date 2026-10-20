@@ -9,13 +9,14 @@ use chrono::{Duration, Utc};
 use local_ip_address::local_ip;
 use rand::{distributions::Alphanumeric, Rng};
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use std::{
     net::{IpAddr, SocketAddr},
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
-use tauri::{AppHandle, Emitter, Manager, State as TauriState};
+use tauri::{AppHandle, Emitter, State as TauriState};
 use tokio::{net::TcpListener, sync::oneshot};
 
 const SESSION_MINUTES: i64 = 10;
@@ -23,6 +24,7 @@ const MAX_UPLOAD_BYTES: usize = 20 * 1024 * 1024;
 
 struct ActiveServer {
     shutdown: oneshot::Sender<()>,
+    revoked: Arc<AtomicBool>,
 }
 
 #[derive(Clone, Default)]
@@ -34,8 +36,10 @@ pub struct UploadServerControl {
 struct UploadContext {
     token: String,
     expires_at: chrono::DateTime<Utc>,
-    inbox_dir: PathBuf,
+    revoked: Arc<AtomicBool>,
     app: AppHandle,
+    ip: std::net::Ipv4Addr,
+    intake_slot: Arc<tokio::sync::Semaphore>,
 }
 
 #[derive(Clone, Serialize)]
@@ -44,14 +48,6 @@ pub struct UploadSessionInfo {
     url: String,
     token: String,
     expires_at: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct UploadEvent {
-    received_at: String,
-    text: String,
-    files: Vec<String>,
 }
 
 #[tauri::command]
@@ -70,6 +66,9 @@ pub async fn start_mobile_upload(
             )
         }
     };
+    if !trusted_profile(ipv4) {
+        return Err("Windows 未将当前适配器识别为专用/域网络，或网络状态无法确认。请手动检查网络配置；程序不会修改设置。也可改用本地导入。".into());
+    }
 
     let token: String = rand::thread_rng()
         .sample_iter(&Alphanumeric)
@@ -77,15 +76,6 @@ pub async fn start_mobile_upload(
         .map(char::from)
         .collect();
     let expires_at = Utc::now() + Duration::minutes(SESSION_MINUTES);
-    let inbox_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| format!("无法定位应用数据目录：{error}"))?
-        .join("inbox");
-    tokio::fs::create_dir_all(&inbox_dir)
-        .await
-        .map_err(|error| format!("无法创建收件箱：{error}"))?;
-
     // Bind only the selected private adapter. Binding 0.0.0.0 would make an
     // already-running session reachable through a newly connected public adapter.
     let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(ipv4), 0))
@@ -95,12 +85,16 @@ pub async fn start_mobile_upload(
         .local_addr()
         .map_err(|error| error.to_string())?
         .port();
+    let revoked = Arc::new(AtomicBool::new(false));
     let context = Arc::new(UploadContext {
         token: token.clone(),
         expires_at,
-        inbox_dir,
+        revoked: revoked.clone(),
         app,
+        ip: ipv4,
+        intake_slot: Arc::new(tokio::sync::Semaphore::new(1)),
     });
+    let shutdown_revoked = revoked.clone();
     let router = Router::new()
         .route("/u/{token}", get(upload_page).post(receive_upload))
         .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))
@@ -112,7 +106,9 @@ pub async fn start_mobile_upload(
             tokio::select! {
                 _ = shutdown_rx => {},
                 _ = tokio::time::sleep(std::time::Duration::from_secs((SESSION_MINUTES * 60) as u64)) => {},
+                _ = async {loop{tokio::time::sleep(std::time::Duration::from_secs(5)).await;if !trusted_profile(ipv4){break;}}} => {},
             }
+            shutdown_revoked.store(true, Ordering::SeqCst);
         };
         let _ = axum::serve(listener, router)
             .with_graceful_shutdown(shutdown)
@@ -123,6 +119,7 @@ pub async fn start_mobile_upload(
         .lock()
         .map_err(|_| "上传服务状态锁损坏".to_string())? = Some(ActiveServer {
         shutdown: shutdown_tx,
+        revoked,
     });
 
     Ok(UploadSessionInfo {
@@ -141,6 +138,7 @@ pub fn stop_mobile_upload(control: TauriState<'_, UploadServerControl>) -> Resul
 fn stop_existing(control: &UploadServerControl) {
     if let Ok(mut guard) = control.inner.lock() {
         if let Some(active) = guard.take() {
+            active.revoked.store(true, Ordering::SeqCst);
             let _ = active.shutdown.send(());
         }
     }
@@ -164,40 +162,73 @@ async fn receive_upload(
     if !authorized(&token, &context) {
         return (StatusCode::GONE, Html(expired_html())).into_response();
     }
-
     let mut text = String::new();
-    let mut saved = Vec::new();
-    while let Ok(Some(field)) = multipart.next_field().await {
-        let field_name = field.name().unwrap_or_default().to_string();
-        if field_name == "note" {
-            if let Ok(value) = field.text().await {
-                text = value.chars().take(10_000).collect();
+    let _slot = match context.intake_slot.clone().try_acquire_owned() {
+        Ok(slot) => slot,
+        Err(_) => {
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                Html(message_html("另一份上传正在处理，请稍后重试。")),
+            )
+                .into_response()
+        }
+    };
+    let mut files = Vec::new();
+    let mut request_id = String::new();
+    loop {
+        let field = match multipart.next_field().await {
+            Ok(Some(field)) => field,
+            Ok(None) => break,
+            Err(_) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Html(message_html("上传不完整或超过限制，未保存本次提交。")),
+                )
+                    .into_response()
             }
+        };
+        let field_name = field.name().unwrap_or_default().to_string();
+        if field_name == "request_id" {
+            request_id = field.text().await.unwrap_or_default();
+            continue;
+        }
+        if field_name == "note" {
+            text = match field.text().await {
+                Ok(v) => v,
+                Err(_) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Html(message_html("文字读取失败，未保存本次提交。")),
+                    )
+                        .into_response()
+                }
+            };
             continue;
         }
         if field_name != "files" {
             continue;
         }
-        let original = field.file_name().unwrap_or("upload.bin").to_string();
-        let extension = safe_extension(&original);
+        let original = field.file_name().unwrap_or("").to_string();
         let bytes = match field.bytes().await {
             Ok(bytes) => bytes,
-            Err(_) => continue,
+            Err(_) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Html(message_html("附件读取失败，未保存本次提交。")),
+                )
+                    .into_response()
+            }
         };
-        let mut hasher = Sha256::new();
-        hasher.update(&bytes);
-        let hash = format!("{:x}", hasher.finalize());
-        let filename = format!("{hash}.{extension}");
-        let target = context.inbox_dir.join(&filename);
-        if tokio::fs::metadata(&target).await.is_err()
-            && tokio::fs::write(&target, &bytes).await.is_err()
-        {
+        // Empty file picker is not an attachment.
+        if bytes.is_empty() && original.is_empty() {
             continue;
         }
-        saved.push(filename);
+        files.push(crate::artifacts::InputFile {
+            name: original,
+            bytes: bytes.to_vec(),
+        });
     }
-
-    if text.trim().is_empty() && saved.is_empty() {
+    if text.trim().is_empty() && files.is_empty() {
         return (
             StatusCode::BAD_REQUEST,
             Html(message_html("没有收到文字或文件。")),
@@ -205,16 +236,29 @@ async fn receive_upload(
             .into_response();
     }
 
-    let event = UploadEvent {
-        received_at: Utc::now().to_rfc3339(),
-        text,
-        files: saved,
-    };
-    let metadata_name = format!("submission-{}.json", Utc::now().timestamp_millis());
-    if let Ok(json) = serde_json::to_vec_pretty(&event) {
-        let _ = tokio::fs::write(context.inbox_dir.join(metadata_name), json).await;
+    if !authorized(&token, &context) {
+        return (StatusCode::GONE, Html(expired_html())).into_response();
     }
-    let _ = context.app.emit("mobile-inbox-changed", &event);
+    let app = context.app.clone();
+    let revoked = context.revoked.clone();
+    let expires = context.expires_at;
+    let saved = tauri::async_runtime::spawn_blocking(move || {
+        if revoked.load(Ordering::SeqCst) || Utc::now() > expires {
+            return Err("上传会话已关闭。".into());
+        }
+        let mut connection = crate::domain_store::open_database(&app)?;
+        crate::artifacts::receive_guarded(
+            &mut connection,
+            &request_id,
+            &text,
+            files,
+            "mobile",
+            || !revoked.load(Ordering::SeqCst) && Utc::now() <= expires,
+        )
+    })
+    .await;
+    match saved {Ok(Ok(_))=>{},_=>return (StatusCode::BAD_REQUEST,Html(message_html("未保存：格式不支持、图片过大、会话结束或存储失败。请检查后重新提交；不会保存半份内容。"))).into_response()}
+    let _ = context.app.emit("mobile-inbox-changed", ());
     (
         StatusCode::OK,
         Html(message_html("已安全送达电脑收件箱，可以关闭此页面。")),
@@ -223,21 +267,26 @@ async fn receive_upload(
 }
 
 fn authorized(token: &str, context: &UploadContext) -> bool {
-    token == context.token && Utc::now() <= context.expires_at
+    token == context.token
+        && !context.revoked.load(Ordering::SeqCst)
+        && Utc::now() <= context.expires_at
+        && trusted_profile(context.ip)
 }
 
-fn safe_extension(filename: &str) -> String {
-    Path::new(filename)
-        .extension()
-        .and_then(|value| value.to_str())
-        .map(|value| value.to_ascii_lowercase())
-        .filter(|value| {
-            matches!(
-                value.as_str(),
-                "png" | "jpg" | "jpeg" | "webp" | "heic" | "pdf"
-            )
-        })
-        .unwrap_or_else(|| "bin".into())
+#[cfg(target_os = "windows")]
+fn trusted_profile(ip: std::net::Ipv4Addr) -> bool {
+    use std::os::windows::process::CommandExt;
+    // Static, read-only OS query; `ip` is an Ipv4Addr, never user-provided code.
+    let script=format!("$ErrorActionPreference='Stop'; $a=Get-NetIPAddress -AddressFamily IPv4 -IPAddress '{ip}'; $p=Get-NetConnectionProfile -InterfaceIndex $a.InterfaceIndex; if (@($p).Count -eq 1 -and $p.NetworkCategory -in @('Private','DomainAuthenticated')) {{ 'trusted' }}");
+    std::process::Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .creation_flags(0x08000000)
+        .output()
+        .is_ok_and(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == "trusted")
+}
+#[cfg(not(target_os = "windows"))]
+fn trusted_profile(_: std::net::Ipv4Addr) -> bool {
+    false
 }
 
 fn response_html(title: &str, body: &str) -> String {
@@ -247,9 +296,16 @@ fn response_html(title: &str, body: &str) -> String {
 }
 
 fn form_html() -> String {
+    let request_id: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(32)
+        .map(char::from)
+        .collect();
     response_html(
         "轻衡手机上传",
-        r#"<h1>发送到轻衡收件箱</h1><p>内容只会进入电脑上的待确认收件箱，不会自动成为饮食、库存或运动记录。</p><form method="post" enctype="multipart/form-data"><label>截图、标签或食物照片</label><input name="files" type="file" accept="image/*,.pdf" multiple><label>文字或商品链接</label><textarea name="note" placeholder="可粘贴商品链接、食物说明或备注"></textarea><button type="submit">发送到电脑</button></form><small>会话十分钟内有效 · 单次总量不超过 20 MB</small>"#,
+        &format!(
+            r#"<h1>发送到轻衡收件箱</h1><p>内容只会保存在电脑，不会自动成为饮食、库存或运动记录。仅在可信局域网使用，HTTP 不提供传输加密。</p><form method="post" enctype="multipart/form-data"><input type="hidden" name="request_id" value="{request_id}"><label>截图、标签或食物照片（PNG/JPEG/WebP/PDF）</label><input name="files" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf" multiple><label>文字或商品链接</label><textarea name="note" placeholder="可粘贴商品链接、食物说明或备注"></textarea><button type="submit">发送到电脑</button></form><small>会话十分钟内有效 · 单次最多 8 个附件，合计不超过 20 MB · 图片不超过 1600 万像素</small>"#
+        ),
     )
 }
 

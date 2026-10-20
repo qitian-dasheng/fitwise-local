@@ -1,3 +1,4 @@
+mod artifacts;
 mod backup;
 mod credentials;
 mod domain_commands;
@@ -16,6 +17,14 @@ pub fn run() {
         .manage(upload::UploadServerControl::default())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            artifacts::import_local_input,
+            artifacts::list_input_receipts,
+            artifacts::read_artifact_preview,
+            artifacts::save_artifact_privacy,
+            artifacts::set_input_status,
+            artifacts::manage_artifact,
+            artifacts::get_artifact_storage,
+            artifacts::recover_legacy_inputs,
             backup::create_encrypted_backup,
             backup::discard_staged_restore,
             backup::get_restore_startup_report,

@@ -8,6 +8,7 @@ import type { AiProviderId } from "../domain/types";
 import { useAppStore } from "../store/appStore";
 import { exportDomainJson } from "../data/domainQueries";
 import { useConfirmedAction } from "../components/useConfirmedAction";
+import { ArtifactStoragePanel } from "../components/InputArtifacts";
 
 interface BackupResult {
   path: string;
@@ -98,7 +99,7 @@ export function SettingsPage() {
     try {
     const state = useAppStore.getState();
     const data = {
-      schemaVersion: 7,
+      schemaVersion: 8,
       exportedAt: new Date().toISOString(),
       app: "Fitwise Local",
       profile: state.profile,
@@ -276,12 +277,13 @@ export function SettingsPage() {
           <div className="settings-list"><div><span>阶段体重</span><b>{profile.startWeightKg} → {profile.targetWeightKg} kg</b></div><div><span>每日热量</span><b>{profile.dailyCalories.min}–{profile.dailyCalories.max} kcal</b></div><div><span>蛋白质 / 纤维</span><b>{profile.proteinTargetG} g / {profile.fiberTargetG} g</b></div><div><span>设备</span><b>{profile.equipment.join("、")}</b></div></div>
         </section>
         <section className="card settings-section">
-          <div className="settings-title"><HardDrive/><div><h2>存储与附件</h2><p>结构化状态由 Rust 事务拆分为 SQLite 领域实体；附件体积统计、缩略图和 2 GB 提醒尚待接通。</p></div></div>
+          <div className="settings-title"><HardDrive/><div><h2>存储与附件</h2><p>附件原件、缩略图和接收记录由 SQLite 事务保存；列表按需读取小预览。</p></div></div>
+          <ArtifactStoragePanel/>
           <div className="storage-bar"><i style={{width:"0%"}}/></div><div className="storage-legend"><span>领域仓库 <b>{storageStatus?.initialized ? `修订 ${storageStatus.revision}` : "等待首次写入"}</b></span><span>实体 / 命令 / 审计 <b>{storageStatus?.entityCount ?? 0} / {storageStatus?.commandCount ?? 0} / {auditEventCount} 条</b></span></div>
           {upgradeReport && <p className="form-hint">升级对账：{upgradeReport.reconciled ? "记录、营养与库存一致" : "需要复核"}{upgradeReport.backupPath ? `。升级前本地明文安全副本：${upgradeReport.backupPath}` : "。首次初始化，无旧数据库需要备份。"}</p>}
         </section>
         <section className="card settings-section">
-          <div className="settings-title"><LockKeyhole/><div><h2>数据库加密备份与恢复验证</h2><p>Argon2id + AES-256-GCM；口令不会被保存，忘记后无法恢复。附件打包与自动轮换尚未启用。</p></div></div>
+          <div className="settings-title"><LockKeyhole/><div><h2>数据库与附件加密备份</h2><p>Argon2id + AES-256-GCM；包含已入库原件与派生图，恢复时逐一核对哈希。忘记口令无法恢复；自动日周轮换尚未启用。</p></div></div>
           <div className="button-row"><button className="button primary" onClick={() => openBackup("create")}><LockKeyhole size={16}/> 创建加密备份</button><button className="button secondary" onClick={() => openBackup("verify")}><Shield size={16}/> 验证 / 暂存恢复</button></div>
           <button className="text-button export-link" onClick={exportJson}><Download size={15}/> 导出 JSON（未加密）</button>
         </section>

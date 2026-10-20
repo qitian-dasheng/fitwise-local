@@ -247,14 +247,18 @@ pub fn export_domain_json(app: AppHandle) -> Result<Value, String> {
     let raw = match load_envelope(&connection)? {
         Some(raw) => raw,
         None => import_legacy_state(&mut connection, STORAGE_NAME)?
-            .ok_or("尚未保存正式记录，请先完成首次记录。")?,
+            .unwrap_or_else(|| json!({"state":{},"version":4}).to_string()),
     };
     let envelope: Value = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
     let mut data = envelope["state"]
         .as_object()
         .ok_or("领域仓库格式无效。")?
         .clone();
-    data.insert("schemaVersion".into(), json!(7));
+    data.insert("schemaVersion".into(), json!(8));
+    data.insert(
+        "inputArtifacts".into(),
+        crate::artifacts::manifest(&connection)?,
+    );
     data.insert("persistVersion".into(), envelope["version"].clone());
     data.insert("exportedAt".into(), json!(Utc::now().to_rfc3339()));
     data.insert("app".into(), json!("Fitwise Local"));

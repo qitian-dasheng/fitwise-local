@@ -1,4 +1,22 @@
-.modal:has(.food-library) { width: min(920px, 100%); }
+.modal:has(.food-library), .modal:has(.artifact-editor) { width: min(920px, 100%); }
+.artifact-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(280px,1fr)); gap: 18px; margin: 20px 0; }
+.artifact-card { overflow: hidden; min-width: 0; }
+.artifact-card-body { padding: 18px; display: grid; gap: 12px; }
+.artifact-card-body p, .artifact-card-body h3 { overflow-wrap: anywhere; margin: 0; white-space: pre-wrap; }
+.artifact-card-body p { max-height: 110px; overflow: auto; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.artifact-card-body small { color: var(--muted); }
+.artifact-thumbnail { height: 170px; background: #e9eee8; display: grid; place-items: center; overflow: hidden; color: var(--muted); }
+.artifact-thumbnail img { width: 100%; height: 100%; object-fit: contain; }
+.artifact-editor { display: grid; gap: 16px; }
+.mask-canvas { position: relative; max-width: 100%; width: fit-content; margin: auto; cursor: crosshair; touch-action: none; user-select: none; line-height: 0; }
+.mask-canvas.readonly { cursor: default; }
+.mask-canvas img { max-width: 100%; max-height: 65vh; width: auto; height: auto; display: block; pointer-events: none; }
+.mask-canvas span { position: absolute; background: #000; pointer-events: none; outline: 1px solid white; }
+.artifact-storage { margin: 14px 0; }
+.storage-breakdown { display: grid; gap: 10px; font-size: 12px; }
+.storage-breakdown span { display: flex; justify-content: space-between; gap: 12px; }
+.artifact-files { padding-left: 20px; color: var(--muted); overflow-wrap: anywhere; }
+.form textarea { min-height: 100px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; font: inherit; resize: vertical; }
 .food-library label { display: grid; gap: 8px; font-size: 13px; font-weight: 600; }
 .food-library input:not([type="checkbox"]), .food-library select { width: 100%; min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: white; color: inherit; font: inherit; }
 .library-toolbar, .library-tabs, .library-item, .basket-row { display: flex; align-items: center; gap: 10px; }
