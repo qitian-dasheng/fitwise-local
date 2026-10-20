@@ -3,6 +3,7 @@ export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 export type DataSource = "label" | "personal" | "official" | "ai_estimate" | "fatsecret" | "manual";
 export type Confidence = "high" | "medium" | "low";
 export type NutrientState = "unknown" | "zero" | "known";
+export type AiProviderId = "openai" | "deepseek" | "openai-compatible";
 
 export interface NutrientValue {
   state: NutrientState;
@@ -182,6 +183,16 @@ export interface PlanCandidate {
   status: "candidate" | "selected" | "dismissed";
 }
 
+export interface AiSettings {
+  provider: AiProviderId;
+  baseUrl: string;
+  model: string;
+  monthlyLimitCny?: number;
+  estimatedSpendCny: number;
+  usageMonth: string;
+  cloudEnabled: boolean;
+}
+
 export interface AppState {
   profile: UserProfile;
   meals: MealEntry[];
@@ -195,6 +206,7 @@ export interface AppState {
   purchases: PurchaseDraft[];
   inbox: InboxItem[];
   plans: PlanCandidate[];
+  aiSettings: AiSettings;
 }
 
 export const nutrientKeys = [

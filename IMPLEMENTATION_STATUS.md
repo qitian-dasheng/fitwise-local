@@ -15,17 +15,25 @@
 - Tauri/Axum 十分钟局域网二维码上传服务源码。
 - 页面按需加载，生产 Web 构建通过。
 - npm 安全审计 0 个已知漏洞。
-- 6 项领域测试通过。
+- Argon2id + AES-256-GCM 数据库加密备份，创建后立即执行解密与 SQLite 完整性检查。
+- 恢复副本暂存、路径约束、下次启动前应用、当前数据库安全副本与失败回滚。
+- Windows Credential Manager API Key 保存、读取状态与删除；真实凭据不会返回前端。
+- OpenAI、DeepSeek、OpenAI 兼容服务的统一配置模型与 HTTPS/本机地址校验。
+- AI 月度费用软上限状态与手工模式降级边界。
+- 收件箱文本隐私预览与常见标识遮挡；图片未实际遮挡时不伪装为已处理。
+- 7 项前端测试与 4 项 Rust 测试通过，包括 SQLite 备份恢复和 Windows 凭据临时往返。
+- Windows release、MSI、NSIS 构建，NSIS 安装/启动/卸载以及用户数据库保留验证通过。
 
 ## 已建立边界但尚未接通外部服务
 
-- AI 页面不会伪装成已配置模型；当前只显示本地规则结果。
+- AI 页面不会伪装成已配置模型；提供商和凭据边界已接通，真实模型网络调用仍保持关闭。
 - MCP/CLI 属于紧随首版的小版本，尚未开放端口。
-- 加密备份界面和数据边界已建立，密码派生与恢复命令尚未接入。
 - 图片遮挡/OCR/视觉解析需要选择并配置具体 AI 提供商。
+- 目前加密备份覆盖 SQLite 数据库；原图附件打包、每日增量/每周完整自动轮换仍待实现。
+- 恢复成功后保留一个未加密的本地安全副本，后续需要增加可见的清理入口与保留策略。
 
-## 当前构建限制
+## Windows 构建状态
 
-用户选择不安装 Microsoft Visual Studio/C++ Build Tools。Windows 上编译 Tauri 的 Rust MSVC 目标需要该编译器与 Windows SDK，因此目前可运行、测试和构建 Web 版本，但尚不能生成 MSI/NSIS。
+已安装最小 Visual Studio 2022 C++ Build Tools，不含完整 Visual Studio IDE；VS Code 保持为编辑器。Rust stable-msvc、MSVC、Windows SDK、前端构建、`cargo check`、release、MSI 和 NSIS 均已验证。
 
-VS Code 已安装，可直接打开本目录并使用 `.vscode/tasks.json` 中的任务。
+安装包当前没有代码签名证书，因此 Windows 会显示“未知发布者”；发布给其他用户前应补签名。

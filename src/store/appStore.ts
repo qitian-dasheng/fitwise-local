@@ -5,6 +5,7 @@ import { deductInventoryFEFO, nutrition } from "../domain/calculations";
 import { initialState } from "../domain/seed";
 import type {
   AppState,
+  AiSettings,
   InboxItem,
   InventoryLot,
   MealEntry,
@@ -36,6 +37,8 @@ interface AppActions {
   selectPlan: (planId: string) => void;
   addInboxItem: (item: Omit<InboxItem, "id" | "receivedAt" | "status">) => void;
   setInboxStatus: (id: string, status: InboxItem["status"]) => void;
+  setAiSettings: (settings: Partial<AiSettings>) => void;
+  recordAiUsage: (estimatedCostCny: number) => void;
   cookRecipe: (recipeVersionId: string, consumedRatio: number) => { shortage: string[] };
   resetDemo: () => void;
 }
@@ -158,6 +161,23 @@ export const useAppStore = create<AppStore>()(
       setInboxStatus(id, status) {
         set((state) => ({ inbox: state.inbox.map((item) => (item.id === id ? { ...item, status } : item)) }));
       },
+      setAiSettings(settings) {
+        set((state) => ({ aiSettings: { ...state.aiSettings, ...settings } }));
+      },
+      recordAiUsage(estimatedCostCny) {
+        if (!Number.isFinite(estimatedCostCny) || estimatedCostCny < 0) return;
+        const usageMonth = format(new Date(), "yyyy-MM");
+        set((state) => ({
+          aiSettings: {
+            ...state.aiSettings,
+            usageMonth,
+            estimatedSpendCny:
+              state.aiSettings.usageMonth === usageMonth
+                ? state.aiSettings.estimatedSpendCny + estimatedCostCny
+                : estimatedCostCny,
+          },
+        }));
+      },
       cookRecipe(recipeVersionId, consumedRatio) {
         const recipe = get().recipes.find((item) => item.id === recipeVersionId);
         if (!recipe) return { shortage: ["找不到菜谱"] };
@@ -223,7 +243,15 @@ export const useAppStore = create<AppStore>()(
     {
       name: "fitwise-app-state-v1",
       storage: createJSONStorage(() => appStorage),
-      version: 1,
+      version: 2,
+      migrate(persistedState) {
+        const persisted = persistedState as Partial<AppState>;
+        return {
+          ...initialState,
+          ...persisted,
+          aiSettings: { ...initialState.aiSettings, ...persisted.aiSettings },
+        } as AppStore;
+      },
     },
   ),
 );

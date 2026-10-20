@@ -1,5 +1,5 @@
 import { Archive, Bot, ChartNoAxesCombined, ChevronLeft, ChevronRight, ClipboardList, CookingPot, Dumbbell, Inbox, LayoutDashboard, Settings, Wheat } from "lucide-react";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useAppStore } from "./store/appStore";
 
 const TodayPage = lazy(() => import("./pages/TodayPage").then((module) => ({ default: module.TodayPage })));
@@ -26,11 +26,15 @@ const navItems = [
 export default function App() {
   const [page, setPage] = useState("today");
   const [collapsed, setCollapsed] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
   const inboxCount = useAppStore((state) => state.inbox.filter((item) => item.status === "unreviewed").length);
   const profile = useAppStore((state) => state.profile);
   const hydrated = useAppStore.persist.hasHydrated();
   const [, forceRender] = useState(0);
   useEffect(() => useAppStore.persist.onFinishHydration(() => forceRender((value) => value + 1)), []);
+  useLayoutEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [page]);
 
   const content = {
     today: <TodayPage goTo={setPage} />,
@@ -54,7 +58,7 @@ export default function App() {
         <div className="sidebar-bottom"><button className={page === "settings" ? "active" : ""} onClick={() => setPage("settings")}><Settings size={19}/><span>设置</span></button><div className="profile-mini"><div>{profile.name.slice(0, 1)}</div><span><strong>{profile.name}</strong><small>本地账户</small></span></div></div>
         <button className="collapse-button" onClick={() => setCollapsed((value) => !value)}>{collapsed ? <ChevronRight size={16}/> : <ChevronLeft size={16}/>}</button>
       </aside>
-      <main className="main-content"><Suspense fallback={<div className="page page-loading"><Wheat size={28}/><span>正在加载页面…</span></div>}>{content}</Suspense></main>
+      <main className="main-content" ref={mainRef}><Suspense fallback={<div className="page page-loading"><Wheat size={28}/><span>正在加载页面…</span></div>}>{content}</Suspense></main>
     </div>
   );
 }

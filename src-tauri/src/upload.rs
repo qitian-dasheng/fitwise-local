@@ -64,7 +64,11 @@ pub async fn start_mobile_upload(
     let ip = local_ip().map_err(|error| format!("无法确定局域网地址：{error}"))?;
     let ipv4 = match ip {
         IpAddr::V4(value) if value.is_private() => value,
-        _ => return Err("当前网络不是受支持的私有 IPv4 局域网。请连接可信任的家庭网络后重试。".into()),
+        _ => {
+            return Err(
+                "当前网络不是受支持的私有 IPv4 局域网。请连接可信任的家庭网络后重试。".into(),
+            )
+        }
     };
 
     let token: String = rand::thread_rng()
@@ -85,7 +89,10 @@ pub async fn start_mobile_upload(
     let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0))
         .await
         .map_err(|error| format!("无法启动手机上传服务：{error}"))?;
-    let port = listener.local_addr().map_err(|error| error.to_string())?.port();
+    let port = listener
+        .local_addr()
+        .map_err(|error| error.to_string())?
+        .port();
     let context = Arc::new(UploadContext {
         token: token.clone(),
         expires_at: expires_at.clone(),
@@ -99,19 +106,22 @@ pub async fn start_mobile_upload(
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
     tokio::spawn(async move {
-        let timeout = tokio::time::sleep(std::time::Duration::from_secs((SESSION_MINUTES * 60) as u64));
-        tokio::pin!(timeout);
         let shutdown = async move {
             tokio::select! {
                 _ = shutdown_rx => {},
-                _ = &mut timeout => {},
+                _ = tokio::time::sleep(std::time::Duration::from_secs((SESSION_MINUTES * 60) as u64)) => {},
             }
         };
         let _ = axum::serve(listener, router)
             .with_graceful_shutdown(shutdown)
             .await;
     });
-    *control.inner.lock().map_err(|_| "上传服务状态锁损坏".to_string())? = Some(ActiveServer { shutdown: shutdown_tx });
+    *control
+        .inner
+        .lock()
+        .map_err(|_| "上传服务状态锁损坏".to_string())? = Some(ActiveServer {
+        shutdown: shutdown_tx,
+    });
 
     Ok(UploadSessionInfo {
         url: format!("http://{ipv4}:{port}/u/{token}"),
@@ -177,14 +187,20 @@ async fn receive_upload(
         let hash = format!("{:x}", hasher.finalize());
         let filename = format!("{hash}.{extension}");
         let target = context.inbox_dir.join(&filename);
-        if tokio::fs::metadata(&target).await.is_err() && tokio::fs::write(&target, &bytes).await.is_err() {
+        if tokio::fs::metadata(&target).await.is_err()
+            && tokio::fs::write(&target, &bytes).await.is_err()
+        {
             continue;
         }
         saved.push(filename);
     }
 
     if text.trim().is_empty() && saved.is_empty() {
-        return (StatusCode::BAD_REQUEST, Html(message_html("没有收到文字或文件。"))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Html(message_html("没有收到文字或文件。")),
+        )
+            .into_response();
     }
 
     let event = UploadEvent {
@@ -197,7 +213,11 @@ async fn receive_upload(
         let _ = tokio::fs::write(context.inbox_dir.join(metadata_name), json).await;
     }
     let _ = context.app.emit("mobile-inbox-changed", &event);
-    (StatusCode::OK, Html(message_html("已安全送达电脑收件箱，可以关闭此页面。"))).into_response()
+    (
+        StatusCode::OK,
+        Html(message_html("已安全送达电脑收件箱，可以关闭此页面。")),
+    )
+        .into_response()
 }
 
 fn authorized(token: &str, context: &UploadContext) -> bool {
@@ -209,12 +229,19 @@ fn safe_extension(filename: &str) -> String {
         .extension()
         .and_then(|value| value.to_str())
         .map(|value| value.to_ascii_lowercase())
-        .filter(|value| matches!(value.as_str(), "png" | "jpg" | "jpeg" | "webp" | "heic" | "pdf"))
+        .filter(|value| {
+            matches!(
+                value.as_str(),
+                "png" | "jpg" | "jpeg" | "webp" | "heic" | "pdf"
+            )
+        })
         .unwrap_or_else(|| "bin".into())
 }
 
 fn response_html(title: &str, body: &str) -> String {
-    format!(r#"<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title><style>body{{margin:0;background:#f1f3ee;color:#19231f;font-family:system-ui,"Microsoft YaHei",sans-serif}}main{{max-width:520px;margin:0 auto;padding:42px 20px}}section{{padding:26px;border:1px solid #dce2dc;border-radius:20px;background:#fff;box-shadow:0 18px 50px rgba(35,55,46,.08)}}h1{{font-size:25px}}p{{color:#6f7b74;line-height:1.7;font-size:14px}}textarea,input{{box-sizing:border-box;width:100%;margin:8px 0 16px;padding:12px;border:1px solid #dce2dc;border-radius:11px}}textarea{{min-height:120px}}button{{width:100%;padding:13px;color:#fff;font-weight:700;border:0;border-radius:11px;background:#276a53}}small{{display:block;margin-top:14px;color:#849088;text-align:center}}</style></head><body><main><section>{body}</section></main></body></html>"#)
+    format!(
+        r#"<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title><style>body{{margin:0;background:#f1f3ee;color:#19231f;font-family:system-ui,"Microsoft YaHei",sans-serif}}main{{max-width:520px;margin:0 auto;padding:42px 20px}}section{{padding:26px;border:1px solid #dce2dc;border-radius:20px;background:#fff;box-shadow:0 18px 50px rgba(35,55,46,.08)}}h1{{font-size:25px}}p{{color:#6f7b74;line-height:1.7;font-size:14px}}textarea,input{{box-sizing:border-box;width:100%;margin:8px 0 16px;padding:12px;border:1px solid #dce2dc;border-radius:11px}}textarea{{min-height:120px}}button{{width:100%;padding:13px;color:#fff;font-weight:700;border:0;border-radius:11px;background:#276a53}}small{{display:block;margin-top:14px;color:#849088;text-align:center}}</style></head><body><main><section>{body}</section></main></body></html>"#
+    )
 }
 
 fn form_html() -> String {
@@ -225,9 +252,15 @@ fn form_html() -> String {
 }
 
 fn expired_html() -> String {
-    response_html("会话已结束", "<h1>上传会话已结束</h1><p>请回到电脑上的轻衡应用，重新生成一次性二维码。</p>")
+    response_html(
+        "会话已结束",
+        "<h1>上传会话已结束</h1><p>请回到电脑上的轻衡应用，重新生成一次性二维码。</p>",
+    )
 }
 
 fn message_html(message: &str) -> String {
-    response_html("轻衡收件箱", &format!("<h1>{message}</h1><p>正式记录仍需要在电脑端检查和确认。</p>"))
+    response_html(
+        "轻衡收件箱",
+        &format!("<h1>{message}</h1><p>正式记录仍需要在电脑端检查和确认。</p>"),
+    )
 }

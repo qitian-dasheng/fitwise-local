@@ -13,8 +13,12 @@
 - 趋势：完整日热量均值、七日体重移动平均。
 - 本地持久化：浏览器开发模式使用 localStorage，Tauri 使用 SQLite。
 - SQLite 规范化 schema、审计、授权和外部助手所需领域边界。
+- 数据库加密备份：Argon2id 派生密钥、AES-256-GCM 认证加密、创建后立即恢复验证。
+- 安全恢复：先暂存与复检，下次启动前保留当前数据库安全副本，失败自动回滚。
+- AI 配置边界：可替换提供商、Windows 凭据存储、月度费用软上限与手工降级。
+- 本地隐私预览：文本常见标识遮挡；图片未实际处理时明确要求人工复核。
 
-AI 提供商、加密备份、MCP/CLI 和截图视觉识别已保留边界，但不会伪装成已配置服务。
+真实 AI 网络请求、附件随备份打包、自动备份轮换、MCP/CLI 和截图视觉识别尚未开放，不会伪装成已配置服务。
 
 ## Web 开发预览
 
@@ -34,10 +38,12 @@ npm run build
 
 ## Windows 桌面版
 
-需要：
+本机已经验证以下最小工具链，不需要完整 Visual Studio IDE：
 
-- Rust stable（MSVC toolchain）
-- Microsoft Visual Studio C++ Build Tools / Windows SDK
+- Visual Studio Code
+- Rust stable x86_64-pc-windows-msvc
+- Microsoft Visual Studio 2022 Build Tools（VCTools workload）
+- Windows SDK 10.0.26100.0
 - WebView2 Runtime
 
 安装工具链后执行：
@@ -49,11 +55,15 @@ npm run tauri build
 
 生产构建输出 MSI 与 NSIS 安装包。应用本体不捆绑本地大模型。
 
+最新的安装包、哈希、内存口径和安装/卸载验证见 [BUILD_REPORT.md](./BUILD_REPORT.md)。
+
 ## 数据安全
 
 - 正式数据只由用户确认写入。
 - 手机上传会话随机、短时、仅允许私有 IPv4 局域网。
 - 外部助手不得直接访问 SQLite。
+- AI API Key 只进入 Windows Credential Manager，不写入 SQLite 或 JSON 导出。
+- 忘记备份口令后无法解密，应用不会保存或找回口令。
 - 不把未知营养值当作零。
 - 运动消耗不抵扣饮食目标。
 - 本产品不是医疗器械，不提供诊断或治疗建议。

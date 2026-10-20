@@ -194,4 +194,13 @@ export const initialState: AppState = {
     },
   ],
   plans,
+  aiSettings: {
+    provider: "openai",
+    baseUrl: "https://api.openai.com/v1",
+    model: "",
+    monthlyLimitCny: 30,
+    estimatedSpendCny: 0,
+    usageMonth: format(now, "yyyy-MM"),
+    cloudEnabled: false,
+  },
 };

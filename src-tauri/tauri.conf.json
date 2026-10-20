@@ -29,9 +29,23 @@
   "bundle": {
     "active": true,
     "targets": ["msi", "nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
     "copyright": "© 2026 Fitwise",
-    "category": "HealthAndFitness",
+    "category": "Healthcare and Fitness",
     "shortDescription": "本地优先的个人减脂与饮食管理",
-    "longDescription": "记录饮食、体重、运动与食材库存，并生成可确认的次日菜单。"
+    "longDescription": "记录饮食、体重、运动与食材库存，并生成可确认的次日菜单。",
+    "windows": {
+      "wix": {
+        "language": "zh-CN"
+      },
+      "nsis": {
+        "languages": ["SimpChinese"]
+      }
+    }
   }
 }
