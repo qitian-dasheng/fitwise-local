@@ -46,22 +46,46 @@ fn database_path(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 pub(crate) fn open_database(app: &AppHandle) -> Result<Connection, String> {
-    let connection = Connection::open(database_path(app)?)
-        .map_err(|error| format!("无法打开领域数据库：{error}"))?;
+    let path = database_path(app)?;
+    let mut connection =
+        Connection::open(&path).map_err(|error| format!("无法打开领域数据库：{error}"))?;
     connection
         .execute_batch("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;")
         .map_err(|error| format!("无法配置领域数据库：{error}"))?;
+    crate::domain_upgrade::upgrade(&mut connection, &path)?;
     Ok(connection)
 }
 
 pub(crate) fn ensure_repository_schema(connection: &Connection) -> Result<(), String> {
+    let transaction = connection
+        .unchecked_transaction()
+        .map_err(|error| error.to_string())?;
+    apply_repository_schema(&transaction)?;
+    transaction.commit().map_err(|error| error.to_string())
+}
+
+pub(crate) fn apply_repository_schema(connection: &Connection) -> Result<(), String> {
     connection
-        .execute_batch(&format!(
-            "{}\n{}",
-            include_str!("../migrations/0003_domain_entity_store.sql"),
-            include_str!("../migrations/0004_domain_commands.sql")
-        ))
-        .map_err(|error| format!("无法初始化领域仓库：{error}"))
+        .execute_batch(include_str!("../migrations/0001_schema.sql"))
+        .map_err(|error| error.to_string())?;
+    let has_batch_status: bool = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('prepared_batches') WHERE name = 'remaining_ratio')", [], |row| row.get(0)
+    ).map_err(|error| error.to_string())?;
+    if !has_batch_status {
+        connection
+            .execute_batch(include_str!("../migrations/0002_batch_events.sql"))
+            .map_err(|error| error.to_string())?;
+    }
+    for sql in [
+        include_str!("../migrations/0003_domain_entity_store.sql"),
+        include_str!("../migrations/0004_domain_commands.sql"),
+        include_str!("../migrations/0005_queries_and_request_identity.sql"),
+    ] {
+        connection
+            .execute_batch(sql)
+            .map_err(|error| format!("无法初始化领域仓库：{error}"))?;
+    }
+    Ok(())
 }
 
 fn entity_id(collection: &str, value: &Value) -> Result<String, String> {
@@ -171,6 +195,17 @@ pub(crate) fn write_transaction(
 }
 
 pub(crate) fn load_envelope(connection: &Connection) -> Result<Option<String>, String> {
+    // Hydration and exports must see one revision even if another process writes.
+    if connection.is_autocommit() {
+        let transaction = connection
+            .unchecked_transaction()
+            .map_err(|error| error.to_string())?;
+        return read_envelope(&transaction);
+    }
+    read_envelope(connection)
+}
+
+fn read_envelope(connection: &Connection) -> Result<Option<String>, String> {
     let version: Option<i64> = connection
         .query_row(
             "SELECT persist_version FROM domain_state_meta WHERE id = 1",
@@ -218,17 +253,60 @@ pub(crate) fn load_envelope(connection: &Connection) -> Result<Option<String>, S
         .map_err(|error| error.to_string())
 }
 
-fn import_legacy_state(connection: &mut Connection, name: &str) -> Result<Option<String>, String> {
+pub(crate) fn import_legacy_state(
+    connection: &mut Connection,
+    name: &str,
+) -> Result<Option<String>, String> {
     let legacy: Option<String> = connection
         .query_row("SELECT value FROM app_kv WHERE key = ?1", [name], |row| {
             row.get(0)
         })
         .optional()
         .map_err(|error| error.to_string())?;
-    if let Some(ref raw) = legacy {
-        persist_envelope(connection, name, raw)?;
+    if let Some(raw) = legacy {
+        let normalized = normalize_legacy_envelope(&raw)?;
+        persist_envelope(connection, name, &normalized)?;
+        return Ok(Some(normalized));
     }
-    Ok(legacy)
+    Ok(None)
+}
+
+pub(crate) fn normalize_legacy_envelope(raw: &str) -> Result<String, String> {
+    let mut envelope: Value = serde_json::from_str(raw).map_err(|error| error.to_string())?;
+    let version = envelope["version"].as_i64().ok_or("状态缺少版本。")?;
+    if version == 3 {
+        return Ok(raw.to_owned());
+    }
+    if version != 2 {
+        return Err("此持久化版本暂不受支持，请保留原数据库并检查升级路径。".into());
+    }
+    let state = envelope
+        .get_mut("state")
+        .and_then(Value::as_object_mut)
+        .ok_or("旧版状态无效。")?;
+    for key in ["consumptionEvents", "wasteEvents", "auditEvents"] {
+        state.entry(key).or_insert_with(|| serde_json::json!([]));
+    }
+    if let Some(batches) = state.get_mut("batches").and_then(Value::as_array_mut) {
+        for batch in batches {
+            let consumed = batch["consumedRatio"].as_f64().unwrap_or(0.0);
+            let wasted = batch["wastedRatio"].as_f64().unwrap_or(0.0);
+            let remaining = batch["remainingRatio"]
+                .as_f64()
+                .unwrap_or((1.0 - consumed - wasted).max(0.0));
+            batch["remainingRatio"] = serde_json::json!(remaining);
+            batch["status"] = serde_json::json!(if remaining > 0.0 { "open" } else { "closed" });
+        }
+    }
+    if let Some(measurements) = state.get_mut("measurements").and_then(Value::as_array_mut) {
+        for measurement in measurements {
+            if measurement.get("status").is_none() {
+                measurement["status"] = serde_json::json!("active");
+            }
+        }
+    }
+    envelope["version"] = serde_json::json!(3);
+    serde_json::to_string(&envelope).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -248,6 +326,9 @@ pub fn domain_storage_get(app: AppHandle, name: String) -> Result<Option<String>
 pub fn domain_storage_set(app: AppHandle, name: String, value: String) -> Result<(), String> {
     let mut connection = open_database(&app)?;
     ensure_repository_schema(&connection)?;
+    if load_envelope(&connection)?.is_some() {
+        return Err("领域仓库已初始化，请通过业务命令保存记录。".into());
+    }
     persist_envelope(&mut connection, &name, &value)
 }
 
@@ -269,6 +350,9 @@ pub fn domain_storage_remove(app: AppHandle, name: String) -> Result<(), String>
         .map_err(|error| error.to_string())?;
     transaction
         .execute("DELETE FROM domain_state_meta", [])
+        .map_err(|error| error.to_string())?;
+    transaction
+        .execute("DELETE FROM domain_command_payloads", [])
         .map_err(|error| error.to_string())?;
     transaction
         .execute("DELETE FROM domain_command_receipts", [])
@@ -349,6 +433,22 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM domain_entities", [], |row| row.get(0))
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn legacy_v2_is_normalized_before_desktop_hydration() {
+        let mut legacy: Value = serde_json::from_str(&envelope(2, "old meal")).unwrap();
+        for key in ["consumptionEvents", "wasteEvents", "auditEvents"] {
+            legacy["state"].as_object_mut().unwrap().remove(key);
+        }
+        legacy["state"]["batches"] =
+            serde_json::json!([{"id":"batch-old","consumedRatio":0.75,"wastedRatio":0.25}]);
+        let normalized: Value =
+            serde_json::from_str(&normalize_legacy_envelope(&legacy.to_string()).unwrap()).unwrap();
+        assert_eq!(normalized["version"], 3);
+        assert_eq!(normalized["state"]["batches"][0]["remainingRatio"], 0.0);
+        assert_eq!(normalized["state"]["batches"][0]["status"], "closed");
+        assert_eq!(normalized["state"]["meals"][0], legacy["state"]["meals"][0]);
     }
 
     #[test]

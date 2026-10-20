@@ -179,6 +179,7 @@ export interface InventoryMovement {
 
 export interface PurchaseDraft {
   id: string;
+  foodId?: string;
   name: string;
   platform: "duoduo" | "online" | "supermarket" | "other";
   url?: string;
@@ -203,6 +204,7 @@ export interface InboxItem {
 
 export interface PlanCandidate {
   id: string;
+  recipeVersionId?: string;
   date: ISODate;
   title: string;
   description: string;

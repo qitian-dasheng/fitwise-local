@@ -61,11 +61,13 @@ export function summarizeMeals(entries: MealEntry[]): NutritionSummary {
 }
 
 export function movingAverage(values: { date: string; value: number }[], windowSize = 7) {
-  return values.map((item, index) => {
-    const slice = values.slice(Math.max(0, index - windowSize + 1), index + 1);
+  return values.map((item) => {
+    const current = Date.parse(`${item.date}T00:00:00Z`);
+    const earliest = current - (windowSize - 1) * 864e5;
+    const slice = values.filter((point) => { const time = Date.parse(`${point.date}T00:00:00Z`); return time >= earliest && time <= current; });
     return {
       date: item.date,
-      value: slice.reduce((sum, point) => sum + point.value, 0) / slice.length,
+      value: slice.length ? slice.reduce((sum, point) => sum + point.value, 0) / slice.length : item.value,
     };
   });
 }
@@ -88,8 +90,9 @@ export function completedDayCalorieAverage(entries: MealEntry[], checkIns: Daily
     grouped.set(entry.date, [...(grouped.get(entry.date) ?? []), entry]);
   }
   if (grouped.size === 0) return null;
-  const total = [...grouped.values()].reduce((sum, day) => sum + summarizeMeals(day).totals.calories, 0);
-  return total / grouped.size;
+  const eligible = [...grouped.values()].filter((day) => day.every((meal) => meal.nutrition.calories.state !== "unknown" && Number.isFinite(meal.nutrition.calories.value))).map(summarizeMeals);
+  if (!eligible.length) return null;
+  return eligible.reduce((sum, day) => sum + day.totals.calories, 0) / eligible.length;
 }
 
 export function deductInventoryFEFO(

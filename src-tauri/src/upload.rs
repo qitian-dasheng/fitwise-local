@@ -97,7 +97,7 @@ pub async fn start_mobile_upload(
         .port();
     let context = Arc::new(UploadContext {
         token: token.clone(),
-        expires_at: expires_at.clone(),
+        expires_at,
         inbox_dir,
         app,
     });

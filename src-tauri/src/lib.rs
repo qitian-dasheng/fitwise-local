@@ -1,49 +1,18 @@
 mod backup;
 mod credentials;
 mod domain_commands;
+mod domain_queries;
 mod domain_store;
+mod domain_upgrade;
+mod record_commands;
 mod upload;
-
-use tauri_plugin_sql::{Migration, MigrationKind};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     backup::apply_pending_restore_before_start();
-    let migrations = vec![
-        Migration {
-            version: 1,
-            description: "initial_fitwise_schema",
-            sql: include_str!("../migrations/0001_schema.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 2,
-            description: "batch_consumption_and_waste_events",
-            sql: include_str!("../migrations/0002_batch_events.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 3,
-            description: "domain_entity_store",
-            sql: include_str!("../migrations/0003_domain_entity_store.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 4,
-            description: "domain_commands",
-            sql: include_str!("../migrations/0004_domain_commands.sql"),
-            kind: MigrationKind::Up,
-        },
-    ];
-
     tauri::Builder::default()
         .manage(upload::UploadServerControl::default())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(
-            tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:fitwise.db", migrations)
-                .build(),
-        )
         .invoke_handler(tauri::generate_handler![
             backup::create_encrypted_backup,
             backup::discard_staged_restore,
@@ -58,6 +27,10 @@ pub fn run() {
             domain_store::domain_storage_set,
             domain_store::get_domain_storage_status,
             domain_commands::execute_domain_command,
+            domain_queries::query_period_summary,
+            domain_queries::query_inventory_summary,
+            domain_queries::export_domain_json,
+            domain_queries::get_domain_upgrade_report,
             upload::start_mobile_upload,
             upload::stop_mobile_upload
         ])

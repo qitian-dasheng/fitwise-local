@@ -1,0 +1,271 @@
+use crate::domain_store::{import_legacy_state, load_envelope, open_database, STORAGE_NAME};
+use chrono::{Days, NaiveDate, Utc};
+use rusqlite::{Connection, OptionalExtension};
+use serde_json::{json, Value};
+use std::collections::BTreeMap;
+use tauri::AppHandle;
+
+const NUTRIENTS: [&str; 7] = [
+    "calories",
+    "protein",
+    "carbohydrates",
+    "fat",
+    "fiber",
+    "sugar",
+    "sodium",
+];
+
+fn validate_period(start: &str, end: &str) -> Result<(NaiveDate, NaiveDate), String> {
+    let start = NaiveDate::parse_from_str(start, "%Y-%m-%d").map_err(|_| "开始日期无效。")?;
+    let end = NaiveDate::parse_from_str(end, "%Y-%m-%d").map_err(|_| "结束日期无效。")?;
+    if end < start || (end - start).num_days() > 3660 {
+        return Err("查询时间范围无效或超过十年。".into());
+    }
+    Ok((start, end))
+}
+
+pub(crate) fn period_summary(
+    connection: &Connection,
+    start: &str,
+    end: &str,
+) -> Result<Value, String> {
+    let (start_date, end_date) = validate_period(start, end)?;
+    let transaction = connection
+        .unchecked_transaction()
+        .map_err(|error| error.to_string())?;
+    let revision: Option<i64> = transaction
+        .query_row(
+            "SELECT revision FROM domain_state_meta WHERE id=1",
+            [],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    if revision.is_none() {
+        return Ok(Value::Null);
+    }
+    let mut days = BTreeMap::<String, Value>::new();
+    let mut current = start_date;
+    loop {
+        days.insert(current.to_string(),json!({"date":current.to_string(),"complete":false,"mealCount":0,"totals":{},"coverage":{}}));
+        if current == end_date {
+            break;
+        }
+        current = current.checked_add_days(Days::new(1)).ok_or("日期溢出。")?;
+    }
+    let mut weights = BTreeMap::<String, ([f64; 7], [f64; 7], f64, usize)>::new();
+    {
+        let mut statement = transaction.prepare("SELECT diary_date,ratio,nutrition_json FROM domain_meal_projection WHERE diary_date BETWEEN ?1 AND ?2").map_err(|error|error.to_string())?;
+        let rows = statement
+            .query_map([start, end], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, f64>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(|error| error.to_string())?;
+        for row in rows {
+            let (date, ratio, nutrition) = row.map_err(|error| error.to_string())?;
+            let nutrition: Value =
+                serde_json::from_str(&nutrition).map_err(|error| error.to_string())?;
+            let entry = weights.entry(date).or_insert(([0.0; 7], [0.0; 7], 0.0, 0));
+            entry.2 += ratio;
+            entry.3 += 1;
+            for (index, key) in NUTRIENTS.iter().enumerate() {
+                let metric = &nutrition[key];
+                if matches!(metric["state"].as_str(), Some("known" | "zero")) {
+                    if let Some(value) = metric["value"].as_f64() {
+                        entry.0[index] += value * ratio;
+                        entry.1[index] += ratio;
+                    }
+                }
+            }
+        }
+    }
+    for (date, day) in &mut days {
+        let (totals, known, total, count) = weights
+            .get(date)
+            .copied()
+            .unwrap_or(([0.0; 7], [0.0; 7], 0.0, 0));
+        for (index, key) in NUTRIENTS.iter().enumerate() {
+            day["totals"][key] = json!(totals[index]);
+            day["coverage"][key] = json!(if total == 0.0 {
+                0.0
+            } else {
+                (known[index] / total * 100.0).round()
+            });
+        }
+        day["mealCount"] = json!(count);
+    }
+    {
+        let mut statement = transaction.prepare("SELECT diary_date,complete FROM domain_checkin_projection WHERE diary_date BETWEEN ?1 AND ?2").map_err(|error|error.to_string())?;
+        let rows = statement
+            .query_map([start, end], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?))
+            })
+            .map_err(|error| error.to_string())?;
+        for row in rows {
+            let (date, complete) = row.map_err(|error| error.to_string())?;
+            if let Some(day) = days.get_mut(&date) {
+                day["complete"] = json!(complete);
+            }
+        }
+    }
+    let eligible: Vec<&Value> = days
+        .values()
+        .filter(|day| {
+            day["complete"] == true
+                && day["mealCount"].as_u64().unwrap_or(0) > 0
+                && day["date"]
+                    .as_str()
+                    .and_then(|date| weights.get(date))
+                    .is_some_and(|(_, known, total, _)| {
+                        *total > 0.0 && (known[0] - total).abs() < 1e-12
+                    })
+        })
+        .collect();
+    let eligible_count = eligible.len();
+    let calorie_average = if eligible.is_empty() {
+        None
+    } else {
+        Some(
+            eligible
+                .iter()
+                .map(|day| day["totals"]["calories"].as_f64().unwrap_or(0.0))
+                .sum::<f64>()
+                / eligible_count as f64,
+        )
+    };
+    let workout_minutes: f64 = transaction.query_row("SELECT COALESCE(SUM(duration_minutes),0.0) FROM domain_workout_projection WHERE workout_date BETWEEN ?1 AND ?2",[start,end],|row|row.get(0)).map_err(|error|error.to_string())?;
+    let mut measurements = Vec::new();
+    {
+        let lookback = start_date
+            .checked_sub_days(Days::new(6))
+            .unwrap_or(start_date)
+            .to_string();
+        let mut statement = transaction.prepare("SELECT id,measured_date,weight_kg,is_outlier FROM domain_measurement_projection WHERE measured_date BETWEEN ?1 AND ?2 ORDER BY measured_date,created_at,id").map_err(|error|error.to_string())?;
+        let rows = statement
+            .query_map([lookback.as_str(), end], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, f64>(2)?,
+                    row.get::<_, Option<bool>>(3)?,
+                ))
+            })
+            .map_err(|error| error.to_string())?;
+        let mut raw = Vec::new();
+        for row in rows {
+            raw.push(row.map_err(|error| error.to_string())?);
+        }
+        for (id, date, weight, outlier) in &raw {
+            if date.as_str() < start {
+                continue;
+            }
+            let earliest = NaiveDate::parse_from_str(date, "%Y-%m-%d")
+                .map_err(|error| error.to_string())?
+                .checked_sub_days(Days::new(6))
+                .ok_or("日期无效。")?
+                .to_string();
+            let window: Vec<f64> = raw
+                .iter()
+                .filter(|(_, candidate, _, _)| candidate >= &earliest && candidate <= date)
+                .map(|(_, _, weight, _)| *weight)
+                .collect();
+            measurements.push(json!({"id":id,"date":date,"weightKg":weight,"isOutlier":outlier.unwrap_or(false),"average":window.iter().sum::<f64>()/window.len() as f64}));
+        }
+    }
+    let latest: Option<(String,f64)> = transaction.query_row("SELECT measured_date,weight_kg FROM domain_measurement_projection WHERE measured_date <= ?1 ORDER BY measured_date DESC,created_at DESC LIMIT 1",[end],|row|Ok((row.get(0)?,row.get(1)?))).optional().map_err(|error|error.to_string())?;
+    Ok(
+        json!({"revision":revision,"start":start,"end":end,"days":days.into_values().collect::<Vec<_>>(),"completedDayCalorieAverage":calorie_average,"eligibleDayCount":eligible_count,"workoutMinutes":workout_minutes,"measurements":measurements,"latestWeightKg":latest.as_ref().map(|item|item.1)}),
+    )
+}
+
+#[tauri::command]
+pub fn query_period_summary(app: AppHandle, start: String, end: String) -> Result<Value, String> {
+    let mut connection = open_database(&app)?;
+    if load_envelope(&connection)?.is_none() {
+        import_legacy_state(&mut connection, STORAGE_NAME)?;
+    }
+    period_summary(&connection, &start, &end)
+}
+
+#[tauri::command]
+pub fn query_inventory_summary(app: AppHandle) -> Result<Value, String> {
+    let mut connection = open_database(&app)?;
+    if load_envelope(&connection)?.is_none() {
+        import_legacy_state(&mut connection, STORAGE_NAME)?;
+    }
+    inventory_summary(&connection)
+}
+
+pub(crate) fn inventory_summary(connection: &Connection) -> Result<Value, String> {
+    let transaction = connection
+        .unchecked_transaction()
+        .map_err(|error| error.to_string())?;
+    let initialized: bool = transaction
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM domain_state_meta)",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    if !initialized {
+        return Ok(Value::Null);
+    }
+    let mut items = Vec::new();
+    let mut statement = transaction.prepare("SELECT id,food_id,name,remaining_amount,purchased_amount,price_cny,unit,opened,expires_at,purchased_at,source,confidence FROM domain_inventory_projection ORDER BY opened DESC,COALESCE(expires_at,'9999-12-31'),purchased_at,id").map_err(|error|error.to_string())?;
+    let rows = statement.query_map([],|row|Ok(json!({"id":row.get::<_,String>(0)?,"foodId":row.get::<_,String>(1)?,"name":row.get::<_,String>(2)?,"remainingAmount":row.get::<_,f64>(3)?,"purchasedAmount":row.get::<_,f64>(4)?,"purchasePriceCny":row.get::<_,f64>(5)?,"unit":row.get::<_,String>(6)?,"opened":row.get::<_,bool>(7)?,"expiresAt":row.get::<_,Option<String>>(8)?,"purchasedAt":row.get::<_,String>(9)?,"source":row.get::<_,Option<String>>(10)?,"confidence":row.get::<_,Option<String>>(11)?}))).map_err(|error|error.to_string())?;
+    for row in rows {
+        items.push(row.map_err(|error| error.to_string())?);
+    }
+    let remaining_cost: f64 = items
+        .iter()
+        .map(|item| {
+            let purchased = item["purchasedAmount"].as_f64().unwrap_or(0.0);
+            if purchased > 0.0 {
+                item["purchasePriceCny"].as_f64().unwrap_or(0.0)
+                    * item["remainingAmount"].as_f64().unwrap_or(0.0)
+                    / purchased
+            } else {
+                0.0
+            }
+        })
+        .sum();
+    Ok(json!({"items":items,"remainingCostCny":remaining_cost}))
+}
+
+#[tauri::command]
+pub fn export_domain_json(app: AppHandle) -> Result<Value, String> {
+    let mut connection = open_database(&app)?;
+    let raw = match load_envelope(&connection)? {
+        Some(raw) => raw,
+        None => import_legacy_state(&mut connection, STORAGE_NAME)?
+            .ok_or("尚未保存正式记录，请先完成首次记录。")?,
+    };
+    let envelope: Value = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+    let mut data = envelope["state"]
+        .as_object()
+        .ok_or("领域仓库格式无效。")?
+        .clone();
+    data.insert("schemaVersion".into(), json!(5));
+    data.insert("persistVersion".into(), envelope["version"].clone());
+    data.insert("exportedAt".into(), json!(Utc::now().to_rfc3339()));
+    data.insert("app".into(), json!("Fitwise Local"));
+    data.insert("source".into(), json!("sqlite_domain_repository"));
+    Ok(Value::Object(data))
+}
+
+#[tauri::command]
+pub fn get_domain_upgrade_report(app: AppHandle) -> Result<Value, String> {
+    let connection = open_database(&app)?;
+    let raw: String = connection
+        .query_row(
+            "SELECT report_json FROM domain_upgrade_reports WHERE version=5",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    serde_json::from_str(&raw).map_err(|error| error.to_string())
+}

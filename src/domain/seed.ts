@@ -87,6 +87,7 @@ const inventory: InventoryLot[] = [
 const plans: PlanCandidate[] = [
   {
     id: "plan-1",
+    recipeVersionId: "recipe-pork-tofu-v1",
     date: tomorrow,
     title: "洋葱豆腐炖里脊",
     description: "一锅供午晚餐共享，优先消耗两日内到期的豆腐和里脊。",
@@ -207,3 +208,21 @@ export const initialState: AppState = {
     cloudEnabled: false,
   },
 };
+
+/** Desktop onboarding starts without fictional health or stock records. */
+export function createPersonalState(): AppState {
+  const state = structuredClone(initialState);
+  state.measurements = [];
+  state.inventory = [];
+  state.checkIns = [];
+  state.plans = state.plans.map((plan) => ({
+    ...plan,
+    status: "candidate",
+    inventoryCoverage: 0,
+    reasons: ["首次使用请确认实际库存后再规划"],
+    missingIngredients: plan.recipeVersionId
+      ? state.recipes.find((recipe) => recipe.id === plan.recipeVersionId)?.ingredients.map((item) => item.name) ?? []
+      : plan.missingIngredients,
+  }));
+  return state;
+}

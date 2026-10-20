@@ -18,7 +18,7 @@ pub struct DomainCommandRequest {
     bootstrap_state: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DomainCommandResponse {
     applied: bool,
@@ -28,12 +28,12 @@ pub struct DomainCommandResponse {
     state: Value,
 }
 
-struct CommandMutation {
-    applied: bool,
-    result: Value,
+pub(crate) struct CommandMutation {
+    pub(crate) applied: bool,
+    pub(crate) result: Value,
 }
 
-fn now_and_date() -> (String, String) {
+pub(crate) fn now_and_date() -> (String, String) {
     let now = Utc::now();
     let timezone = FixedOffset::east_opt(8 * 60 * 60).expect("valid Shanghai offset");
     (
@@ -42,7 +42,7 @@ fn now_and_date() -> (String, String) {
     )
 }
 
-fn payload_str<'a>(payload: &'a Value, key: &str) -> Result<&'a str, String> {
+pub(crate) fn payload_str<'a>(payload: &'a Value, key: &str) -> Result<&'a str, String> {
     payload
         .get(key)
         .and_then(Value::as_str)
@@ -50,7 +50,7 @@ fn payload_str<'a>(payload: &'a Value, key: &str) -> Result<&'a str, String> {
         .ok_or_else(|| format!("命令缺少 {key}。"))
 }
 
-fn payload_number(payload: &Value, key: &str) -> Result<f64, String> {
+pub(crate) fn payload_number(payload: &Value, key: &str) -> Result<f64, String> {
     payload
         .get(key)
         .and_then(Value::as_f64)
@@ -58,14 +58,17 @@ fn payload_number(payload: &Value, key: &str) -> Result<f64, String> {
         .ok_or_else(|| format!("命令中的 {key} 无效。"))
 }
 
-fn array<'a>(state: &'a Map<String, Value>, key: &str) -> Result<&'a Vec<Value>, String> {
+pub(crate) fn array<'a>(
+    state: &'a Map<String, Value>,
+    key: &str,
+) -> Result<&'a Vec<Value>, String> {
     state
         .get(key)
         .and_then(Value::as_array)
         .ok_or_else(|| format!("领域状态缺少 {key} 集合。"))
 }
 
-fn array_mut<'a>(
+pub(crate) fn array_mut<'a>(
     state: &'a mut Map<String, Value>,
     key: &str,
 ) -> Result<&'a mut Vec<Value>, String> {
@@ -92,8 +95,9 @@ fn revision(connection: &Connection) -> Result<i64, String> {
 }
 
 fn parse_envelope(raw: &str) -> Result<(i64, Map<String, Value>), String> {
+    let raw = crate::domain_store::normalize_legacy_envelope(raw)?;
     let envelope: Value =
-        serde_json::from_str(raw).map_err(|error| format!("领域状态 JSON 无效：{error}"))?;
+        serde_json::from_str(&raw).map_err(|error| format!("领域状态 JSON 无效：{error}"))?;
     let version = envelope
         .get("version")
         .and_then(Value::as_i64)
@@ -128,7 +132,7 @@ fn load_command_state(
     parse_envelope(raw)
 }
 
-fn prepare_recipe(
+pub(crate) fn prepare_recipe(
     state: &mut Map<String, Value>,
     payload: &Value,
     command_id: &str,
@@ -149,13 +153,27 @@ fn prepare_recipe(
         .and_then(Value::as_array)
         .ok_or_else(|| "菜谱原料无效。".to_string())?;
 
+    let (_, today) = now_and_date();
+    let usable = |lot: &Value, unit: &str| {
+        lot.get("unit").and_then(Value::as_str) == Some(unit)
+            && lot
+                .get("expiresAt")
+                .and_then(Value::as_str)
+                .is_none_or(|value| value >= today.as_str())
+    };
     let mut requirements: Vec<(String, String, String, f64)> = Vec::new();
     for ingredient in ingredients {
         let food_id = payload_str(ingredient, "foodId")?.to_owned();
         let name = payload_str(ingredient, "name")?.to_owned();
         let unit = payload_str(ingredient, "unit")?.to_owned();
         let amount = payload_number(ingredient, "amount")?;
+        if amount <= 0.0 {
+            return Err("菜谱原料数量必须大于 0。".into());
+        }
         if let Some(existing) = requirements.iter_mut().find(|item| item.0 == food_id) {
+            if existing.2 != unit {
+                return Err("同一食材的计量单位不一致。".into());
+            }
             existing.3 += amount;
         } else {
             requirements.push((food_id, name, unit, amount));
@@ -169,6 +187,7 @@ fn prepare_recipe(
             let available: f64 = inventory
                 .iter()
                 .filter(|lot| lot.get("foodId").and_then(Value::as_str) == Some(food_id))
+                .filter(|lot| usable(lot, unit))
                 .filter_map(|lot| lot.get("remainingAmount").and_then(Value::as_f64))
                 .sum();
             (available + 0.0001 < *required)
@@ -187,12 +206,13 @@ fn prepare_recipe(
     let mut movements = Vec::new();
     {
         let inventory = array_mut(state, "inventory")?;
-        for (food_id, _, _, required) in &requirements {
+        for (food_id, _, unit, required) in &requirements {
             let mut candidates: Vec<usize> = inventory
                 .iter()
                 .enumerate()
                 .filter(|(_, lot)| {
                     lot.get("foodId").and_then(Value::as_str) == Some(food_id)
+                        && usable(lot, unit)
                         && lot
                             .get("remainingAmount")
                             .and_then(Value::as_f64)
@@ -538,6 +558,11 @@ fn receive_purchase(
         .unwrap_or("other");
     let (now, date) = now_and_date();
     let lot_id = format!("lot-{command_id}");
+    let food_id = if let Some(food_id) = purchase.get("foodId").and_then(Value::as_str) {
+        food_id.to_owned()
+    } else {
+        crate::record_commands::resolve_food_id(state, &purchase, &purchase_id)?
+    };
 
     array_mut(state, "purchases")?[purchase_index]
         .as_object_mut()
@@ -545,7 +570,7 @@ fn receive_purchase(
         .insert("status".into(), json!("received"));
     array_mut(state, "inventory")?.push(json!({
         "id": lot_id,
-        "foodId": format!("food-{command_id}"),
+        "foodId": food_id,
         "name": name,
         "purchasedAmount": amount,
         "remainingAmount": amount,
@@ -639,7 +664,18 @@ fn execute_with_connection(
     }
     if !matches!(
         request.kind.as_str(),
-        "prepare_recipe"
+        "add_meal"
+            | "add_weight"
+            | "add_workout"
+            | "set_checkin"
+            | "set_day_complete"
+            | "add_purchase"
+            | "select_plan"
+            | "add_inbox_item"
+            | "set_inbox_status"
+            | "set_ai_settings"
+            | "record_ai_usage"
+            | "prepare_recipe"
             | "consume_batch"
             | "discard_batch"
             | "receive_purchase"
@@ -649,7 +685,7 @@ fn execute_with_connection(
     }
 
     let transaction = connection
-        .transaction()
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
         .map_err(|error| format!("无法开始领域命令事务：{error}"))?;
     let receipt: Option<(String, String, i64)> = transaction
         .query_row(
@@ -659,9 +695,26 @@ fn execute_with_connection(
         )
         .optional()
         .map_err(|error| error.to_string())?;
+    let request_hash = format!(
+        "{:x}",
+        Sha256::digest(serde_json::to_vec(&request.payload).map_err(|error| error.to_string())?)
+    );
     if let Some((stored_kind, stored_result, applied_revision)) = receipt {
         if stored_kind != request.kind {
             return Err("同一 commandId 不能用于不同命令。".into());
+        }
+        let stored_hash: Option<String> = transaction
+            .query_row(
+                "SELECT request_sha256 FROM domain_command_payloads WHERE command_id = ?1",
+                [&request.command_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        if stored_hash.as_deref() != Some(&request_hash) {
+            return Err(
+                "命令内容与原提交不同或属于旧版回执，请先核对已保存记录后重新发起。".into(),
+            );
         }
         let (_, state) = load_command_state(&transaction, request.bootstrap_state.as_deref())?;
         return Ok(DomainCommandResponse {
@@ -681,7 +734,12 @@ fn execute_with_connection(
         "discard_batch" => discard_batch(&mut state, &request.payload, &request.command_id)?,
         "receive_purchase" => receive_purchase(&mut state, &request.payload, &request.command_id)?,
         "adjust_inventory" => adjust_inventory(&mut state, &request.payload, &request.command_id)?,
-        _ => unreachable!(),
+        _ => crate::record_commands::apply(
+            &mut state,
+            &request.kind,
+            &request.payload,
+            &request.command_id,
+        )?,
     };
     if !mutation.applied {
         return Ok(DomainCommandResponse {
@@ -709,6 +767,12 @@ fn execute_with_connection(
             params![request.command_id, request.kind, result_json, applied_revision, now],
         )
         .map_err(|error| format!("保存命令回执失败：{error}"))?;
+    transaction
+        .execute(
+            "INSERT INTO domain_command_payloads (command_id, request_sha256) VALUES (?1, ?2)",
+            params![request.command_id, request_hash],
+        )
+        .map_err(|error| error.to_string())?;
     transaction
         .commit()
         .map_err(|error| format!("提交领域命令失败：{error}"))?;
@@ -777,8 +841,8 @@ mod tests {
         state.insert(
             "inventory".into(),
             json!([
-                {"id":"lot-late-open","foodId":"tofu","remainingAmount":200,"opened":true,"expiresAt":"2026-10-25","purchasedAt":"2026-10-10"},
-                {"id":"lot-early","foodId":"tofu","remainingAmount":200,"opened":false,"expiresAt":"2026-10-21","purchasedAt":"2026-10-11"}
+                {"id":"lot-late-open","foodId":"tofu","name":"豆腐","unit":"g","purchasedAmount":200,"purchasePriceCny":2,"remainingAmount":200,"opened":true,"expiresAt":"2099-10-25","purchasedAt":"2026-10-10"},
+                {"id":"lot-early","foodId":"tofu","name":"豆腐","unit":"g","purchasedAmount":200,"purchasePriceCny":2,"remainingAmount":200,"opened":false,"expiresAt":"2099-10-21","purchasedAt":"2026-10-11"}
             ]),
         );
         serde_json::to_string(&json!({"state":state,"version":3})).unwrap()
@@ -832,6 +896,357 @@ mod tests {
             state["inventory"][1]["remainingAmount"].as_f64(),
             Some(100.0)
         );
+    }
+
+    #[test]
+    fn concurrent_file_commands_and_restart_preserve_every_write() {
+        let directory =
+            std::env::temp_dir().join(format!("fitwise-command-file-{}", rand::random::<u64>()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("fitwise.db");
+        let mut connection = Connection::open(&path).unwrap();
+        ensure_repository_schema(&connection).unwrap();
+        execute_with_connection(
+            &mut connection,
+            request(
+                "file-initial-001",
+                "set_checkin",
+                json!({"date":"2026-10-20","energy":3}),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        drop(connection);
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let handles: Vec<_>=(0..2).map(|index|{
+            let path=path.clone();let barrier=barrier.clone();
+            std::thread::spawn(move||{
+                let mut connection=Connection::open(path).unwrap();
+                connection.busy_timeout(std::time::Duration::from_secs(5)).unwrap();
+                barrier.wait();
+                execute_with_connection(&mut connection,request(&format!("file-workout-{index}"),"add_workout",json!({"date":"2026-10-20","name":"有氧","type":"有氧","durationMinutes":22}),None)).unwrap();
+            })
+        }).collect();
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        let mut restarted = Connection::open(&path).unwrap();
+        let replay = execute_with_connection(
+            &mut restarted,
+            request(
+                "file-workout-0",
+                "add_workout",
+                json!({"date":"2026-10-20","name":"有氧","type":"有氧","durationMinutes":22}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert!(replay.replayed);
+        assert_eq!(replay.state["workouts"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            crate::domain_queries::period_summary(&restarted, "2026-10-20", "2026-10-20").unwrap()
+                ["workoutMinutes"],
+            44.0
+        );
+        drop(restarted);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn expired_or_wrong_unit_stock_cannot_be_used_or_confirmed_as_plan() {
+        let mut connection = connection();
+        let mut envelope: Value = serde_json::from_str(&bootstrap()).unwrap();
+        envelope["state"]["inventory"][0]["expiresAt"] = json!("2000-01-01");
+        envelope["state"]["inventory"][1]["unit"] = json!("ml");
+        envelope["state"]["plans"] = json!([{"id":"plan-1","recipeVersionId":"recipe-1","date":"2026-10-21","inventoryCoverage":100,"missingIngredients":[],"status":"candidate"}]);
+        let raw = envelope.to_string();
+        let prepare = execute_with_connection(
+            &mut connection,
+            request(
+                "expired-prepare1",
+                "prepare_recipe",
+                json!({"recipeVersionId":"recipe-1"}),
+                Some(raw.clone()),
+            ),
+        )
+        .unwrap();
+        assert!(!prepare.applied);
+        assert_eq!(prepare.state["inventory"][0]["remainingAmount"], 200);
+        assert!(execute_with_connection(
+            &mut connection,
+            request(
+                "expired-select-1",
+                "select_plan",
+                json!({"planId":"plan-1"}),
+                Some(raw)
+            )
+        )
+        .is_err());
+        assert_eq!(revision(&connection).unwrap(), 0);
+    }
+
+    #[test]
+    fn record_commands_keep_revisions_and_request_identity() {
+        let mut connection = connection();
+        let first = execute_with_connection(
+            &mut connection,
+            request(
+                "weight-first-01",
+                "add_weight",
+                json!({"weightKg":83,"date":"2026-10-20"}),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        let second = execute_with_connection(
+            &mut connection,
+            request(
+                "weight-next-001",
+                "add_weight",
+                json!({"weightKg":82.6,"date":"2026-10-20"}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(second.state["measurements"].as_array().unwrap().len(), 2);
+        assert_eq!(second.state["measurements"][0]["status"], "superseded");
+        assert_eq!(
+            second.state["measurements"][1]["supersedesId"],
+            first.state["measurements"][0]["id"]
+        );
+        let replay = execute_with_connection(
+            &mut connection,
+            request(
+                "weight-next-001",
+                "add_weight",
+                json!({"date":"2026-10-20","weightKg":82.6}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert!(replay.replayed);
+        assert_eq!(replay.revision, second.revision);
+        let changed = execute_with_connection(
+            &mut connection,
+            request(
+                "weight-next-001",
+                "add_weight",
+                json!({"weightKg":81,"date":"2026-10-20"}),
+                None,
+            ),
+        );
+        assert!(changed.unwrap_err().contains("命令内容"));
+        let abnormal = execute_with_connection(
+            &mut connection,
+            request(
+                "weight-outlier01",
+                "add_weight",
+                json!({"weightKg":95,"date":"2026-10-21"}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(abnormal.result["isOutlier"], true);
+        assert_eq!(abnormal.state["measurements"][2]["weightKg"], 95.0);
+    }
+
+    #[test]
+    fn period_projection_uses_calendar_days_complete_records_and_date_filtered_workouts() {
+        let mut connection = connection();
+        for (index, date, weight) in [
+            (0, "2026-09-01", 100),
+            (1, "2026-10-19", 84),
+            (2, "2026-10-20", 82),
+        ] {
+            execute_with_connection(
+                &mut connection,
+                request(
+                    &format!("weight-query-{index}"),
+                    "add_weight",
+                    json!({"weightKg":weight,"date":date}),
+                    Some(bootstrap()),
+                ),
+            )
+            .unwrap();
+        }
+        for (index, date, calories) in [(0, "2026-10-20", 1800), (1, "2026-10-21", 600)] {
+            execute_with_connection(&mut connection,request(&format!("meal-query-{index}"),"add_meal",json!({"name":"测试餐","type":"lunch","amountLabel":"一份","calories":calories,"protein":100,"date":date}),None)).unwrap();
+        }
+        execute_with_connection(
+            &mut connection,
+            request(
+                "complete-query-01",
+                "set_day_complete",
+                json!({"date":"2026-10-20","complete":true}),
+                None,
+            ),
+        )
+        .unwrap();
+        for (index, date, duration) in [(0, "2026-09-01", 120), (1, "2026-10-20", 22)] {
+            execute_with_connection(
+                &mut connection,
+                request(
+                    &format!("workout-query-{index}"),
+                    "add_workout",
+                    json!({"date":date,"name":"有氧","type":"低冲击","durationMinutes":duration}),
+                    None,
+                ),
+            )
+            .unwrap();
+        }
+        let summary =
+            crate::domain_queries::period_summary(&connection, "2026-10-18", "2026-10-24").unwrap();
+        assert_eq!(summary["completedDayCalorieAverage"], 1800.0);
+        assert_eq!(summary["workoutMinutes"], 22.0);
+        assert_eq!(summary["measurements"][1]["average"], 83.0);
+        assert_eq!(summary["days"][2]["coverage"]["fiber"], 0.0);
+        assert_eq!(summary["days"].as_array().unwrap().len(), 7);
+    }
+
+    #[test]
+    fn workout_fingerprint_and_completion_retries_do_not_duplicate_or_toggle() {
+        let mut connection = connection();
+        let payload = json!({"date":"2026-10-20","name":"Keep","type":"有氧","durationMinutes":22,"sourceFingerprint":"same-session"});
+        let first = execute_with_connection(
+            &mut connection,
+            request(
+                "workout-dedupe01",
+                "add_workout",
+                payload.clone(),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        let duplicate = execute_with_connection(
+            &mut connection,
+            request("workout-dedupe02", "add_workout", payload, None),
+        )
+        .unwrap();
+        assert!(!duplicate.applied);
+        assert_eq!(duplicate.result["duplicate"], true);
+        assert_eq!(duplicate.revision, first.revision);
+        let payload = json!({"date":"2026-10-20","complete":true});
+        execute_with_connection(
+            &mut connection,
+            request(
+                "complete-dedupe1",
+                "set_day_complete",
+                payload.clone(),
+                None,
+            ),
+        )
+        .unwrap();
+        let replay = execute_with_connection(
+            &mut connection,
+            request("complete-dedupe1", "set_day_complete", payload, None),
+        )
+        .unwrap();
+        assert_eq!(replay.state["checkIns"][0]["complete"], true);
+        assert_eq!(replay.state["workouts"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn purchase_replenishes_existing_food_and_invalid_commands_roll_back() {
+        let mut connection = connection();
+        let ordered = execute_with_connection(&mut connection,request("purchase-link-01","add_purchase",json!({"name":"豆腐","foodId":"tofu","amount":500,"unit":"g","priceCny":6,"platform":"duoduo","status":"ordered","confidence":"high"}),Some(bootstrap()))).unwrap();
+        assert_eq!(ordered.state["inventory"].as_array().unwrap().len(), 2);
+        let received = execute_with_connection(
+            &mut connection,
+            request(
+                "receive-link-001",
+                "receive_purchase",
+                json!({"purchaseId":ordered.state["purchases"][0]["id"]}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(received.state["inventory"][2]["foodId"], "tofu");
+        let invalid = execute_with_connection(
+            &mut connection,
+            request("invalid-rating01", "set_checkin", json!({"hunger":6}), None),
+        );
+        assert!(invalid.is_err());
+        assert_eq!(revision(&connection).unwrap(), received.revision);
+    }
+
+    #[test]
+    fn inbox_and_settings_use_commands_without_accepting_confirmation_or_usage_overwrite() {
+        let mut connection = connection();
+        let item = execute_with_connection(
+            &mut connection,
+            request(
+                "inbox-created-01",
+                "add_inbox_item",
+                json!({"kind":"text","title":"测试","preview":"一餐"}),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        let item_id = item.state["inbox"][0]["id"].clone();
+        assert!(execute_with_connection(
+            &mut connection,
+            request(
+                "inbox-forbidden1",
+                "set_inbox_status",
+                json!({"id":item_id,"status":"confirmed"}),
+                None
+            )
+        )
+        .is_err());
+        let drafted = execute_with_connection(
+            &mut connection,
+            request(
+                "inbox-drafted-01",
+                "set_inbox_status",
+                json!({"id":item_id,"status":"drafted"}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(drafted.state["inbox"][0]["status"], "drafted");
+        execute_with_connection(
+            &mut connection,
+            request(
+                "settings-config1",
+                "set_ai_settings",
+                json!({"monthlyLimitCny":20}),
+                None,
+            ),
+        )
+        .unwrap();
+        let settings = execute_with_connection(
+            &mut connection,
+            request(
+                "settings-config2",
+                "set_ai_settings",
+                json!({"monthlyLimitCny":null}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert!(settings.state["aiSettings"]
+            .get("monthlyLimitCny")
+            .is_none());
+        assert!(execute_with_connection(
+            &mut connection,
+            request(
+                "settings-illegal",
+                "set_ai_settings",
+                json!({"estimatedSpendCny":0}),
+                None
+            )
+        )
+        .is_err());
+        assert!(execute_with_connection(
+            &mut connection,
+            request(
+                "settings-url-bad",
+                "set_ai_settings",
+                json!({"baseUrl":"http://example.com"}),
+                None
+            )
+        )
+        .is_err());
     }
 
     #[test]

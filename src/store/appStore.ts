@@ -2,7 +2,7 @@ import { format } from "date-fns";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { deductInventoryFEFO, nutrition } from "../domain/calculations";
-import { initialState } from "../domain/seed";
+import { createPersonalState, initialState } from "../domain/seed";
 import type {
   AppState,
   AiSettings,
@@ -15,10 +15,11 @@ import type {
   PurchaseDraft,
   WorkoutSession,
 } from "../domain/types";
-import { executeDomainCommand } from "../data/domainCommands";
-import { appStorage, isTauriRuntime, suppressNextAppStorageWrite } from "../data/storage";
+import { enqueueDomainCommand, executeDomainCommand, type DomainCommandKind } from "../data/domainCommands";
+import { appStorage, flushAppStorageWrites, isTauriRuntime, suppressNextAppStorageWrite } from "../data/storage";
 
 const uid = () => crypto.randomUUID();
+export interface ActionResult { error?: string; duplicate?: boolean; isOutlier?: boolean }
 
 interface AppActions {
   addMeal: (input: {
@@ -28,19 +29,19 @@ interface AppActions {
     calories: number;
     protein: number;
     fiber?: number;
-  }) => void;
-  addWeight: (weightKg: number, date?: string) => void;
-  addWorkout: (input: Omit<WorkoutSession, "id" | "createdAt">) => void;
-  setCheckIn: (input: { hunger?: number; energy?: number }) => void;
-  toggleDayComplete: () => void;
-  addPurchase: (draft: Omit<PurchaseDraft, "id">) => void;
+  }, commandId?: string) => Promise<ActionResult>;
+  addWeight: (weightKg: number, date?: string, commandId?: string) => Promise<ActionResult>;
+  addWorkout: (input: Omit<WorkoutSession, "id" | "createdAt">, commandId?: string) => Promise<ActionResult>;
+  setCheckIn: (input: { hunger?: number; energy?: number }, commandId?: string) => Promise<ActionResult>;
+  toggleDayComplete: (commandId?: string) => Promise<ActionResult>;
+  addPurchase: (draft: Omit<PurchaseDraft, "id">, commandId?: string) => Promise<ActionResult>;
   receivePurchase: (purchaseId: string, commandId?: string) => Promise<{ error?: string }>;
   adjustInventory: (lotId: string, remainingAmount: number, reason: string, commandId?: string) => Promise<{ error?: string }>;
-  selectPlan: (planId: string) => void;
-  addInboxItem: (item: Omit<InboxItem, "id" | "receivedAt" | "status">) => void;
-  setInboxStatus: (id: string, status: InboxItem["status"]) => void;
-  setAiSettings: (settings: Partial<AiSettings>) => void;
-  recordAiUsage: (estimatedCostCny: number) => void;
+  selectPlan: (planId: string, commandId?: string) => Promise<ActionResult>;
+  addInboxItem: (item: Omit<InboxItem, "id" | "receivedAt" | "status">, commandId?: string) => Promise<ActionResult>;
+  setInboxStatus: (id: string, status: InboxItem["status"], commandId?: string) => Promise<ActionResult>;
+  setAiSettings: (settings: Partial<AiSettings>, commandId?: string) => Promise<ActionResult>;
+  recordAiUsage: (estimatedCostCny: number, commandId?: string) => Promise<ActionResult>;
   prepareRecipe: (recipeVersionId: string, commandId?: string) => Promise<{ shortage: string[]; batchId?: string }>;
   consumeBatch: (input: { batchId: string; mealType: MealType; ratio: number; ratioIsEstimated: boolean; commandId?: string }) => Promise<{ error?: string }>;
   discardBatchRemainder: (batchId: string, reason?: "discarded" | "spoiled" | "other", commandId?: string) => Promise<{ error?: string }>;
@@ -51,9 +52,23 @@ export type AppStore = AppState & AppActions;
 
 export const useAppStore = create<AppStore>()(
   persist(
-    (set, get) => ({
-      ...initialState,
-      addMeal(input) {
+    (set, get) => {
+      const commit = <TResult,>(kind: DomainCommandKind, payload: Record<string, unknown>, commandId: string) =>
+        enqueueDomainCommand(async () => {
+          const response = await executeDomainCommand<TResult>(get(), commandId, kind, payload);
+          suppressNextAppStorageWrite();
+          set(response.state);
+          return response;
+        });
+      const submit = async (kind: DomainCommandKind, payload: Record<string, unknown>, commandId: string): Promise<ActionResult> => {
+        try { return (await commit<ActionResult>(kind, payload, commandId)).result; }
+        catch (cause) { return { error: cause instanceof Error ? cause.message : String(cause) }; }
+      };
+      return ({
+      ...(isTauriRuntime() ? createPersonalState() : initialState),
+      async addMeal(input, commandId = uid()) {
+        if (isTauriRuntime()) return submit("add_meal", input, commandId);
+        if (!input.name.trim() || !input.amountLabel.trim() || !Number.isFinite(input.calories) || input.calories < 0 || !Number.isFinite(input.protein) || input.protein < 0 || (input.fiber !== undefined && (!Number.isFinite(input.fiber) || input.fiber < 0))) return { error: "请检查名称、份量和营养值。" };
         const now = new Date();
         const meal: MealEntry = {
           id: uid(),
@@ -72,8 +87,11 @@ export const useAppStore = create<AppStore>()(
           createdAt: now.toISOString(),
         };
         set((state) => ({ meals: [...state.meals, meal] }));
+        return {};
       },
-      addWeight(weightKg, date = format(new Date(), "yyyy-MM-dd")) {
+      async addWeight(weightKg, date = format(new Date(), "yyyy-MM-dd"), commandId = uid()) {
+        if (isTauriRuntime()) return submit("add_weight", { weightKg, date }, commandId);
+        if (!Number.isFinite(weightKg) || weightKg <= 0) return { error: "体重必须大于 0。" };
         const now = new Date().toISOString();
         const id = uid();
         set((state) => {
@@ -98,22 +116,32 @@ export const useAppStore = create<AppStore>()(
             ],
           };
         });
+        return {};
       },
-      addWorkout(input) {
-        if (input.sourceFingerprint && get().workouts.some((item) => item.sourceFingerprint === input.sourceFingerprint)) return;
+      async addWorkout(input, commandId = uid()) {
+        if (isTauriRuntime()) return submit("add_workout", input, commandId);
+        if (!input.name.trim() || !Number.isFinite(input.durationMinutes) || input.durationMinutes <= 0) return { error: "请检查运动名称和时长。" };
+        if (input.sourceFingerprint && get().workouts.some((item) => item.sourceFingerprint === input.sourceFingerprint)) return { duplicate: true };
         set((state) => ({
           workouts: [...state.workouts, { ...input, id: uid(), createdAt: new Date().toISOString() }],
         }));
+        return {};
       },
-      setCheckIn(input) {
+      async setCheckIn(input, commandId = uid()) {
+        if (isTauriRuntime()) return submit("set_checkin", input, commandId);
         const date = format(new Date(), "yyyy-MM-dd");
         set((state) => ({
           checkIns: state.checkIns.some((item) => item.date === date)
             ? state.checkIns.map((item) => (item.date === date ? { ...item, ...input } : item))
             : [...state.checkIns, { date, complete: false, ...input }],
         }));
+        return {};
       },
-      toggleDayComplete() {
+      async toggleDayComplete(commandId = uid()) {
+        if (isTauriRuntime()) {
+          const date = format(new Date(), "yyyy-MM-dd");
+          return submit("set_day_complete", { date, complete: !get().checkIns.find((item) => item.date === date)?.complete }, commandId);
+        }
         const date = format(new Date(), "yyyy-MM-dd");
         set((state) => {
           const current = state.checkIns.find((item) => item.date === date);
@@ -125,21 +153,22 @@ export const useAppStore = create<AppStore>()(
               : [...state.checkIns, next],
           };
         });
+        return {};
       },
-      addPurchase(draft) {
+      async addPurchase(draft, commandId = uid()) {
+        if (isTauriRuntime()) return submit("add_purchase", draft, commandId);
+        if (!draft.name.trim() || !Number.isFinite(draft.amount) || draft.amount <= 0 || !Number.isFinite(draft.priceCny) || draft.priceCny < 0) return { error: "请检查商品、数量和价格。" };
         set((state) => ({ purchases: [...state.purchases, { ...draft, id: uid() }] }));
+        return {};
       },
       async receivePurchase(purchaseId, commandId = uid()) {
         if (isTauriRuntime()) {
           try {
-            const response = await executeDomainCommand<{ lotId: string }>(
-              get(),
-              commandId,
+            await commit<{ lotId: string }>(
               "receive_purchase",
               { purchaseId },
+              commandId,
             );
-            suppressNextAppStorageWrite();
-            set(response.state);
             return {};
           } catch (cause) {
             return { error: cause instanceof Error ? cause.message : String(cause) };
@@ -149,7 +178,7 @@ export const useAppStore = create<AppStore>()(
         if (!purchase || purchase.status === "received") return { error: "这笔采购已经收货或不存在。" };
         const lot: InventoryLot = {
           id: uid(),
-          foodId: `food-${purchase.name.trim().toLowerCase().replace(/\s+/g, "-")}`,
+          foodId: purchase.foodId ?? get().inventory.find((item) => item.name === purchase.name && item.unit === purchase.unit)?.foodId ?? `food-${purchase.id}`,
           name: purchase.name,
           purchasedAmount: purchase.amount,
           remainingAmount: purchase.amount,
@@ -174,14 +203,11 @@ export const useAppStore = create<AppStore>()(
       async adjustInventory(lotId, remainingAmount, reason, commandId = uid()) {
         if (isTauriRuntime()) {
           try {
-            const response = await executeDomainCommand<Record<string, never>>(
-              get(),
-              commandId,
+            await commit<Record<string, never>>(
               "adjust_inventory",
               { lotId, remainingAmount, reason },
+              commandId,
             );
-            suppressNextAppStorageWrite();
-            set(response.state);
             return {};
           } catch (cause) {
             return { error: cause instanceof Error ? cause.message : String(cause) };
@@ -199,27 +225,41 @@ export const useAppStore = create<AppStore>()(
         }));
         return {};
       },
-      selectPlan(planId) {
+      async selectPlan(planId, commandId = uid()) {
+        if (isTauriRuntime()) return submit("select_plan", { planId }, commandId);
+        const plan = get().plans.find((item) => item.id === planId);
+        if (!plan || !plan.recipeVersionId || plan.inventoryCoverage < 100 || plan.missingIngredients.length) return { error: "候选需要完整菜谱与实际库存校验后才能确认。" };
+        const recipe = get().recipes.find((item) => item.id === plan.recipeVersionId);
+        if (!recipe || recipe.ingredients.some((ingredient) => get().inventory.filter((lot) => lot.foodId === ingredient.foodId && lot.unit === ingredient.unit && (!lot.expiresAt || lot.expiresAt >= format(new Date(), "yyyy-MM-dd"))).reduce((sum, lot) => sum + lot.remainingAmount, 0) < ingredient.amount)) return { error: "当前库存不足或已过期，请实际收货后重新校验。" };
         set((state) => ({
           plans: state.plans.map((plan): PlanCandidate => ({
             ...plan,
             status: plan.id === planId ? "selected" : plan.status === "selected" ? "candidate" : plan.status,
           })),
         }));
+        return {};
       },
-      addInboxItem(item) {
+      async addInboxItem(item, commandId = uid()) {
+        if (isTauriRuntime()) return submit("add_inbox_item", item, commandId);
+        if (item.fingerprint && get().inbox.some((entry) => entry.fingerprint === item.fingerprint)) return { duplicate: true };
         set((state) => ({
           inbox: [...state.inbox, { ...item, id: uid(), receivedAt: new Date().toISOString(), status: "unreviewed" }],
         }));
+        return {};
       },
-      setInboxStatus(id, status) {
+      async setInboxStatus(id, status, commandId = uid()) {
+        if (isTauriRuntime()) return submit("set_inbox_status", { id, status }, commandId);
         set((state) => ({ inbox: state.inbox.map((item) => (item.id === id ? { ...item, status } : item)) }));
+        return {};
       },
-      setAiSettings(settings) {
+      async setAiSettings(settings, commandId = uid()) {
+        if (isTauriRuntime()) return submit("set_ai_settings", { ...settings, ...(Object.prototype.hasOwnProperty.call(settings, "monthlyLimitCny") ? { monthlyLimitCny: settings.monthlyLimitCny ?? null } : {}) }, commandId);
         set((state) => ({ aiSettings: { ...state.aiSettings, ...settings } }));
+        return {};
       },
-      recordAiUsage(estimatedCostCny) {
-        if (!Number.isFinite(estimatedCostCny) || estimatedCostCny < 0) return;
+      async recordAiUsage(estimatedCostCny, commandId = uid()) {
+        if (isTauriRuntime()) return submit("record_ai_usage", { estimatedCostCny }, commandId);
+        if (!Number.isFinite(estimatedCostCny) || estimatedCostCny < 0) return { error: "费用不能小于 0。" };
         const usageMonth = format(new Date(), "yyyy-MM");
         set((state) => ({
           aiSettings: {
@@ -231,20 +271,16 @@ export const useAppStore = create<AppStore>()(
                 : estimatedCostCny,
           },
         }));
+        return {};
       },
       async prepareRecipe(recipeVersionId, commandId = uid()) {
         if (isTauriRuntime()) {
           try {
-            const response = await executeDomainCommand<{ shortage: string[]; batchId?: string }>(
-              get(),
-              commandId,
+            const response = await commit<{ shortage: string[]; batchId?: string }>(
               "prepare_recipe",
               { recipeVersionId },
+              commandId,
             );
-            if (response.applied) {
-              suppressNextAppStorageWrite();
-              set(response.state);
-            }
             return response.result;
           } catch (cause) {
             return { shortage: [cause instanceof Error ? cause.message : String(cause)] };
@@ -299,16 +335,11 @@ export const useAppStore = create<AppStore>()(
       async consumeBatch({ batchId, mealType, ratio, ratioIsEstimated, commandId = uid() }) {
         if (isTauriRuntime()) {
           try {
-            const response = await executeDomainCommand<Record<string, never>>(
-              get(),
-              commandId,
+            await commit<Record<string, never>>(
               "consume_batch",
               { batchId, mealType, ratio, ratioIsEstimated },
+              commandId,
             );
-            if (response.applied) {
-              suppressNextAppStorageWrite();
-              set(response.state);
-            }
             return {};
           } catch (cause) {
             return { error: cause instanceof Error ? cause.message : String(cause) };
@@ -357,16 +388,11 @@ export const useAppStore = create<AppStore>()(
       async discardBatchRemainder(batchId, reason = "discarded", commandId = uid()) {
         if (isTauriRuntime()) {
           try {
-            const response = await executeDomainCommand<Record<string, never>>(
-              get(),
-              commandId,
+            await commit<Record<string, never>>(
               "discard_batch",
               { batchId, reason },
+              commandId,
             );
-            if (response.applied) {
-              suppressNextAppStorageWrite();
-              set(response.state);
-            }
             return {};
           } catch (cause) {
             return { error: cause instanceof Error ? cause.message : String(cause) };
@@ -387,10 +413,15 @@ export const useAppStore = create<AppStore>()(
         return {};
       },
       async resetDemo() {
-        await appStorage.removeItem("fitwise-app-state-v1");
-        set(initialState);
+        await enqueueDomainCommand(async () => {
+          await flushAppStorageWrites();
+          await appStorage.removeItem("fitwise-app-state-v1");
+          set(isTauriRuntime() ? createPersonalState() : structuredClone(initialState));
+          await flushAppStorageWrites();
+        });
       },
-    }),
+    });
+    },
     {
       name: "fitwise-app-state-v1",
       storage: createJSONStorage(() => appStorage),

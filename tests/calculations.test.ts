@@ -37,6 +37,12 @@ describe("nutrition summaries", () => {
     expect(result.coverage.calories).toBe(50);
   });
 
+  it("excludes an unknown calorie entry even when rounded coverage displays 100 percent", () => {
+    const entries=[meal("known",1800),meal("tiny-unknown",undefined,0.000001)];
+    expect(summarizeMeals(entries).coverage.calories).toBe(100);
+    expect(completedDayCalorieAverage(entries,[{date:"2026-10-20",complete:true}])).toBeNull();
+  });
+
   it("excludes incomplete days from calorie averages", () => {
     const entries = [
       meal("complete", 1800),
@@ -89,11 +95,15 @@ describe("inventory FEFO", () => {
 describe("weight trends", () => {
   it("computes a rolling average without requiring seven initial days", () => {
     const result = movingAverage([
-      { date: "1", value: 83 },
-      { date: "2", value: 82 },
-      { date: "3", value: 81 },
+      { date: "2026-10-18", value: 83 },
+      { date: "2026-10-19", value: 82 },
+      { date: "2026-10-20", value: 81 },
     ], 2);
     expect(result.map((item) => item.value)).toEqual([83, 82.5, 81.5]);
+  });
+
+  it("does not bridge missing weeks into a seven-calendar-day average", () => {
+    expect(movingAverage([{date:"2026-09-01",value:90},{date:"2026-10-20",value:82}]).at(-1)?.value).toBe(82);
   });
 
   it("uses only active revisions in trend calculations", () => {

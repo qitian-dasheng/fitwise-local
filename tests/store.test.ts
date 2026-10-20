@@ -1,9 +1,18 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { initialState } from "../src/domain/seed";
+import { createPersonalState, initialState } from "../src/domain/seed";
 import { useAppStore } from "../src/store/appStore";
 
 beforeEach(() => {
   useAppStore.setState(structuredClone(initialState));
+});
+
+it("desktop onboarding does not seed fictional measurements or inventory", () => {
+  const state = createPersonalState();
+  expect(state.measurements).toEqual([]);
+  expect(state.inventory).toEqual([]);
+  expect(state.recipes).toHaveLength(1);
+  expect(state.plans.every((plan) => plan.inventoryCoverage === 0 && plan.status === "candidate")).toBe(true);
+  expect(initialState.inventory.length).toBeGreaterThan(0);
 });
 
 describe("prepared batch lifecycle", () => {
@@ -39,10 +48,10 @@ describe("prepared batch lifecycle", () => {
 });
 
 describe("body measurement revisions", () => {
-  it("retains the previous same-day value as a superseded audit record", () => {
+  it("retains the previous same-day value as a superseded audit record", async () => {
     const date = initialState.measurements[0].date;
-    useAppStore.getState().addWeight(82.8, date);
-    useAppStore.getState().addWeight(82.6, date);
+    await useAppStore.getState().addWeight(82.8, date);
+    await useAppStore.getState().addWeight(82.6, date);
 
     const state = useAppStore.getState();
     const sameDay = state.measurements.filter((item) => item.date === date);

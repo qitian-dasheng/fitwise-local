@@ -6,6 +6,8 @@ import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import type { AiProviderId } from "../domain/types";
 import { useAppStore } from "../store/appStore";
+import { exportDomainJson } from "../data/domainQueries";
+import { useConfirmedAction } from "../components/useConfirmedAction";
 
 interface BackupResult {
   path: string;
@@ -37,7 +39,9 @@ const formatBytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 
 export function SettingsPage() {
   const profile = useAppStore((state) => state.profile);
-  const aiSettings = useAppStore((state) => state.aiSettings);
+  const savedAiSettings = useAppStore((state) => state.aiSettings);
+  const [aiSettings, setAiDraft] = useState(savedAiSettings);
+  const configAction = useConfirmedAction();
   const auditEventCount = useAppStore((state) => state.auditEvents.length);
   const setAiSettings = useAppStore((state) => state.setAiSettings);
   const resetDemo = useAppStore((state) => state.resetDemo);
@@ -53,8 +57,16 @@ export function SettingsPage() {
   const [credentialBusy, setCredentialBusy] = useState(false);
   const [restoreScheduled, setRestoreScheduled] = useState(false);
   const [storageStatus, setStorageStatus] = useState<DomainStorageStatus | null>(null);
+  const [upgradeReport, setUpgradeReport] = useState<{ reconciled: boolean; backupPath?: string | null } | null>(null);
   const budget = aiBudgetState(aiSettings);
   const providerErrors = validateProviderSettings(aiSettings);
+
+  useEffect(() => { setAiDraft(savedAiSettings); }, [savedAiSettings]);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    void invoke<{ reconciled: boolean; backupPath?: string | null }>("get_domain_upgrade_report").then(setUpgradeReport).catch((cause) => setMessage(String(cause)));
+  }, []);
 
   useEffect(() => {
     setCredentialConfigured(false);
@@ -82,10 +94,11 @@ export function SettingsPage() {
       .catch(() => setStorageStatus(null));
   }, [auditEventCount]);
 
-  function exportJson() {
+  async function exportJson() {
+    try {
     const state = useAppStore.getState();
     const data = {
-      schemaVersion: 2,
+      schemaVersion: 5,
       exportedAt: new Date().toISOString(),
       app: "Fitwise Local",
       profile: state.profile,
@@ -105,12 +118,14 @@ export function SettingsPage() {
       plans: state.plans,
       aiSettings: state.aiSettings,
     };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+    const exported = isTauri() ? await exportDomainJson() : data;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" }));
     const link = document.createElement("a");
     link.href = url;
     link.download = `fitwise-export-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
+    } catch (cause) { setMessage(String(cause)); }
   }
 
   function openBackup(mode: "create" | "verify") {
@@ -197,8 +212,13 @@ export function SettingsPage() {
 
   function changeProvider(provider: AiProviderId) {
     const descriptor = providerDescriptor(provider);
-    setAiSettings({ provider, baseUrl: descriptor.defaultBaseUrl, cloudEnabled: false });
+    setAiDraft((current) => ({ ...current, provider, baseUrl: descriptor.defaultBaseUrl, cloudEnabled: false }));
     setApiKey("");
+  }
+
+  async function saveSettings(cloudEnabled = false) {
+    const settings = { provider: aiSettings.provider, baseUrl: aiSettings.baseUrl, model: aiSettings.model, monthlyLimitCny: aiSettings.monthlyLimitCny, cloudEnabled };
+    return configAction.run(JSON.stringify(settings), (id) => setAiSettings(settings, id));
   }
 
   async function saveCredential() {
@@ -213,10 +233,13 @@ export function SettingsPage() {
     setCredentialBusy(true);
     setMessage("");
     try {
+      const config = await saveSettings(false);
+      if (config.error) throw new Error(config.error);
       const status = await invoke<{ configured: boolean }>("save_ai_credential", { provider: aiSettings.provider, apiKey });
       setCredentialConfigured(status.configured);
       setApiKey("");
-      setAiSettings({ cloudEnabled: true });
+      const enabled = await setAiSettings({ cloudEnabled: true });
+      if (enabled.error) throw new Error(`凭据已保存，但配置未更新：${enabled.error}`);
       setMessage("API Key 已保存到 Windows 凭据管理器，不会写入数据库或 JSON 导出。");
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : String(cause));
@@ -231,7 +254,8 @@ export function SettingsPage() {
     try {
       await invoke("delete_ai_credential", { provider: aiSettings.provider });
       setCredentialConfigured(false);
-      setAiSettings({ cloudEnabled: false });
+      const disabled = await setAiSettings({ cloudEnabled: false });
+      if (disabled.error) throw new Error(`凭据已删除，但配置未更新：${disabled.error}`);
       setMessage("API Key 已从 Windows 凭据管理器删除。");
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : String(cause));
@@ -252,6 +276,7 @@ export function SettingsPage() {
         <section className="card settings-section">
           <div className="settings-title"><HardDrive/><div><h2>存储与附件</h2><p>结构化状态由 Rust 事务拆分为 SQLite 领域实体；附件体积统计、缩略图和 2 GB 提醒尚待接通。</p></div></div>
           <div className="storage-bar"><i style={{width:"0%"}}/></div><div className="storage-legend"><span>领域仓库 <b>{storageStatus?.initialized ? `修订 ${storageStatus.revision}` : "等待首次写入"}</b></span><span>实体 / 命令 / 审计 <b>{storageStatus?.entityCount ?? 0} / {storageStatus?.commandCount ?? 0} / {auditEventCount} 条</b></span></div>
+          {upgradeReport && <p className="form-hint">升级对账：{upgradeReport.reconciled ? "记录、营养与库存一致" : "需要复核"}{upgradeReport.backupPath ? `。升级前本地明文安全副本：${upgradeReport.backupPath}` : "。首次初始化，无旧数据库需要备份。"}</p>}
         </section>
         <section className="card settings-section">
           <div className="settings-title"><LockKeyhole/><div><h2>数据库加密备份与恢复验证</h2><p>Argon2id + AES-256-GCM；口令不会被保存，忘记后无法恢复。附件打包与自动轮换尚未启用。</p></div></div>
@@ -262,12 +287,13 @@ export function SettingsPage() {
           <div className="settings-title"><KeyRound/><div><h2>AI 提供商与费用上限</h2><p>密钥仅存 Windows 凭据管理器；达到软上限后回退手工模式。</p></div></div>
           <div className="form compact-form">
             <label>提供商<select value={aiSettings.provider} onChange={(event) => changeProvider(event.target.value as AiProviderId)}>{aiProviders.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label>
-            <label>接口地址<input value={aiSettings.baseUrl} onChange={(event) => setAiSettings({ baseUrl: event.target.value, cloudEnabled: false })}/></label>
-            <div className="form-grid"><label>模型名称<input value={aiSettings.model} placeholder="由你配置" onChange={(event) => setAiSettings({ model: event.target.value, cloudEnabled: false })}/></label><label>月度软上限（元）<input type="number" min="0" step="1" value={aiSettings.monthlyLimitCny ?? ""} onChange={(event) => setAiSettings({ monthlyLimitCny: event.target.value === "" ? undefined : Number(event.target.value) })}/></label></div>
+            <label>接口地址<input value={aiSettings.baseUrl} onChange={(event) => setAiDraft({ ...aiSettings, baseUrl: event.target.value, cloudEnabled: false })}/></label>
+            <div className="form-grid"><label>模型名称<input value={aiSettings.model} placeholder="由你配置" onChange={(event) => setAiDraft({ ...aiSettings, model: event.target.value, cloudEnabled: false })}/></label><label>月度软上限（元）<input type="number" min="0" step="1" value={aiSettings.monthlyLimitCny ?? ""} onChange={(event) => setAiDraft({ ...aiSettings, monthlyLimitCny: event.target.value === "" ? undefined : Number(event.target.value) })}/></label></div>
             <label>API Key<input type="password" autoComplete="off" value={apiKey} placeholder={credentialConfigured ? "已安全保存；输入可替换" : "不会写入应用数据库"} onChange={(event) => setApiKey(event.target.value)}/></label>
             {providerErrors.length > 0 && <p className="form-error">{providerErrors.join("；")}</p>}
+            {configAction.message && <p className="form-error" role="alert">{configAction.message}</p>}
             <div className="credential-row"><span className={`status-pill ${credentialConfigured ? "success" : "neutral"}`}>{credentialConfigured ? "凭据已保存" : "未配置凭据"}</span><span>本月估算 ¥{aiSettings.estimatedSpendCny.toFixed(2)}{aiSettings.monthlyLimitCny === undefined ? " · 不限额" : ` / ¥${aiSettings.monthlyLimitCny.toFixed(2)}`}</span></div>
-            <div className="button-row"><button className="button primary" disabled={credentialBusy || !apiKey} onClick={saveCredential}>{credentialBusy ? "处理中…" : "安全保存"}</button>{credentialConfigured && <button className="button danger" disabled={credentialBusy} onClick={deleteCredential}><Trash2 size={15}/> 删除凭据</button>}</div>
+            <div className="button-row"><button className="button secondary" disabled={configAction.busy || credentialBusy || providerErrors.length > 0} onClick={async () => { const result = await saveSettings(false); if (!result.error) setMessage("AI 配置已保存。真实模型调用尚待接通。"); }}>保存配置</button><button className="button primary" disabled={configAction.busy || credentialBusy || !apiKey} onClick={saveCredential}>{credentialBusy ? "处理中…" : "安全保存凭据"}</button>{credentialConfigured && <button className="button danger" disabled={credentialBusy} onClick={deleteCredential}><Trash2 size={15}/> 删除凭据</button>}</div>
             {budget.exhausted && <p className="form-error">本月软上限已达到，云端调用已停用；手工记录不受影响。</p>}
           </div>
         </section>
@@ -275,7 +301,7 @@ export function SettingsPage() {
           <div className="settings-title"><Shield/><div><h2>外部助手</h2><p>MCP 默认关闭；首个小版本只开放摘要读取和草稿创建。</p></div></div><span className="status-pill neutral">尚未启用</span>
         </section>
       </div>
-      <section className="danger-zone card"><div><h3>重置本地演示数据</h3><p>清除 SQLite 中的应用状态和命令回执，再恢复标准菜谱和初始库存；附件和 Windows 凭据不会删除。</p></div><button className="button danger" onClick={() => { if (confirm("确定重置演示数据？")) void resetDemo(); }}><RotateCcw size={16}/> 重置</button></section>
+      <section className="danger-zone card"><div><h3>重置本地记录</h3><p>清除应用记录和命令回执。桌面版回到空白记录并保留标准菜谱；附件和 Windows 凭据保留。</p></div><button className="button danger" disabled={busy} onClick={async () => { if (!confirm("确定清除这台电脑上的全部应用记录？建议先创建加密备份。")) return; setBusy(true); try { await resetDemo(); setMessage("本地记录已重置。"); } catch (cause) { setMessage(String(cause)); } finally { setBusy(false); } }}><RotateCcw size={16}/> 重置</button></section>
 
       {backupMode && <Modal title={backupMode === "create" ? "创建加密备份" : "验证或暂存恢复副本"} onClose={() => !busy && setBackupMode(null)}>
         <form className="form" onSubmit={(event) => { event.preventDefault(); void submitBackup(); }}>

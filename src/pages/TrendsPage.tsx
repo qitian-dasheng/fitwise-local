@@ -4,6 +4,7 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Too
 import { activeMeasurements, completedDayCalorieAverage, movingAverage, summarizeMeals } from "../domain/calculations";
 import { PageHeader } from "../components/PageHeader";
 import { useAppStore } from "../store/appStore";
+import { usePeriodSummary } from "../data/domainQueries";
 
 export function TrendsPage() {
   const measurements = useAppStore((state) => state.measurements);
@@ -11,24 +12,30 @@ export function TrendsPage() {
   const checkIns = useAppStore((state) => state.checkIns);
   const workouts = useAppStore((state) => state.workouts);
   const profile = useAppStore((state) => state.profile);
+  const start = format(subDays(new Date(), 6), "yyyy-MM-dd");
+  const end = format(new Date(), "yyyy-MM-dd");
+  const period = usePeriodSummary(start, end);
   const currentMeasurements = activeMeasurements(measurements);
   const weights = currentMeasurements.map((item) => ({ date: item.date, value: item.weightKg }));
   const avg = movingAverage(weights);
-  const weightData = weights.map((item, index) => ({ date: item.date.slice(5), weight: item.value, average: avg[index].value }));
-  const calorieData = Array.from({ length: 7 }, (_, index) => {
+  const weightData = period.data ? period.data.measurements.map((item) => ({ date: item.date.slice(5), weight: item.weightKg, average: item.average })) : weights.map((item, index) => ({ date: item.date.slice(5), weight: item.value, average: avg[index].value }));
+  const calorieData = period.data ? period.data.days.map((day) => ({ date: day.date.slice(5), calories: Math.round(day.totals.calories), complete: day.complete })) : Array.from({ length: 7 }, (_, index) => {
     const date = format(subDays(new Date(), 6 - index), "yyyy-MM-dd");
     const entries = meals.filter((item) => item.date === date);
     return { date: date.slice(5), calories: Math.round(summarizeMeals(entries).totals.calories), complete: checkIns.some((item) => item.date === date && item.complete) };
   });
-  const averageCalories = completedDayCalorieAverage(meals, checkIns);
+  const averageCalories = period.data ? period.data.completedDayCalorieAverage : completedDayCalorieAverage(meals.filter((item) => item.date >= start && item.date <= end), checkIns);
+  const workoutMinutes = period.data?.workoutMinutes ?? workouts.filter((item) => item.date >= start && item.date <= end).reduce((sum, item) => sum + item.durationMinutes, 0);
+  const latestWeight = period.data ? period.data.latestWeightKg : currentMeasurements.at(-1)?.weightKg;
+  if (period.loading || period.error) return <div className="page"><PageHeader eyebrow="周报" title="趋势与周报" description={period.error ? "读取趋势失败，请重新打开此页面后重试。" : "正在读取本地趋势…"}/>{period.error && <p className="form-error" role="alert">{period.error}</p>}</div>;
   return (
     <div className="page">
       <PageHeader eyebrow="只看确认过的事实" title="趋势与周报" description="未完成日期不进入平均值，运动消耗也不会抵扣饮食预算。" />
       <div className="metric-row">
-        <Metric icon={<Scale />} label="最新体重" value={`${currentMeasurements.at(-1)?.weightKg.toFixed(1) ?? "—"} kg`} />
-        <Metric icon={<Activity />} label="距阶段目标" value={`${((currentMeasurements.at(-1)?.weightKg ?? profile.startWeightKg) - profile.targetWeightKg).toFixed(1)} kg`} />
+        <Metric icon={<Scale />} label="最新体重" value={`${latestWeight?.toFixed(1) ?? "—"} kg`} />
+        <Metric icon={<Activity />} label="距阶段目标" value={`${((latestWeight ?? profile.startWeightKg) - profile.targetWeightKg).toFixed(1)} kg`} />
         <Metric icon={<CalendarCheck />} label="完整记录日均" value={averageCalories === null ? "数据不足" : `${Math.round(averageCalories)} kcal`} />
-        <Metric icon={<Dumbbell />} label="本周运动" value={`${workouts.reduce((sum, item) => sum + item.durationMinutes, 0)} 分钟`} />
+        <Metric icon={<Dumbbell />} label="近七日运动" value={`${workoutMinutes} 分钟`} />
       </div>
       <div className="two-column equal">
         <section className="card chart-card"><div className="card-heading compact"><div><p className="eyebrow">七日移动平均</p><h2>体重趋势</h2></div></div><div className="chart-large">{weightData.length > 1 ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={weightData}><defs><linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#276a53" stopOpacity={0.25}/><stop offset="1" stopColor="#276a53" stopOpacity={0}/></linearGradient></defs><CartesianGrid vertical={false} stroke="#e8ebe5" /><XAxis dataKey="date" axisLine={false} tickLine={false}/><YAxis domain={["dataMin - 1", "dataMax + 1"]} axisLine={false} tickLine={false}/><Tooltip/><Area type="monotone" dataKey="weight" stroke="#b6bcb4" fill="none" strokeDasharray="4 4"/><Area type="monotone" dataKey="average" stroke="#276a53" strokeWidth={3} fill="url(#trendFill)"/></AreaChart></ResponsiveContainer> : <div className="empty-chart"><Scale /><span>至少需要两次体重记录</span></div>}</div></section>

@@ -8,12 +8,15 @@ import { useAppStore } from "../store/appStore";
 import { Modal } from "../components/Modal";
 import { NutritionRing } from "../components/NutritionRing";
 import { PageHeader } from "../components/PageHeader";
+import { useConfirmedAction } from "../components/useConfirmedAction";
+import { usePeriodSummary } from "../data/domainQueries";
 
 const mealLabels = { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", snack: "加餐" } as const;
 
 export function TodayPage({ goTo }: { goTo: (page: string) => void }) {
   const [weightOpen, setWeightOpen] = useState(false);
   const [weight, setWeight] = useState("");
+  const action = useConfirmedAction();
   const profile = useAppStore((state) => state.profile);
   const meals = useAppStore((state) => state.meals);
   const measurements = useAppStore((state) => state.measurements);
@@ -25,15 +28,18 @@ export function TodayPage({ goTo }: { goTo: (page: string) => void }) {
   const setCheckIn = useAppStore((state) => state.setCheckIn);
   const toggleDayComplete = useAppStore((state) => state.toggleDayComplete);
   const today = format(new Date(), "yyyy-MM-dd");
+  const period = usePeriodSummary(today, today);
   const todayMeals = meals.filter((meal) => meal.date === today);
-  const summary = summarizeMeals(todayMeals);
+  const summary = period.data?.days[0] ?? summarizeMeals(todayMeals);
   const todayWorkouts = workouts.filter((item) => item.date === today);
   const todayCheck = checkIns.find((item) => item.date === today);
   const selectedPlan = plans.find((item) => item.status === "selected") ?? plans[0];
   const currentMeasurements = activeMeasurements(measurements);
   const weightData = currentMeasurements.slice(-14).map((item) => ({ date: item.date.slice(5), weight: item.weightKg }));
-  const latestWeight = currentMeasurements.at(-1)?.weightKg ?? profile.startWeightKg;
-  const expiringCount = useMemo(() => inventory.filter((item) => item.expiresAt && new Date(item.expiresAt).getTime() - Date.now() < 3 * 864e5).length, [inventory]);
+  const latestWeight = period.data?.latestWeightKg ?? currentMeasurements.at(-1)?.weightKg ?? profile.startWeightKg;
+  const expiringCount = useMemo(() => inventory.filter((item) => item.remainingAmount > 0 && item.expiresAt && new Date(item.expiresAt).getTime() - Date.now() < 3 * 864e5).length, [inventory]);
+
+  if (period.loading || period.error) return <div className="page"><PageHeader eyebrow="今日" title="今日记录" description={period.error ? "读取记录失败，请重新打开此页面后重试。" : "正在读取本地记录…"}/>{period.error && <p className="form-error" role="alert">{period.error}</p>}</div>;
 
   return (
     <div className="page">
@@ -42,11 +48,12 @@ export function TodayPage({ goTo }: { goTo: (page: string) => void }) {
         title={`早上好，${profile.name}`}
         description="先记录事实，再让趋势说话。今天的建议不会因为一次波动而改变。"
         action={
-          <button className={todayCheck?.complete ? "button success" : "button primary"} onClick={toggleDayComplete}>
+          <button className={todayCheck?.complete ? "button success" : "button primary"} disabled={action.busy} onClick={() => { void action.run(`complete:${today}:${!todayCheck?.complete}`, (id) => toggleDayComplete(id)); }}>
             <Check size={17} /> {todayCheck?.complete ? "今日已完成" : "完成今日记录"}
           </button>
         }
       />
+      {action.message && <div className="settings-notice card" role="alert">{action.message}</div>}
 
       <section className="hero-grid">
         <article className="card nutrition-hero">
@@ -72,7 +79,7 @@ export function TodayPage({ goTo }: { goTo: (page: string) => void }) {
         <article className="card weight-card">
           <div className="card-heading compact">
             <div>
-              <p className="eyebrow">体重趋势</p>
+              <p className="eyebrow">{currentMeasurements.length ? "体重趋势" : "起始参考 · 尚未记录晨重"}</p>
               <h2>{latestWeight.toFixed(1)} <small>kg</small></h2>
             </div>
             <button className="icon-button solid" onClick={() => setWeightOpen(true)} aria-label="记录体重"><Plus size={19} /></button>
@@ -129,7 +136,7 @@ export function TodayPage({ goTo }: { goTo: (page: string) => void }) {
           </article>
 
           <article className="card quick-status">
-            <div className="quick-item"><Dumbbell size={19} /><span>今日运动</span><b>{todayWorkouts.length ? `${todayWorkouts.reduce((sum, item) => sum + item.durationMinutes, 0)} 分钟` : "未记录"}</b></div>
+            <div className="quick-item"><Dumbbell size={19} /><span>今日运动</span><b>{(period.data?.workoutMinutes ?? todayWorkouts.reduce((sum, item) => sum + item.durationMinutes, 0)) || "未记录"}{period.data?.workoutMinutes || todayWorkouts.length ? " 分钟" : ""}</b></div>
             <div className="quick-item"><Wheat size={19} /><span>临期库存</span><b className={expiringCount ? "warning-text" : ""}>{expiringCount} 项</b></div>
           </article>
         </div>
@@ -148,16 +155,17 @@ export function TodayPage({ goTo }: { goTo: (page: string) => void }) {
 
       <section className="checkin-bar card">
         <div><p className="eyebrow">主观状态</p><h3>今天感觉怎么样？</h3></div>
-        <Rating label="饥饿感" value={todayCheck?.hunger} onChange={(hunger) => setCheckIn({ hunger })} />
-        <Rating label="精力" value={todayCheck?.energy} onChange={(energy) => setCheckIn({ energy })} />
+        <Rating label="饥饿感" disabled={action.busy} value={todayCheck?.hunger} onChange={(hunger) => { void action.run(`hunger:${today}:${hunger}`, (id) => setCheckIn({ hunger }, id)); }} />
+        <Rating label="精力" disabled={action.busy} value={todayCheck?.energy} onChange={(energy) => { void action.run(`energy:${today}:${energy}`, (id) => setCheckIn({ energy }, id)); }} />
       </section>
 
       {weightOpen && (
-        <Modal title="记录晨起体重" onClose={() => setWeightOpen(false)}>
-          <form className="form" onSubmit={(event) => { event.preventDefault(); const value = Number(weight); if (value > 0) { addWeight(value); setWeightOpen(false); setWeight(""); } }}>
+        <Modal title="记录晨起体重" onClose={() => { if (!action.busy) setWeightOpen(false); }}>
+          <form className="form" onSubmit={async (event) => { event.preventDefault(); const value = Number(weight); const result = await action.run(`weight:${today}:${value}`, (id) => addWeight(value, today, id)); if (!result.error) { setWeightOpen(false); setWeight(""); if (result.isOutlier) action.setMessage("本次体重与最近记录相差较大，已保留原始值，请复核称量。 "); } }}>
             <label><span>体重（kg）</span><input autoFocus inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} placeholder="例如 82.6" /></label>
             <p className="form-hint">相同日期重复记录会把旧值标为“已修订”并保留审计，不会静默删除；异常波动也不会自动删除。</p>
-            <button className="button primary wide" type="submit">确认记录</button>
+            {action.message && <p className="form-error" role="alert">{action.message}</p>}
+            <button className="button primary wide" type="submit" disabled={action.busy}>{action.busy ? "正在保存…" : "确认记录"}</button>
           </form>
         </Modal>
       )}
@@ -165,11 +173,11 @@ export function TodayPage({ goTo }: { goTo: (page: string) => void }) {
   );
 }
 
-function Rating({ label, value, onChange }: { label: string; value?: number; onChange: (value: number) => void }) {
+function Rating({ label, value, onChange, disabled }: { label: string; value?: number; onChange: (value: number) => void; disabled?: boolean }) {
   return (
     <div className="rating">
       <span>{label}</span>
-      <div>{[1, 2, 3, 4, 5].map((item) => <button className={value === item ? "active" : ""} onClick={() => onChange(item)} key={item}>{item}</button>)}</div>
+      <div>{[1, 2, 3, 4, 5].map((item) => <button disabled={disabled} className={value === item ? "active" : ""} onClick={() => onChange(item)} key={item}>{item}</button>)}</div>
     </div>
   );
 }
