@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   completedDayCalorieAverage,
+  activeMeasurements,
   deductInventoryFEFO,
   movingAverage,
   nutrition,
@@ -93,5 +94,13 @@ describe("weight trends", () => {
       { date: "3", value: 81 },
     ], 2);
     expect(result.map((item) => item.value)).toEqual([83, 82.5, 81.5]);
+  });
+
+  it("uses only active revisions in trend calculations", () => {
+    const result = activeMeasurements([
+      { id: "old", date: "2026-10-20", weightKg: 83, status: "superseded", createdAt: "2026-10-20T01:00:00Z" },
+      { id: "new", date: "2026-10-20", weightKg: 82.8, status: "active", supersedesId: "old", createdAt: "2026-10-20T02:00:00Z" },
+    ]);
+    expect(result.map((item) => item.id)).toEqual(["new"]);
   });
 });

@@ -1,5 +1,6 @@
 import type {
   DailyCheckIn,
+  BodyMeasurement,
   InventoryLot,
   MealEntry,
   NutritionFacts,
@@ -67,6 +68,12 @@ export function movingAverage(values: { date: string; value: number }[], windowS
       value: slice.reduce((sum, point) => sum + point.value, 0) / slice.length,
     };
   });
+}
+
+export function activeMeasurements(measurements: BodyMeasurement[]) {
+  return measurements
+    .filter((item) => item.status !== "superseded")
+    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
 }
 
 export function completedDateSet(checkIns: DailyCheckIn[]) {

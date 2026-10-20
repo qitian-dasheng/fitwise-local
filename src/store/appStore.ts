@@ -11,6 +11,7 @@ import type {
   MealEntry,
   MealType,
   PlanCandidate,
+  PreparedBatch,
   PurchaseDraft,
   WorkoutSession,
 } from "../domain/types";
@@ -39,7 +40,9 @@ interface AppActions {
   setInboxStatus: (id: string, status: InboxItem["status"]) => void;
   setAiSettings: (settings: Partial<AiSettings>) => void;
   recordAiUsage: (estimatedCostCny: number) => void;
-  cookRecipe: (recipeVersionId: string, consumedRatio: number) => { shortage: string[] };
+  prepareRecipe: (recipeVersionId: string) => { shortage: string[]; batchId?: string };
+  consumeBatch: (input: { batchId: string; mealType: MealType; ratio: number; ratioIsEstimated: boolean }) => { error?: string };
+  discardBatchRemainder: (batchId: string, reason?: "discarded" | "spoiled" | "other") => { error?: string };
   resetDemo: () => void;
 }
 
@@ -70,12 +73,30 @@ export const useAppStore = create<AppStore>()(
         set((state) => ({ meals: [...state.meals, meal] }));
       },
       addWeight(weightKg, date = format(new Date(), "yyyy-MM-dd")) {
-        set((state) => ({
-          measurements: [
-            ...state.measurements.filter((item) => item.date !== date),
-            { id: uid(), date, weightKg, createdAt: new Date().toISOString() },
-          ].sort((a, b) => a.date.localeCompare(b.date)),
-        }));
+        const now = new Date().toISOString();
+        const id = uid();
+        set((state) => {
+          const previous = [...state.measurements]
+            .reverse()
+            .find((item) => item.date === date && item.status !== "superseded");
+          return {
+            measurements: [
+              ...state.measurements.map((item) => item.id === previous?.id ? { ...item, status: "superseded" as const } : item),
+              { id, date, weightKg, status: "active" as const, supersedesId: previous?.id, createdAt: now },
+            ].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt)),
+            auditEvents: [
+              ...state.auditEvents,
+              {
+                id: uid(),
+                eventType: previous ? "body_measurement_superseded" : "body_measurement_created",
+                entityType: "body_measurement",
+                entityId: id,
+                payload: { date, weightKg, supersedesId: previous?.id },
+                createdAt: now,
+              },
+            ],
+          };
+        });
       },
       addWorkout(input) {
         if (input.sourceFingerprint && get().workouts.some((item) => item.sourceFingerprint === input.sourceFingerprint)) return;
@@ -178,14 +199,13 @@ export const useAppStore = create<AppStore>()(
           },
         }));
       },
-      cookRecipe(recipeVersionId, consumedRatio) {
+      prepareRecipe(recipeVersionId) {
         const recipe = get().recipes.find((item) => item.id === recipeVersionId);
         if (!recipe) return { shortage: ["找不到菜谱"] };
         let inventory = get().inventory;
         const movements = [...get().inventoryMovements];
         const shortages: string[] = [];
         for (const ingredient of recipe.ingredients) {
-          if (ingredient.unit === "piece") continue;
           const result = deductInventoryFEFO(inventory, ingredient.foodId, ingredient.amount);
           inventory = result.lots;
           if (result.shortage > 0) shortages.push(`${ingredient.name} 缺 ${result.shortage}${ingredient.unit}`);
@@ -203,19 +223,7 @@ export const useAppStore = create<AppStore>()(
         if (shortages.length) return { shortage: shortages };
         const batchId = uid();
         const date = format(new Date(), "yyyy-MM-dd");
-        const batchMeal: MealEntry = {
-          id: uid(),
-          date,
-          type: "dinner",
-          name: `${recipe.name}（午晚餐共享）`,
-          amountLabel: `整锅已食用 ${Math.round(consumedRatio * 100)}%`,
-          nutrition: recipe.nutrition,
-          consumedRatio,
-          source: recipe.source,
-          confidence: "medium",
-          preparedBatchId: batchId,
-          createdAt: new Date().toISOString(),
-        };
+        const createdAt = new Date().toISOString();
         set((state) => ({
           inventory,
           inventoryMovements: movements,
@@ -226,15 +234,73 @@ export const useAppStore = create<AppStore>()(
               recipeVersionId,
               date,
               inventoryDeducted: true,
-              consumedRatio,
-              wastedRatio: 1 - consumedRatio,
-              ratioIsEstimated: consumedRatio !== 1,
-              createdAt: new Date().toISOString(),
+              consumedRatio: 0,
+              wastedRatio: 0,
+              remainingRatio: 1,
+              status: "open",
+              ratioIsEstimated: false,
+              createdAt,
             },
           ],
-          meals: [...state.meals, batchMeal],
+          auditEvents: [...state.auditEvents, { id: uid(), eventType: "prepared_batch_created", entityType: "prepared_batch", entityId: batchId, payload: { recipeVersionId }, createdAt }],
         }));
-        return { shortage: [] };
+        return { shortage: [], batchId };
+      },
+      consumeBatch({ batchId, mealType, ratio, ratioIsEstimated }) {
+        const batch = get().batches.find((item) => item.id === batchId);
+        if (!batch || batch.status === "closed") return { error: "这个批次已经结束或不存在。" };
+        if (!Number.isFinite(ratio) || ratio <= 0) return { error: "进食比例必须大于 0。" };
+        const remaining = batch.remainingRatio ?? Math.max(0, 1 - batch.consumedRatio - batch.wastedRatio);
+        if (ratio > remaining + 0.0001) return { error: `最多只能记录剩余整锅的 ${Math.round(remaining * 100)}%。` };
+        const recipe = get().recipes.find((item) => item.id === batch.recipeVersionId);
+        if (!recipe) return { error: "找不到这个批次对应的菜谱版本。" };
+        const eventId = uid();
+        const mealId = uid();
+        const now = new Date().toISOString();
+        const date = format(new Date(), "yyyy-MM-dd");
+        const nextRemaining = Math.max(0, Number((remaining - ratio).toFixed(4)));
+        set((state) => ({
+          batches: state.batches.map((item) => item.id === batchId ? {
+            ...item,
+            consumedRatio: Number((item.consumedRatio + ratio).toFixed(4)),
+            remainingRatio: nextRemaining,
+            status: nextRemaining === 0 ? "closed" : "open",
+            ratioIsEstimated: item.ratioIsEstimated || ratioIsEstimated,
+            closedAt: nextRemaining === 0 ? now : item.closedAt,
+          } : item),
+          consumptionEvents: [...state.consumptionEvents, { id: eventId, batchId, date, mealType, ratio, ratioIsEstimated, createdAt: now }],
+          meals: [...state.meals, {
+            id: mealId,
+            date,
+            type: mealType,
+            name: recipe.name,
+            amountLabel: `整锅的 ${Math.round(ratio * 100)}%${ratioIsEstimated ? "（估算）" : ""}`,
+            nutrition: recipe.nutrition,
+            consumedRatio: ratio,
+            source: recipe.source,
+            confidence: ratioIsEstimated ? "medium" : "high",
+            preparedBatchId: batchId,
+            consumptionEventId: eventId,
+            createdAt: now,
+          }],
+          auditEvents: [...state.auditEvents, { id: uid(), eventType: "batch_consumption_recorded", entityType: "consumption_event", entityId: eventId, payload: { batchId, mealId, mealType, ratio, ratioIsEstimated }, createdAt: now }],
+        }));
+        return {};
+      },
+      discardBatchRemainder(batchId, reason = "discarded") {
+        const batch = get().batches.find((item) => item.id === batchId);
+        if (!batch || batch.status === "closed") return { error: "这个批次已经结束或不存在。" };
+        const ratio = batch.remainingRatio ?? Math.max(0, 1 - batch.consumedRatio - batch.wastedRatio);
+        if (ratio <= 0) return { error: "这个批次已经没有剩余。" };
+        const id = uid();
+        const now = new Date().toISOString();
+        const date = format(new Date(), "yyyy-MM-dd");
+        set((state) => ({
+          batches: state.batches.map((item) => item.id === batchId ? { ...item, wastedRatio: Number((item.wastedRatio + ratio).toFixed(4)), remainingRatio: 0, status: "closed", closedAt: now } : item),
+          wasteEvents: [...state.wasteEvents, { id, batchId, date, ratio, reason, createdAt: now }],
+          auditEvents: [...state.auditEvents, { id: uid(), eventType: "batch_remainder_discarded", entityType: "waste_event", entityId: id, payload: { batchId, ratio, reason }, createdAt: now }],
+        }));
+        return {};
       },
       resetDemo() {
         set(initialState);
@@ -243,12 +309,23 @@ export const useAppStore = create<AppStore>()(
     {
       name: "fitwise-app-state-v1",
       storage: createJSONStorage(() => appStorage),
-      version: 2,
+      version: 3,
       migrate(persistedState) {
         const persisted = persistedState as Partial<AppState>;
+        type LegacyBatch = Omit<PreparedBatch, "remainingRatio" | "status"> & Partial<Pick<PreparedBatch, "remainingRatio" | "status">>;
+        const migratedBatches = ((persisted.batches ?? []) as LegacyBatch[]).map((batch) => {
+          const remainingRatio = batch.remainingRatio
+            ?? Math.max(0, 1 - (batch.consumedRatio ?? 0) - (batch.wastedRatio ?? 0));
+          return { ...batch, remainingRatio, status: remainingRatio > 0 ? "open" as const : "closed" as const };
+        });
         return {
           ...initialState,
           ...persisted,
+          batches: migratedBatches,
+          consumptionEvents: persisted.consumptionEvents ?? [],
+          wasteEvents: persisted.wasteEvents ?? [],
+          auditEvents: persisted.auditEvents ?? [],
+          measurements: (persisted.measurements ?? initialState.measurements).map((item) => ({ ...item, status: item.status ?? "active" })),
           aiSettings: { ...initialState.aiSettings, ...persisted.aiSettings },
         } as AppStore;
       },

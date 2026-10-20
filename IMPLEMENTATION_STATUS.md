@@ -26,6 +26,11 @@
 - 0.1.1 修复 WebView2 主内容被侧栏覆盖的问题；安装版原生截图和全部 9 个导航页面验证通过。
 - 安装版从 0.1.0 覆盖升级至 0.1.1，用户数据库哈希保持不变。
 - 默认不再联网加载 Google Fonts；局域网上传仅绑定选中的私有网卡地址。
+- 0.2.1 将制作、实际进食、保留剩余与熟食丢弃拆分为独立事件；午餐和晚餐可记录不同整锅比例。
+- 熟食批次只有在用户明确记录进食时才进入营养汇总；只有明确丢弃时才进入浪费记录。
+- 同日体重修订保留旧记录、修订链和审计事件，趋势只读取当前有效版本。
+- SQLite 迁移 v2 已建立 `consumption_events`、`waste_events` 以及批次剩余/状态字段。
+- 持久化状态从 v2 到 v3 的兼容迁移已有自动化测试；前端测试增加到 12 项。
 
 ## 已建立边界但尚未接通外部服务
 
@@ -41,6 +46,6 @@
 
 ## Windows 构建状态
 
-已安装最小 Visual Studio 2022 C++ Build Tools，不含完整 Visual Studio IDE；VS Code 保持为编辑器。Rust stable-msvc、MSVC、Windows SDK、前端构建、`cargo test`、release、MSI 和 NSIS 均已验证。当前安装版本为 0.1.1。
+已安装最小 Visual Studio 2022 C++ Build Tools，不含完整 Visual Studio IDE；VS Code 保持为编辑器。Rust stable-msvc、MSVC、Windows SDK、前端构建、`cargo test`、release、MSI 和 NSIS 均已验证。当前交付版本为 0.2.1。
 
 安装包当前没有代码签名证书，因此 Windows 会显示“未知发布者”；发布给其他用户前应补签名。

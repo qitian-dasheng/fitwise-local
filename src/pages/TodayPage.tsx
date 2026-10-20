@@ -3,7 +3,7 @@ import { zhCN } from "date-fns/locale";
 import { ArrowRight, Check, Dumbbell, Plus, Scale, Sparkles, Utensils, Wheat } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { summarizeMeals } from "../domain/calculations";
+import { activeMeasurements, summarizeMeals } from "../domain/calculations";
 import { useAppStore } from "../store/appStore";
 import { Modal } from "../components/Modal";
 import { NutritionRing } from "../components/NutritionRing";
@@ -30,8 +30,9 @@ export function TodayPage({ goTo }: { goTo: (page: string) => void }) {
   const todayWorkouts = workouts.filter((item) => item.date === today);
   const todayCheck = checkIns.find((item) => item.date === today);
   const selectedPlan = plans.find((item) => item.status === "selected") ?? plans[0];
-  const weightData = measurements.slice(-14).map((item) => ({ date: item.date.slice(5), weight: item.weightKg }));
-  const latestWeight = measurements.at(-1)?.weightKg ?? profile.startWeightKg;
+  const currentMeasurements = activeMeasurements(measurements);
+  const weightData = currentMeasurements.slice(-14).map((item) => ({ date: item.date.slice(5), weight: item.weightKg }));
+  const latestWeight = currentMeasurements.at(-1)?.weightKg ?? profile.startWeightKg;
   const expiringCount = useMemo(() => inventory.filter((item) => item.expiresAt && new Date(item.expiresAt).getTime() - Date.now() < 3 * 864e5).length, [inventory]);
 
   return (
@@ -155,7 +156,7 @@ export function TodayPage({ goTo }: { goTo: (page: string) => void }) {
         <Modal title="记录晨起体重" onClose={() => setWeightOpen(false)}>
           <form className="form" onSubmit={(event) => { event.preventDefault(); const value = Number(weight); if (value > 0) { addWeight(value); setWeightOpen(false); setWeight(""); } }}>
             <label><span>体重（kg）</span><input autoFocus inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} placeholder="例如 82.6" /></label>
-            <p className="form-hint">相同日期重复记录会保留最新值；异常波动只提示复核，不会自动删除。</p>
+            <p className="form-hint">相同日期重复记录会把旧值标为“已修订”并保留审计，不会静默删除；异常波动也不会自动删除。</p>
             <button className="button primary wide" type="submit">确认记录</button>
           </form>
         </Modal>

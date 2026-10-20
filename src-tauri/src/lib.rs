@@ -7,12 +7,20 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     backup::apply_pending_restore_before_start();
-    let migrations = vec![Migration {
-        version: 1,
-        description: "initial_fitwise_schema",
-        sql: include_str!("../migrations/0001_schema.sql"),
-        kind: MigrationKind::Up,
-    }];
+    let migrations = vec![
+        Migration {
+            version: 1,
+            description: "initial_fitwise_schema",
+            sql: include_str!("../migrations/0001_schema.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "batch_consumption_and_waste_events",
+            sql: include_str!("../migrations/0002_batch_events.sql"),
+            kind: MigrationKind::Up,
+        },
+    ];
 
     tauri::Builder::default()
         .manage(upload::UploadServerControl::default())

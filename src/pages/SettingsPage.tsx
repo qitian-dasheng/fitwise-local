@@ -29,6 +29,7 @@ const formatBytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 export function SettingsPage() {
   const profile = useAppStore((state) => state.profile);
   const aiSettings = useAppStore((state) => state.aiSettings);
+  const auditEventCount = useAppStore((state) => state.auditEvents.length);
   const setAiSettings = useAppStore((state) => state.setAiSettings);
   const resetDemo = useAppStore((state) => state.resetDemo);
   const [backupMode, setBackupMode] = useState<"create" | "verify" | null>(null);
@@ -77,6 +78,9 @@ export function SettingsPage() {
       workouts: state.workouts,
       recipes: state.recipes,
       batches: state.batches,
+      consumptionEvents: state.consumptionEvents,
+      wasteEvents: state.wasteEvents,
+      auditEvents: state.auditEvents,
       inventory: state.inventory,
       inventoryMovements: state.inventoryMovements,
       purchases: state.purchases,
@@ -229,8 +233,8 @@ export function SettingsPage() {
           <div className="settings-list"><div><span>阶段体重</span><b>{profile.startWeightKg} → {profile.targetWeightKg} kg</b></div><div><span>每日热量</span><b>{profile.dailyCalories.min}–{profile.dailyCalories.max} kcal</b></div><div><span>蛋白质 / 纤维</span><b>{profile.proteinTargetG} g / {profile.fiberTargetG} g</b></div><div><span>设备</span><b>{profile.equipment.join("、")}</b></div></div>
         </section>
         <section className="card settings-section">
-          <div className="settings-title"><HardDrive/><div><h2>存储与附件</h2><p>达到 2 GB 时提醒，不自动删除原图。</p></div></div>
-          <div className="storage-bar"><i style={{width:"6%"}}/></div><div className="storage-legend"><span>结构化数据 <b>SQLite</b></span><span>附件 <b>按内容哈希去重</b></span></div>
+          <div className="settings-title"><HardDrive/><div><h2>存储与附件</h2><p>结构化状态已进入 SQLite；附件体积统计、缩略图和 2 GB 提醒尚待接通。</p></div></div>
+          <div className="storage-bar"><i style={{width:"0%"}}/></div><div className="storage-legend"><span>结构化数据 <b>SQLite</b></span><span>审计事件 <b>{auditEventCount} 条</b></span></div>
         </section>
         <section className="card settings-section">
           <div className="settings-title"><LockKeyhole/><div><h2>数据库加密备份与恢复验证</h2><p>Argon2id + AES-256-GCM；口令不会被保存，忘记后无法恢复。附件打包与自动轮换尚未启用。</p></div></div>

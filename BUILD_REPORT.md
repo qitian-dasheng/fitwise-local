@@ -1,4 +1,4 @@
-# Windows 0.1.1 构建与验证报告
+# Windows 0.2.1 构建与验证报告
 
 生成日期：2026-10-20（Asia/Shanghai）
 
@@ -16,15 +16,15 @@
 
 | 产物 | 大小 | SHA-256 | 签名 |
 | --- | ---: | --- | --- |
-| `src-tauri/target/release/fitwise-local.exe` | 7.00 MiB | `6333BF17F02DCA9B567926FF123CC5BC01FC8953E49AA494A35423AB2034AE69` | 未签名 |
-| `src-tauri/target/release/bundle/msi/轻衡_0.1.1_x64_zh-CN.msi` | 4.04 MiB | `437FAAB6C7DFDB5AF1F3B5491C777C9D5776750CEF746BEB0D8712131B0E91B6` | 未签名 |
-| `src-tauri/target/release/bundle/nsis/轻衡_0.1.1_x64-setup.exe` | 3.22 MiB | `856A6CD54A83FE9BF5AE01F1871B8FD717CB3619B025961AE0C9AB290861FEA1` | 未签名 |
+| `src-tauri/target/release/fitwise-local.exe` | 7.01 MiB | `194DBC9DB3F4AE350794A140ABF3652FF113CA4800A342E07B50E20D4594BF03` | 未签名 |
+| `src-tauri/target/release/bundle/msi/轻衡_0.2.1_x64_zh-CN.msi` | 4.05 MiB | `18FF2E6883E8CC491DFA0AFF8DA2D4A980DE597CB38EF6A50D7362C70D3C31DB` | 未签名 |
+| `src-tauri/target/release/bundle/nsis/轻衡_0.2.1_x64-setup.exe` | 3.23 MiB | `49E8D411A286B713AF6F6422DA10199D9A5AB0D52906E5B026542FDF067ABD07` | 未签名 |
 
 安装包远低于 150 MB 目标；release 主程序远低于 250 MB 目标。
 
 ## 自动化与运行验证
 
-- `npm test`：2 个测试文件、7 项测试全部通过。
+- `npm test`：3 个测试文件、12 项测试全部通过。
 - `npm run build`：通过。
 - `cargo check`：通过，无警告。
 - `cargo test`：4 项测试全部通过。
@@ -38,13 +38,16 @@
 - 今日、饮食、运动、库存、计划、趋势、收件箱、AI 助手和设置共 9 个页面逐一加载；均有可见尺寸、正文内容且未触发错误兜底。
 - 移除了默认访问 Google Fonts 的外部请求，字体改用 Windows 系统字体；页面异常会显示可恢复错误页，不再静默呈现空白。
 - 手机上传服务由监听 `0.0.0.0` 改为只监听启动时选中的私有 IPv4 网卡地址。
+- 0.2.1 自动化覆盖整锅只扣一次原料、分餐比例、剩余熟食保持开放、明确丢弃才产生浪费，以及同日体重修订审计。
+- SQLite 迁移 v2 已在安装版执行，`consumption_events`、`waste_events` 和批次剩余/状态字段均存在。
+- 持久化状态 v2 → v3 迁移通过自动化测试，旧批次会补充剩余量和结束状态，新事件集合安全初始化。
 
 ## 安装生命周期
 
-- MSI 将已安装的 0.1.0 覆盖升级到 0.1.1，退出码为 0，注册表版本为 0.1.1。
-- 升级前后用户数据库 SHA-256 均为 `3938370E39F642016F12C30B5773BA2190DF590C80051B6ABD1A79BEAA7450EC`。
-- `C:\Program Files\轻衡\fitwise-local.exe` 升级后正常启动，原生窗口主内容可见。
-- 0.1.0 阶段已验证 NSIS 静默安装与卸载、安装目录移除及用户数据库保留；0.1.1 本轮重点验证覆盖升级。
+- MSI 已依次完成 0.1.0 → 0.1.1 → 0.2.0 → 0.2.1 覆盖升级，退出码均为 0，当前注册表版本为 0.2.1。
+- 0.1.0 → 0.1.1 的无 schema 变更升级前后，用户数据库 SHA-256 均为 `3938370E39F642016F12C30B5773BA2190DF590C80051B6ABD1A79BEAA7450EC`。0.2.x 会按设计增加迁移表和字段，因此文件哈希会变化。
+- `C:\Program Files\轻衡\fitwise-local.exe` 升级后正常启动，0.2.1 全部 9 个页面均有可见宽度、正文内容且无错误兜底。
+- 0.1.0 阶段已验证 NSIS 静默安装与卸载、安装目录移除及用户数据库保留；0.2.1 本轮验证覆盖升级、schema 迁移和全部页面加载。
 
 ## 资源口径
 

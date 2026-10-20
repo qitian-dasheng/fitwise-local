@@ -48,6 +48,7 @@ export interface MealEntry {
   source: DataSource;
   confidence: Confidence;
   preparedBatchId?: string;
+  consumptionEventId?: string;
   createdAt: string;
 }
 
@@ -66,6 +67,8 @@ export interface BodyMeasurement {
   waistCm?: number;
   bodyFatPercent?: number;
   isOutlier?: boolean;
+  status?: "active" | "superseded";
+  supersedesId?: string;
   createdAt: string;
 }
 
@@ -111,8 +114,39 @@ export interface PreparedBatch {
   inventoryDeducted: boolean;
   consumedRatio: number;
   wastedRatio: number;
+  remainingRatio: number;
+  status: "open" | "closed";
   ratioIsEstimated: boolean;
   cookedWeightG?: number;
+  closedAt?: string;
+  createdAt: string;
+}
+
+export interface ConsumptionEvent {
+  id: string;
+  batchId: string;
+  date: ISODate;
+  mealType: MealType;
+  ratio: number;
+  ratioIsEstimated: boolean;
+  createdAt: string;
+}
+
+export interface WasteEvent {
+  id: string;
+  batchId: string;
+  date: ISODate;
+  ratio: number;
+  reason: "discarded" | "spoiled" | "other";
+  createdAt: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  eventType: string;
+  entityType: string;
+  entityId?: string;
+  payload: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -201,6 +235,9 @@ export interface AppState {
   workouts: WorkoutSession[];
   recipes: RecipeVersion[];
   batches: PreparedBatch[];
+  consumptionEvents: ConsumptionEvent[];
+  wasteEvents: WasteEvent[];
+  auditEvents: AuditEvent[];
   inventory: InventoryLot[];
   inventoryMovements: InventoryMovement[];
   purchases: PurchaseDraft[];

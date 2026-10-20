@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { AlertTriangle, CheckCircle2, ChefHat, Plus, ShieldCheck, Utensils } from "lucide-react";
+import { AlertTriangle, ChefHat, Plus, ShieldCheck, Trash2, Utensils } from "lucide-react";
 import { useState } from "react";
 import { summarizeMeals } from "../domain/calculations";
 import type { MealType } from "../domain/types";
@@ -12,21 +12,32 @@ const mealLabels: Record<MealType, string> = { breakfast: "早餐", lunch: "午�
 export function FoodPage() {
   const [mealOpen, setMealOpen] = useState(false);
   const [cookOpen, setCookOpen] = useState(false);
-  const [cookRatio, setCookRatio] = useState(1);
+  const [batchOpen, setBatchOpen] = useState<string | null>(null);
+  const [consumeRatio, setConsumeRatio] = useState("50");
+  const [consumeType, setConsumeType] = useState<MealType>("lunch");
   const [message, setMessage] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
   const meals = useAppStore((state) => state.meals);
   const recipes = useAppStore((state) => state.recipes);
   const batches = useAppStore((state) => state.batches);
+  const consumptionEvents = useAppStore((state) => state.consumptionEvents);
+  const wasteEvents = useAppStore((state) => state.wasteEvents);
   const addMeal = useAppStore((state) => state.addMeal);
-  const cookRecipe = useAppStore((state) => state.cookRecipe);
+  const prepareRecipe = useAppStore((state) => state.prepareRecipe);
+  const consumeBatch = useAppStore((state) => state.consumeBatch);
+  const discardBatchRemainder = useAppStore((state) => state.discardBatchRemainder);
   const today = format(new Date(), "yyyy-MM-dd");
   const todayMeals = meals.filter((item) => item.date === today);
   const total = summarizeMeals(todayMeals);
   const recipe = recipes[0];
+  const activeBatches = batches.filter((item) => item.status === "open" && item.remainingRatio > 0);
+  const todayBatches = batches.filter((item) => item.date === today);
+  const selectedBatch = batches.find((item) => item.id === batchOpen);
 
   return (
     <div className="page">
       <PageHeader eyebrow="实际摄入" title="饮食日记" description="计划只是计划，只有确认吃下的食物才会进入趋势。" action={<button className="button primary" onClick={() => setMealOpen(true)}><Plus size={17} /> 添加食物</button>} />
+      {statusMessage && <div className="settings-notice card" role="status">{statusMessage}</div>}
       <div className="metric-row">
         <Metric label="今日热量" value={`${Math.round(total.totals.calories)} kcal`} note={`覆盖率 ${total.coverage.calories}%`} />
         <Metric label="蛋白质" value={`${Math.round(total.totals.protein)} g`} note="目标约 100 g" />
@@ -61,26 +72,43 @@ export function FoodPage() {
             <div className="recipe-visual"><ChefHat size={32} /></div>
             <p className="eyebrow">标准菜谱 · v{recipe.version}</p>
             <h2>{recipe.name}</h2>
-            <p>整锅供午晚餐共享。确认制作后扣除全部原料，只按实际吃掉比例计算摄入。</p>
+            <p>制作、实际进食与丢弃分别记账。确认制作只扣原料，不会提前计入饮食。</p>
             <div className="recipe-macros"><span><b>883</b> kcal</span><span><b>119.6</b> g 蛋白质</span><span><b>30</b> 分钟</span></div>
             <ul className="ingredient-list">{recipe.ingredients.map((item) => <li key={item.foodId}><span>{item.name}</span><b>{item.amount} {item.unit}</b></li>)}</ul>
             <button className="button primary wide" onClick={() => { setMessage(""); setCookOpen(true); }}>确认今日制作</button>
           </article>
+          {activeBatches.map((batch) => <article className="card batch-card" key={batch.id}>
+            <div className="card-heading compact"><div><p className="eyebrow">熟食批次 · 待处理</p><h3>{recipe.name}</h3></div><span className="status-pill warning">剩余 {Math.round(batch.remainingRatio * 100)}%</span></div>
+            <div className="batch-progress"><i style={{ width: `${batch.remainingRatio * 100}%` }}/></div>
+            <p>已吃 {Math.round(batch.consumedRatio * 100)}%，已丢弃 {Math.round(batch.wastedRatio * 100)}%。保留剩余时无需现在处理，可在下一餐继续记录。</p>
+            <div className="button-row"><button className="button primary small" onClick={() => { setConsumeRatio(String(Math.round(Math.min(.5, batch.remainingRatio) * 100))); setBatchOpen(batch.id); setMessage(""); }}>记录实际进食</button><button className="button danger small" onClick={() => { if (confirm(`确认将剩余 ${Math.round(batch.remainingRatio * 100)}% 记为熟食丢弃？`)) { const result = discardBatchRemainder(batch.id); setStatusMessage(result.error ?? "剩余熟食已记入浪费记录。"); } }}><Trash2 size={14}/> 丢弃剩余</button></div>
+          </article>)}
           <article className="card validation-card"><ShieldCheck size={22} /><div><strong>营养值不会把空白当成零</strong><p>首次商品会校验千焦/千卡、每份/每百克和净含量。</p></div></article>
         </section>
       </div>
 
+      {todayBatches.length > 0 && <section className="card batch-history"><div className="card-heading compact"><div><p className="eyebrow">原料、进食、浪费分账</p><h2>今日熟食批次</h2></div><span className="status-pill neutral">{todayBatches.length} 批</span></div>{todayBatches.map((batch) => { const consumed = consumptionEvents.filter((item) => item.batchId === batch.id); const waste = wasteEvents.filter((item) => item.batchId === batch.id); return <div className="batch-history-row" key={batch.id}><div><strong>{recipes.find((item) => item.id === batch.recipeVersionId)?.name ?? "未知菜谱"}</strong><span>{consumed.length ? consumed.map((item) => `${mealLabels[item.mealType]} ${Math.round(item.ratio * 100)}%`).join(" · ") : "尚未记录进食"}</span></div><div><small>已吃</small><b>{Math.round(batch.consumedRatio * 100)}%</b></div><div><small>保留</small><b>{Math.round(batch.remainingRatio * 100)}%</b></div><div><small>丢弃</small><b>{Math.round(batch.wastedRatio * 100)}%</b></div><span className={`status-pill ${batch.status === "open" ? "warning" : "success"}`}>{batch.status === "open" ? "仍有剩余" : waste.length ? "已结束 · 含浪费" : "已吃完"}</span></div>; })}</section>}
+
       {mealOpen && <MealModal onClose={() => setMealOpen(false)} onSave={(input) => { addMeal(input); setMealOpen(false); }} />}
       {cookOpen && (
-        <Modal title="确认整锅的实际去向" onClose={() => setCookOpen(false)}>
+        <Modal title="确认制作整锅菜" onClose={() => setCookOpen(false)}>
           <div className="form">
-            <div className="ratio-options">
-              {[1, 0.75, 0.67, 0.5].map((ratio) => <button key={ratio} className={cookRatio === ratio ? "active" : ""} onClick={() => setCookRatio(ratio)}>{ratio === 1 ? "全部吃完" : `剩约 ${Math.round((1 - ratio) * 100)}%`}</button>)}
-            </div>
-            <div className="ratio-summary"><CheckCircle2 size={20} /><div><strong>摄入 {Math.round(cookRatio * 100)}%</strong><span>库存仍会扣除整锅原料，剩余 {Math.round((1 - cookRatio) * 100)}% 记为熟食浪费。</span></div></div>
+            <div className="ratio-summary"><ChefHat size={20} /><div><strong>这一步只确认制作完成</strong><span>四种原料会按 FEFO 扣减一次；午餐、晚餐和剩余熟食稍后分别记录。</span></div></div>
             {message && <div className="alert"><AlertTriangle size={18} />{message}</div>}
-            <button className="button primary wide" onClick={() => { const result = cookRecipe(recipe.id, cookRatio); if (result.shortage.length) setMessage(result.shortage.join("；")); else setCookOpen(false); }}>确认制作并记账</button>
+            <button className="button primary wide" onClick={() => { const result = prepareRecipe(recipe.id); if (result.shortage.length) setMessage(result.shortage.join("；")); else { setCookOpen(false); setStatusMessage("制作批次已建立，原料已扣减；尚未计入任何饮食摄入。"); } }}>确认制作并扣减原料</button>
           </div>
+        </Modal>
+      )}
+      {selectedBatch && (
+        <Modal title="记录这个批次的实际进食" onClose={() => setBatchOpen(null)}>
+          <form className="form" onSubmit={(event) => { event.preventDefault(); const ratio = Number(consumeRatio) / 100; const result = consumeBatch({ batchId: selectedBatch.id, mealType: consumeType, ratio, ratioIsEstimated: true }); if (result.error) setMessage(result.error); else { setBatchOpen(null); setStatusMessage(`已把整锅的 ${Math.round(ratio * 100)}% 记入${mealLabels[consumeType]}；其余继续保留在熟食批次中。`); } }}>
+            <label><span>计入餐次</span><select value={consumeType} onChange={(event) => setConsumeType(event.target.value as MealType)}><option value="lunch">午餐</option><option value="dinner">晚餐</option><option value="breakfast">早餐</option><option value="snack">加餐</option></select></label>
+            <label><span>占整锅比例（当前最多 {Math.round(selectedBatch.remainingRatio * 100)}%）</span><input type="number" min="1" max={Math.round(selectedBatch.remainingRatio * 10000) / 100} step="1" required value={consumeRatio} onChange={(event) => setConsumeRatio(event.target.value)}/></label>
+            <div className="ratio-options">{[25, 33, 50, Math.round(selectedBatch.remainingRatio * 100)].filter((value, index, values) => value > 0 && value <= selectedBatch.remainingRatio * 100 + .01 && values.indexOf(value) === index).map((value) => <button type="button" key={value} className={Number(consumeRatio) === value ? "active" : ""} onClick={() => setConsumeRatio(String(value))}>{value === Math.round(selectedBatch.remainingRatio * 100) ? `全部剩余 ${value}%` : `${value}%`}</button>)}</div>
+            <p className="form-hint">这里记录的是整锅比例，不是假定午晚餐各一半。当前按目测估算，未来可升级为熟重称量。</p>
+            {message && <div className="alert"><AlertTriangle size={18}/>{message}</div>}
+            <button className="button primary wide" type="submit">确认写入这一餐</button>
+          </form>
         </Modal>
       )}
     </div>
