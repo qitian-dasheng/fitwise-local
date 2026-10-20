@@ -10,16 +10,17 @@ import type { FoodUnit, InventoryLot, RecipeInput, RecipeVersion } from "../doma
 type Row={key:string;foodVersionId:string;quantity:string;unit:FoodUnit;inventoryFoodId:string;inventoryUnit:InventoryLot["unit"];inventoryConfirmed:boolean};
 const emptyRow=():Row=>({key:crypto.randomUUID(),foodVersionId:"",quantity:"100",unit:"g",inventoryFoodId:"",inventoryUnit:"g",inventoryConfirmed:false});
 
-export function RecipeEditor({recipe,onClose,onSaved}:{recipe?:RecipeVersion;onClose:()=>void;onSaved:(id:string)=>void}){
+export function RecipeEditor({recipe,copyMode=false,onClose,onSaved}:{recipe?:RecipeVersion;copyMode?:boolean;onClose:()=>void;onSaved:(id:string)=>void}){
   const state=useAppStore();const action=useConfirmedAction();const [libraryOpen,setLibraryOpen]=useState(false);
-  const [name,setName]=useState(recipe?.name??"");const [minutes,setMinutes]=useState(String(recipe?.totalMinutes??30));
+  const [name,setName]=useState(copyMode&&recipe?`${recipe.name}（副本）`:recipe?.name??"");const [minutes,setMinutes]=useState(String(recipe?.totalMinutes??30));
   const [equipment,setEquipment]=useState(recipe?.equipment??state.profile.equipment.slice(0,1));
   const [rows,setRows]=useState<Row[]>(()=>recipe?recipe.ingredients.map(i=>({key:crypto.randomUUID(),foodVersionId:i.foodVersionId??"",quantity:String(i.nutritionQuantity??i.amount),unit:i.nutritionUnit??i.unit,inventoryFoodId:i.foodId,inventoryUnit:i.unit,inventoryConfirmed:false})):[emptyRow()]);
   const patch=(key:string,changes:Partial<Row>)=>setRows(current=>current.map(r=>r.key===key?{...r,inventoryConfirmed:false,...changes}:r));
-  const input:RecipeInput={name,totalMinutes:Number(minutes),equipment,ingredients:rows.map(({foodVersionId,quantity,unit,inventoryFoodId,inventoryUnit,inventoryConfirmed})=>({foodVersionId,quantity:Number(quantity),unit,inventoryFoodId,inventoryUnit,inventoryConfirmed})),...(recipe?{recipeId:recipe.recipeId,expectedVersionId:recipe.id}:{})};
+  const input:RecipeInput={...(copyMode&&recipe?{copiedFromVersionId:recipe.id}:{}),name,totalMinutes:Number(minutes),equipment,ingredients:rows.map(({foodVersionId,quantity,unit,inventoryFoodId,inventoryUnit,inventoryConfirmed})=>({foodVersionId,quantity:Number(quantity),unit,inventoryFoodId,inventoryUnit,inventoryConfirmed})),...(recipe&&!copyMode?{recipeId:recipe.recipeId,expectedVersionId:recipe.id}:{})};
   let preview:ReturnType<typeof previewRecipe>|undefined;let error="";try{preview=previewRecipe(state,input);}catch(e){error=String(e);}
-  return <><div hidden={libraryOpen}><Modal title={recipe?`修订菜谱 · v${recipe.version+1}`:"新建标准菜谱"} onClose={()=>{if(!action.busy)onClose();}}><form className="form recipe-editor" onSubmit={async e=>{e.preventDefault();const result=await action.run(JSON.stringify(input),id=>state.saveRecipe(input,id));if(!result.error&&result.recipeVersionId){onSaved(result.recipeVersionId);onClose();}}}><fieldset className="library-fields" disabled={action.busy}>
+  return <><div hidden={libraryOpen}><Modal title={copyMode?`另存历史配方 · 来源 v${recipe?.version}`:recipe?`修订菜谱 · v${recipe.version+1}`:"新建标准菜谱"} onClose={()=>{if(!action.busy)onClose();}}><form className="form recipe-editor" onSubmit={async e=>{e.preventDefault();const result=await action.run(JSON.stringify(input),id=>state.saveRecipe(input,id));if(!result.error&&result.recipeVersionId){onSaved(result.recipeVersionId);onClose();}}}><fieldset className="library-fields" disabled={action.busy}>
     <p className="form-hint">从已确认的食材库选择原料，整锅营养由程序求和。保存只建立菜谱版本，不制作、不扣库存、不记进食。每项营养有缺失时，整锅对应营养也保持未知。</p>
+    {copyMode&&<p className="library-notice">另存会建立独立菜谱，不覆盖原菜谱。原食材营养版本保持不变，请重新核对库存身份和计量；旧快照缺少营养关联时仍需人工补全。</p>}
     {recipe&&<p className="library-notice">历史菜谱及已制作批次保持原版本。旧菜谱若尚无食材营养关联，请逐项人工选择，不会按同名猜测。</p>}
     <button type="button" className="button secondary" onClick={()=>setLibraryOpen(true)}>管理／新建食材（保留菜谱输入）</button>
     {!state.foodDefinitions.length&&<p className="library-notice">食材库为空：可先点击上方按钮建档并核对规格，再返回菜谱；只保存资料，不记餐。</p>}

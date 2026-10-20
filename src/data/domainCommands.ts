@@ -5,6 +5,9 @@ import { flushAppStorageWrites } from "./storage";
 export type DomainCommandKind =
   | "revise_meal"
   | "void_meal"
+  | "void_prepared_batch"
+  | "revise_waste"
+  | "void_waste"
   | "save_recipe_version"
   | "save_food_definition"
   | "revise_food_definition"

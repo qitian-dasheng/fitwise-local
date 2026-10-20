@@ -173,6 +173,7 @@ export interface RecipeIngredient {
 
 export interface RecipeVersion {
   id: string;
+  copiedFromVersionId?: string;
   recipeId: string;
   name: string;
   version: number;
@@ -194,7 +195,10 @@ export interface PreparedBatch {
   consumedRatio: number;
   wastedRatio: number;
   remainingRatio: number;
-  status: "open" | "closed";
+  status: "open" | "closed" | "void";
+  inventoryDeductions?: { movementId: string; lotBefore: InventoryLot; lotAfter: InventoryLot }[];
+  voidedAt?: string;
+  correctionReason?: string;
   ratioIsEstimated: boolean;
   cookedWeightG?: number;
   closedAt?: string;
@@ -215,6 +219,11 @@ export interface ConsumptionEvent {
 
 export interface WasteEvent {
   id: string;
+  status?: "active" | "superseded" | "void";
+  supersedesId?: string;
+  supersededBy?: string;
+  correctedAt?: string;
+  correctionReason?: string;
   batchId: string;
   date: ISODate;
   ratio: number;
@@ -259,6 +268,8 @@ export type InventoryMovementType = "purchase" | "cooking" | "waste" | "adjustme
 export interface InventoryMovement {
   id: string;
   lotId: string;
+  batchId?: string;
+  reversesMovementId?: string;
   type: InventoryMovementType;
   amount: number;
   reason: string;
@@ -388,6 +399,7 @@ export interface MealCorrectionInput {
   nutrients?: Partial<Record<NutrientKey, number>>;
 }
 export interface RecipeInput {
+  copiedFromVersionId?: string;
   name: string;
   totalMinutes: number;
   equipment: string[];

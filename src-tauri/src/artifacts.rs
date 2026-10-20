@@ -818,6 +818,47 @@ mod tests {
             2
         );
     }
+
+    #[test]
+    fn distinct_image_pressure_keeps_receipt_pages_metadata_only_and_thumbnails_bounded() {
+        let c = &mut conn();
+        let started = std::time::Instant::now();
+        for i in 0..120u8 {
+            let mut bytes = Cursor::new(Vec::new());
+            DynamicImage::ImageRgba8(image::RgbaImage::from_fn(640, 480, |x, y| {
+                Rgba([i, (x % 251) as u8, (y % 251) as u8, 255])
+            }))
+            .write_to(&mut bytes, image::ImageFormat::Png)
+            .unwrap();
+            receive(
+                c,
+                &format!("pressure-distinct-{i:04}"),
+                "synthetic",
+                vec![InputFile {
+                    name: "synthetic.png".into(),
+                    bytes: bytes.into_inner(),
+                }],
+                "desktop",
+            )
+            .unwrap();
+        }
+        assert_eq!(storage(c).unwrap()["count"], 120);
+        for offset in [0, 50, 100] {
+            let page = receipts(c, false, offset).unwrap();
+            let items = page["items"].as_array().unwrap();
+            assert_eq!(items.len(), if offset == 100 { 20 } else { 50 });
+            let serialized = serde_json::to_string(&page).unwrap();
+            assert!(serialized.len() < 100_000);
+            assert!(!serialized.contains("data:image") && !serialized.contains("base64"));
+            for item in items {
+                let id = item["artifactId"].as_str().unwrap();
+                let thumbnail = decoded(&preview(c, id, "thumbnail").unwrap()).unwrap();
+                assert!(thumbnail.width() <= 512 && thumbnail.height() <= 512);
+            }
+        }
+        println!("synthetic_attachment_pressure: 120 unique 640x480 PNG, paged metadata+bounded thumbnails, elapsed_ms={}",started.elapsed().as_millis());
+    }
+
     #[test]
     fn pagination_bounds_queries_and_thumbnail_not_original_is_returned() {
         let mut c = conn();

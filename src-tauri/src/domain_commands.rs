@@ -153,6 +153,9 @@ pub(crate) fn prepare_recipe(
         .and_then(Value::as_array)
         .ok_or_else(|| "菜谱原料无效。".to_string())?;
 
+    if ingredients.is_empty() {
+        return Err("菜谱至少需要一种原料。".into());
+    }
     let (_, today) = now_and_date();
     let usable = |lot: &Value, unit: &str| {
         lot.get("unit").and_then(Value::as_str) == Some(unit)
@@ -190,7 +193,7 @@ pub(crate) fn prepare_recipe(
                 .filter(|lot| usable(lot, unit))
                 .filter_map(|lot| lot.get("remainingAmount").and_then(Value::as_f64))
                 .sum();
-            (available + 0.0001 < *required)
+            (available + 1e-8 < *required)
                 .then(|| format!("{name} 缺 {:.2}{unit}", (required - available).max(0.0)))
         })
         .collect();
@@ -204,6 +207,7 @@ pub(crate) fn prepare_recipe(
     let (now, date) = now_and_date();
     let batch_id = format!("batch-{command_id}");
     let mut movements = Vec::new();
+    let mut deductions = Vec::new();
     {
         let inventory = array_mut(state, "inventory")?;
         for (food_id, _, unit, required) in &requirements {
@@ -262,9 +266,10 @@ pub(crate) fn prepare_recipe(
             });
             let mut remaining = *required;
             for index in candidates {
-                if remaining <= 0.0001 {
+                if remaining <= 0.0 {
                     break;
                 }
+                let lot_before = inventory[index].clone();
                 let lot = inventory[index]
                     .as_object_mut()
                     .ok_or_else(|| "库存批次格式无效。".to_string())?;
@@ -285,11 +290,13 @@ pub(crate) fn prepare_recipe(
                     "id": format!("{command_id}:movement:{}", movements.len()),
                     "lotId": lot_id,
                     "type": "cooking",
+                    "batchId": batch_id,
                     "amount": -deducted,
                     "reason": recipe_name,
                     "createdAt": now,
                 }));
-                remaining -= deducted;
+                deductions.push(json!({"movementId":movements.last().unwrap()["id"],"lotBefore":lot_before,"lotAfter":inventory[index]}));
+                remaining = round_ratio(remaining - deducted);
             }
         }
     }
@@ -300,6 +307,7 @@ pub(crate) fn prepare_recipe(
         "recipeVersionId": recipe_id,
         "date": date,
         "inventoryDeducted": true,
+        "inventoryDeductions": deductions,
         "consumedRatio": 0,
         "wastedRatio": 0,
         "remainingRatio": 1,
@@ -351,6 +359,7 @@ fn consume_batch(
         .position(|value| value.get("id").and_then(Value::as_str) == Some(&batch_id))
         .ok_or_else(|| "这个批次不存在。".to_string())?;
     let batch_snapshot = array(state, "batches")?[batch_index].clone();
+    crate::batch_corrections::validate_balance(state, &batch_snapshot)?;
     if batch_snapshot.get("status").and_then(Value::as_str) == Some("closed") {
         return Err("这个批次已经结束。".into());
     }
@@ -473,6 +482,7 @@ fn discard_batch(
         .position(|value| value.get("id").and_then(Value::as_str) == Some(&batch_id))
         .ok_or_else(|| "这个批次不存在。".to_string())?;
     let snapshot = array(state, "batches")?[batch_index].clone();
+    crate::batch_corrections::validate_balance(state, &snapshot)?;
     if snapshot.get("status").and_then(Value::as_str) == Some("closed") {
         return Err("这个批次已经结束。".into());
     }
@@ -480,7 +490,7 @@ fn discard_batch(
         .get("remainingRatio")
         .and_then(Value::as_f64)
         .unwrap_or(0.0);
-    if remaining <= 0.0001 {
+    if remaining <= 0.0 {
         return Err("这个批次已经没有剩余。".into());
     }
     let wasted = snapshot
@@ -549,6 +559,9 @@ fn execute_with_connection(
         "save_food_definition"
             | "revise_meal"
             | "void_meal"
+            | "void_prepared_batch"
+            | "revise_waste"
+            | "void_waste"
             | "save_recipe_version"
             | "revise_food_definition"
             | "set_food_favorite"
@@ -622,6 +635,12 @@ fn execute_with_connection(
     let (version, mut state) =
         load_command_state(&transaction, request.bootstrap_state.as_deref())?;
     let mutation = match request.kind.as_str() {
+        "void_prepared_batch" | "revise_waste" | "void_waste" => crate::batch_corrections::apply(
+            &mut state,
+            &request.kind,
+            &request.payload,
+            &request.command_id,
+        )?,
         "revise_meal" | "void_meal" => crate::meal_corrections::apply(
             &mut state,
             &request.kind,
@@ -753,6 +772,533 @@ mod tests {
             .unwrap();
         ensure_repository_schema(&connection).unwrap();
         connection
+    }
+
+    fn prepare_ledger(c: &mut Connection) -> DomainCommandResponse {
+        execute_with_connection(
+            c,
+            request(
+                "ledger-prepare",
+                "prepare_recipe",
+                json!({"recipeVersionId":"recipe-1"}),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn untouched_mistaken_cooking_reverses_exact_lots_once_and_survives_reload() {
+        let mut c = connection();
+        let prepared = prepare_ledger(&mut c);
+        let original: Value = serde_json::from_str(&bootstrap()).unwrap();
+        assert_eq!(
+            prepared.state["batches"][0]["inventoryDeductions"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        let payload = json!({"batchId":prepared.result["batchId"],"reason":"实际未制作，误点按钮"});
+        let reversed = execute_with_connection(
+            &mut c,
+            request(
+                "ledger-reversal",
+                "void_prepared_batch",
+                payload.clone(),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(reversed.state["inventory"], original["state"]["inventory"]);
+        assert_eq!(reversed.state["batches"][0]["status"], "void");
+        assert_eq!(
+            reversed.state["inventoryMovements"]
+                .as_array()
+                .unwrap()
+                .len(),
+            4
+        );
+        assert_eq!(
+            reversed.state["inventoryMovements"][0],
+            prepared.state["inventoryMovements"][0]
+        );
+        assert_eq!(reversed.state["meals"], json!([]));
+        let replay = execute_with_connection(
+            &mut c,
+            request(
+                "ledger-reversal",
+                "void_prepared_batch",
+                payload.clone(),
+                None,
+            ),
+        )
+        .unwrap();
+        assert!(replay.replayed);
+        assert_eq!(replay.state, reversed.state);
+        let loaded: Value = serde_json::from_str(&load_envelope(&c).unwrap().unwrap()).unwrap();
+        assert_eq!(loaded["state"], reversed.state);
+        for (id, kind, p) in [
+            ("ledger-reverse-again", "void_prepared_batch", payload),
+            (
+                "ledger-void-consume",
+                "consume_batch",
+                json!({"batchId":prepared.result["batchId"],"mealType":"lunch","ratio":0.5}),
+            ),
+            (
+                "ledger-void-discard",
+                "discard_batch",
+                json!({"batchId":prepared.result["batchId"]}),
+            ),
+        ] {
+            let before = load_envelope(&c).unwrap();
+            assert!(execute_with_connection(&mut c, request(id, kind, p, None)).is_err());
+            assert_eq!(load_envelope(&c).unwrap(), before);
+        }
+    }
+
+    #[test]
+    fn cooking_reversal_refuses_downstream_count_waste_return_and_second_cook_atomically() {
+        for (kind, extra) in [
+            (
+                "adjust_inventory",
+                json!({"remainingAmount":0,"opened":true}),
+            ),
+            ("dispose_inventory", json!({"amount":10,"kind":"waste"})),
+            ("dispose_inventory", json!({"amount":10,"kind":"return"})),
+        ] {
+            let mut c = connection();
+            let p = prepare_ledger(&mut c);
+            let mut input = extra;
+            input["lotId"] = json!("lot-early");
+            input["reason"] = json!("后续操作");
+            execute_with_connection(&mut c, request("ledger-downstream", kind, input, None))
+                .unwrap();
+            let before = load_envelope(&c).unwrap();
+            assert!(execute_with_connection(
+                &mut c,
+                request(
+                    "ledger-denied",
+                    "void_prepared_batch",
+                    json!({"batchId":p.result["batchId"],"reason":"不能撤回"}),
+                    None
+                )
+            )
+            .is_err());
+            assert_eq!(load_envelope(&c).unwrap(), before);
+        }
+        let mut initial: Value = serde_json::from_str(&bootstrap()).unwrap();
+        for lot in initial["state"]["inventory"].as_array_mut().unwrap() {
+            lot["purchasedAmount"] = json!(500);
+            lot["remainingAmount"] = json!(500);
+        }
+        let mut c = connection();
+        let p = execute_with_connection(
+            &mut c,
+            request(
+                "ledger-cook-first",
+                "prepare_recipe",
+                json!({"recipeVersionId":"recipe-1"}),
+                Some(initial.to_string()),
+            ),
+        )
+        .unwrap();
+        execute_with_connection(
+            &mut c,
+            request(
+                "ledger-cook-second",
+                "prepare_recipe",
+                json!({"recipeVersionId":"recipe-1"}),
+                None,
+            ),
+        )
+        .unwrap();
+        let before = load_envelope(&c).unwrap();
+        assert!(execute_with_connection(
+            &mut c,
+            request(
+                "ledger-cook-denied",
+                "void_prepared_batch",
+                json!({"batchId":p.result["batchId"],"reason":"有后续制作"}),
+                None
+            )
+        )
+        .is_err());
+        assert_eq!(load_envelope(&c).unwrap(), before);
+    }
+
+    #[test]
+    fn cooking_reversal_refuses_even_voided_consumption_history_or_legacy_untraceable_batches() {
+        let mut c = connection();
+        let p = prepare_ledger(&mut c);
+        let eaten = execute_with_connection(
+            &mut c,
+            request(
+                "ledger-eaten",
+                "consume_batch",
+                json!({"batchId":p.result["batchId"],"mealType":"lunch","ratio":0.5}),
+                None,
+            ),
+        )
+        .unwrap();
+        execute_with_connection(
+            &mut c,
+            request(
+                "ledger-eaten-void",
+                "void_meal",
+                json!({"mealId":eaten.state["meals"][0]["id"],"reason":"误记进食"}),
+                None,
+            ),
+        )
+        .unwrap();
+        let before = load_envelope(&c).unwrap();
+        assert!(execute_with_connection(
+            &mut c,
+            request(
+                "ledger-eaten-deny",
+                "void_prepared_batch",
+                json!({"batchId":p.result["batchId"],"reason":"不能连锁撤销"}),
+                None
+            )
+        )
+        .is_err());
+        assert_eq!(load_envelope(&c).unwrap(), before);
+        let mut envelope: Value = serde_json::from_str(&before.unwrap()).unwrap();
+        envelope["state"]["consumptionEvents"] = json!([]);
+        envelope["state"]["meals"] = json!([]);
+        envelope["state"]["batches"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("inventoryDeductions");
+        let mut legacy = connection();
+        let error = execute_with_connection(
+            &mut legacy,
+            request(
+                "ledger-legacy-deny",
+                "void_prepared_batch",
+                json!({"batchId":p.result["batchId"],"reason":"旧版无快照"}),
+                Some(envelope.to_string()),
+            ),
+        )
+        .unwrap_err();
+        assert!(error.contains("旧批次"));
+    }
+
+    #[test]
+    fn waste_corrections_retain_evidence_do_not_refund_raw_stock_or_rewrite_consumption() {
+        let mut c = connection();
+        let p = prepare_ledger(&mut c);
+        let eaten = execute_with_connection(
+            &mut c,
+            request(
+                "ledger-waste-eat",
+                "consume_batch",
+                json!({"batchId":p.result["batchId"],"mealType":"lunch","ratio":0.75}),
+                None,
+            ),
+        )
+        .unwrap();
+        let discarded = execute_with_connection(
+            &mut c,
+            request(
+                "ledger-waste-all",
+                "discard_batch",
+                json!({"batchId":p.result["batchId"]}),
+                None,
+            ),
+        )
+        .unwrap();
+        let payload = json!({"wasteId":discarded.state["wasteEvents"][0]["id"],"ratio":0.1,"reason":"仅丢弃一部分，误记全部"});
+        let changed = execute_with_connection(
+            &mut c,
+            request("ledger-waste-revise", "revise_waste", payload.clone(), None),
+        )
+        .unwrap();
+        assert_eq!(changed.state["batches"][0]["wastedRatio"], 0.1);
+        assert_eq!(changed.state["batches"][0]["remainingRatio"], 0.15);
+        assert_eq!(changed.state["batches"][0]["status"], "open");
+        assert_eq!(changed.state["meals"], eaten.state["meals"]);
+        assert_eq!(changed.state["inventory"], p.state["inventory"]);
+        assert_eq!(
+            changed.state["inventoryMovements"],
+            p.state["inventoryMovements"]
+        );
+        assert_eq!(changed.state["wasteEvents"][0]["ratio"], 0.25);
+        assert_eq!(changed.state["wasteEvents"][0]["status"], "superseded");
+        assert_eq!(
+            changed.state["wasteEvents"][1]["supersedesId"],
+            discarded.state["wasteEvents"][0]["id"]
+        );
+        assert!(
+            execute_with_connection(
+                &mut c,
+                request("ledger-waste-revise", "revise_waste", payload, None)
+            )
+            .unwrap()
+            .replayed
+        );
+        let before = load_envelope(&c).unwrap();
+        assert!(execute_with_connection(&mut c,request("ledger-waste-over","revise_waste",json!({"wasteId":changed.state["wasteEvents"][1]["id"],"ratio":0.3,"reason":"不得占用已吃部分"}),None)).is_err());
+        assert_eq!(load_envelope(&c).unwrap(), before);
+        let voided = execute_with_connection(
+            &mut c,
+            request(
+                "ledger-waste-void",
+                "void_waste",
+                json!({"wasteId":changed.state["wasteEvents"][1]["id"],"reason":"实际未丢弃"}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(voided.state["batches"][0]["wastedRatio"], 0.0);
+        assert_eq!(voided.state["batches"][0]["remainingRatio"], 0.25);
+        assert_eq!(voided.state["wasteEvents"][1]["status"], "void");
+        let consumed = execute_with_connection(
+            &mut c,
+            request(
+                "ledger-waste-finish",
+                "consume_batch",
+                json!({"batchId":p.result["batchId"],"mealType":"dinner","ratio":0.25}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(consumed.state["batches"][0]["consumedRatio"], 1.0);
+        assert_eq!(consumed.state["inventory"], p.state["inventory"]);
+    }
+
+    #[test]
+    fn corrupted_waste_balance_blocks_all_corrections_instead_of_guessing() {
+        let mut c = connection();
+        let p = prepare_ledger(&mut c);
+        let discarded = execute_with_connection(
+            &mut c,
+            request(
+                "ledger-bad-waste",
+                "discard_batch",
+                json!({"batchId":p.result["batchId"]}),
+                None,
+            ),
+        )
+        .unwrap();
+        let mut envelope = json!({"version":4,"state":discarded.state});
+        envelope["state"]["wasteEvents"][0]["ratio"] = json!(0.5);
+        let mut corrupt = connection();
+        let error = execute_with_connection(
+            &mut corrupt,
+            request(
+                "ledger-bad-revise",
+                "void_waste",
+                json!({"wasteId":envelope["state"]["wasteEvents"][0]["id"],"reason":"不猜测"}),
+                Some(envelope.to_string()),
+            ),
+        )
+        .unwrap_err();
+        assert!(error.contains("不一致"));
+    }
+
+    #[test]
+    fn historical_recipe_copy_pins_old_food_and_keeps_independent_identity_and_audit_source() {
+        let mut c = connection();
+        execute_with_connection(
+            &mut c,
+            request(
+                "recipe-food",
+                "save_food_definition",
+                food_payload(),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        let original = execute_with_connection(
+            &mut c,
+            request(
+                "ledger-recipe-original",
+                "save_recipe_version",
+                recipe_payload(1.0),
+                None,
+            ),
+        )
+        .unwrap();
+        let original_recipe = original.state["recipes"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap()
+            .clone();
+        let mut revision = food_payload();
+        revision["foodId"] = json!("food-recipe-food");
+        revision["expectedVersionId"] = json!("food-version-recipe-food");
+        revision["input"]["nutrients"]["calories"] = json!(800);
+        execute_with_connection(
+            &mut c,
+            request(
+                "ledger-food-revision",
+                "revise_food_definition",
+                revision,
+                None,
+            ),
+        )
+        .unwrap();
+        let mut newer = recipe_payload(2.0);
+        newer["recipeId"] = original_recipe["recipeId"].clone();
+        newer["expectedVersionId"] = original_recipe["id"].clone();
+        execute_with_connection(
+            &mut c,
+            request("ledger-recipe-newer", "save_recipe_version", newer, None),
+        )
+        .unwrap();
+        let mut copy = recipe_payload(1.0);
+        copy["name"] = json!("旧配方另存");
+        copy["copiedFromVersionId"] = original_recipe["id"].clone();
+        let copied = execute_with_connection(
+            &mut c,
+            request(
+                "ledger-recipe-copy",
+                "save_recipe_version",
+                copy.clone(),
+                None,
+            ),
+        )
+        .unwrap();
+        let r = copied.state["recipes"].as_array().unwrap().last().unwrap();
+        assert_ne!(r["recipeId"], original_recipe["recipeId"]);
+        assert_eq!(r["version"], 1);
+        assert_eq!(r["copiedFromVersionId"], original_recipe["id"]);
+        assert_eq!(r["nutrition"], original_recipe["nutrition"]);
+        assert_eq!(r["ingredients"], original_recipe["ingredients"]);
+        assert!(copied.state["recipes"]
+            .as_array()
+            .unwrap()
+            .contains(&original_recipe));
+        assert_eq!(copied.state["inventory"], original.state["inventory"]);
+        assert_eq!(copied.state["meals"], original.state["meals"]);
+        assert!(
+            execute_with_connection(
+                &mut c,
+                request("ledger-recipe-copy", "save_recipe_version", copy, None)
+            )
+            .unwrap()
+            .replayed
+        );
+    }
+
+    #[test]
+    fn tiny_raw_and_cooked_remainders_are_not_silently_ignored_or_created() {
+        let mut c = connection();
+        let mut envelope: Value = serde_json::from_str(&bootstrap()).unwrap();
+        envelope["state"]["recipes"][0]["ingredients"][0]["amount"] = json!(0.0001);
+        envelope["state"]["inventory"]
+            .as_array_mut()
+            .unwrap()
+            .truncate(1);
+        envelope["state"]["inventory"][0]["remainingAmount"] = json!(0.0001);
+        let p = execute_with_connection(
+            &mut c,
+            request(
+                "ledger-tiny-cook",
+                "prepare_recipe",
+                json!({"recipeVersionId":"recipe-1"}),
+                Some(envelope.to_string()),
+            ),
+        )
+        .unwrap();
+        assert_eq!(p.state["inventory"][0]["remainingAmount"], 0.0);
+        assert_eq!(p.state["inventoryMovements"][0]["amount"], -0.0001);
+        let short = execute_with_connection(
+            &mut c,
+            request(
+                "ledger-tiny-short",
+                "prepare_recipe",
+                json!({"recipeVersionId":"recipe-1"}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert!(!short.applied);
+        execute_with_connection(
+            &mut c,
+            request(
+                "ledger-tiny-eat",
+                "consume_batch",
+                json!({"batchId":p.result["batchId"],"mealType":"lunch","ratio":0.9999}),
+                None,
+            ),
+        )
+        .unwrap();
+        let disposed = execute_with_connection(
+            &mut c,
+            request(
+                "ledger-tiny-waste",
+                "discard_batch",
+                json!({"batchId":p.result["batchId"]}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(disposed.state["wasteEvents"][0]["ratio"], 0.0001);
+        assert_eq!(disposed.state["batches"][0]["status"], "closed");
+    }
+
+    #[test]
+    fn correction_rollback_and_file_restart_preserve_receipts_and_original_evidence() {
+        let path =
+            std::env::temp_dir().join(format!("fitwise-ledger-{}.db", rand::random::<u64>()));
+        let batch_id;
+        let snapshot;
+        {
+            let mut c = Connection::open(&path).unwrap();
+            c.execute_batch("CREATE TABLE app_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);").unwrap();
+            ensure_repository_schema(&c).unwrap();
+            let prepared = prepare_ledger(&mut c);
+            batch_id = prepared.result["batchId"].clone();
+            c.execute_batch("CREATE TRIGGER ledger_fail BEFORE INSERT ON domain_command_receipts BEGIN SELECT RAISE(FAIL,'simulated disk failure'); END;").unwrap();
+            let before = load_envelope(&c).unwrap();
+            assert!(execute_with_connection(
+                &mut c,
+                request(
+                    "ledger-file-reverse",
+                    "void_prepared_batch",
+                    json!({"batchId":batch_id,"reason":"误确认制作"}),
+                    None
+                )
+            )
+            .is_err());
+            assert_eq!(load_envelope(&c).unwrap(), before);
+            c.execute_batch("DROP TRIGGER ledger_fail;").unwrap();
+            snapshot = execute_with_connection(
+                &mut c,
+                request(
+                    "ledger-file-reverse",
+                    "void_prepared_batch",
+                    json!({"batchId":batch_id,"reason":"误确认制作"}),
+                    None,
+                ),
+            )
+            .unwrap()
+            .state;
+        }
+        {
+            let mut c = Connection::open(&path).unwrap();
+            let replay = execute_with_connection(
+                &mut c,
+                request(
+                    "ledger-file-reverse",
+                    "void_prepared_batch",
+                    json!({"batchId":batch_id,"reason":"误确认制作"}),
+                    None,
+                ),
+            )
+            .unwrap();
+            assert!(replay.replayed);
+            assert_eq!(replay.state, snapshot);
+            assert_eq!(
+                c.query_row("PRAGMA quick_check", [], |r| r.get::<_, String>(0))
+                    .unwrap(),
+                "ok"
+            );
+        }
+        std::fs::remove_file(path).unwrap();
     }
 
     fn food_payload() -> Value {

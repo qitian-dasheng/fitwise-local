@@ -29,6 +29,7 @@ const reopenedCheckIns = (state: AppState, date: string) => state.checkIns.map(i
 export interface ActionResult { error?: string; duplicate?: boolean; isOutlier?: boolean; foodId?: string; foodVersionId?: string; mealIds?: string[]; recipeVersionId?: string; date?: string }
 
 interface AppActions {
+  correctBatch: (kind: "void_prepared_batch" | "revise_waste" | "void_waste", input: { batchId?: string; wasteId?: string; reason: string; ratio?: number }, commandId?: string) => Promise<ActionResult>;
   correctMeal: (input: MealCorrectionInput, voided: boolean, commandId?: string) => Promise<ActionResult>;
   saveRecipe: (input: RecipeInput, commandId?: string) => Promise<ActionResult>;
   saveFoodDefinition: (input: FoodDefinitionInput, foodId?: string, expectedVersionId?: string, commandId?: string) => Promise<ActionResult>;
@@ -90,6 +91,10 @@ export const useAppStore = create<AppStore>()(
       };
       return ({
       ...(isTauriRuntime() ? createPersonalState() : initialState),
+      async correctBatch(kind, input, commandId = uid()) {
+        if (!isTauriRuntime()) return { error: "批次纠错需要桌面版，由 Rust 在同一事务中核对并冲正；浏览器不模拟正式写入。" };
+        return submit(kind, input, commandId);
+      },
       async correctMeal(input, voided, commandId = uid()) {
         if (!isTauriRuntime()) return { error: "餐食纠错需要桌面版，由 Rust 在同一事务中更新日记和熟食批次；浏览器预览不模拟正式写入。" };
         return submit(voided ? "void_meal" : "revise_meal", { ...input }, commandId);

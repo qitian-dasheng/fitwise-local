@@ -20,6 +20,7 @@ struct RecipeInput {
     equipment: Vec<String>,
     ingredients: Vec<Ingredient>,
     recipe_id: Option<String>,
+    copied_from_version_id: Option<String>,
     expected_version_id: Option<String>,
 }
 
@@ -63,6 +64,12 @@ pub(crate) fn apply(
     {
         return Err("菜谱使用了个人配置中未启用的厨具。".into());
     }
+    if let Some(source) = input.copied_from_version_id.as_deref() {
+        if input.recipe_id.is_some() || !array(state, "recipes")?.iter().any(|r| r["id"] == source)
+        {
+            return Err("另存来源不存在，或不能同时覆盖原菜谱。".into());
+        }
+    }
     let (recipe_id, number) = if let Some(id) = input.recipe_id.as_deref() {
         let latest = array(state, "recipes")?
             .iter()
@@ -102,12 +109,28 @@ pub(crate) fn apply(
         if !["g", "ml", "piece"].contains(&item.inventory_unit.as_str()) {
             return Err("库存仅按克、毫升或个扣减，份和包装需要已确认换算。".into());
         }
-        let snapshot = crate::food_library::historical_portion(
+        let mut snapshot = crate::food_library::historical_portion(
             state,
             &item.food_version_id,
             item.quantity,
             &item.unit,
         )?;
+        // Copy the historical identity metadata too, not today\'s activeVersionId/favorite.
+        if let Some(source) = input.copied_from_version_id.as_deref() {
+            if let Some(original) = array(state, "recipes")?
+                .iter()
+                .find(|r| r["id"] == source)
+                .and_then(|r| r["ingredients"].as_array())
+                .and_then(|items| {
+                    items.iter().find(|i| {
+                        i["foodVersionId"] == item.food_version_id
+                            && i["foodSnapshot"]["definition"]["id"] == snapshot["definition"]["id"]
+                    })
+                })
+            {
+                snapshot["definition"] = original["foodSnapshot"]["definition"].clone();
+            }
+        }
         let definition = &snapshot["definition"];
         let unit_preview = crate::food_library::historical_portion(
             state,
@@ -182,7 +205,10 @@ pub(crate) fn apply(
     }
     let (now, _) = now_and_date();
     let id = format!("recipe-version-{command_id}");
-    let recipe = json!({"id":id,"recipeId":recipe_id,"name":input.name.trim(),"version":number,"ingredients":ingredients,"nutrition":nutrition,"totalMinutes":input.total_minutes,"equipment":input.equipment,"source":"personal","confirmedBy":state["profile"]["name"],"confirmedAt":now,"createdAt":now});
+    let mut recipe = json!({"id":id,"recipeId":recipe_id,"name":input.name.trim(),"version":number,"ingredients":ingredients,"nutrition":nutrition,"totalMinutes":input.total_minutes,"equipment":input.equipment,"source":"personal","confirmedBy":state["profile"]["name"],"confirmedAt":now,"createdAt":now});
+    if let Some(source) = input.copied_from_version_id {
+        recipe["copiedFromVersionId"] = json!(source);
+    }
     array_mut(state, "recipes")?.push(recipe.clone());
     array_mut(state,"auditEvents")?.push(json!({"id":format!("{command_id}:audit"),"eventType":"save_recipe_version","entityType":"recipe","entityId":id,"createdAt":now,"payload":{"commandId":command_id,"previousVersionId":input.expected_version_id,"recipe":recipe}}));
     Ok(CommandMutation {

@@ -1,5 +1,6 @@
 mod artifacts;
 mod backup;
+mod batch_corrections;
 mod credentials;
 mod domain_commands;
 mod domain_queries;

@@ -65,6 +65,7 @@ pub(crate) fn apply(
             .position(|v| v["id"] == batch_id)
             .ok_or("熟食批次缺失，不能孤立修改日记。")?;
         let batch = array(state, "batches")?[batch_index].clone();
+        crate::batch_corrections::validate_balance(state, &batch)?;
         if new_date.as_str() < batch["date"].as_str().ok_or("制作日期缺失。")? {
             return Err("进食日期不能早于制作日。".into());
         }
