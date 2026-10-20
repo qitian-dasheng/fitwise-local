@@ -5,7 +5,7 @@ import { DiaryDateControl } from "../components/DiaryDateControl";
 import { ArrowRight, Check, Dumbbell, Plus, Scale, Sparkles, Utensils, Wheat } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { activeMeasurements, summarizeMeals } from "../domain/calculations";
+import { activeMeals, activeMeasurements, summarizeMeals } from "../domain/calculations";
 import { useAppStore } from "../store/appStore";
 import { Modal } from "../components/Modal";
 import { NutritionRing } from "../components/NutritionRing";
@@ -31,7 +31,7 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange }: { goTo: (
   const setDayComplete = useAppStore((state) => state.setDayComplete);
   const today = date;
   const period = usePeriodSummary(today, today);
-  const todayMeals = meals.filter((meal) => meal.date === today);
+  const todayMeals = activeMeals(meals).filter((meal) => meal.date === today);
   const summary = period.data?.days[0] ?? summarizeMeals(todayMeals);
   const todayWorkouts = workouts.filter((item) => item.date === today);
   const todayCheck = checkIns.find((item) => item.date === today);

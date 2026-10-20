@@ -3,6 +3,9 @@ import type { AppState } from "../domain/types";
 import { flushAppStorageWrites } from "./storage";
 
 export type DomainCommandKind =
+  | "revise_meal"
+  | "void_meal"
+  | "save_recipe_version"
   | "save_food_definition"
   | "revise_food_definition"
   | "set_food_favorite"

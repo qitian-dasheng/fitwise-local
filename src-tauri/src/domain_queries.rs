@@ -55,7 +55,7 @@ pub(crate) fn period_summary(
     }
     let mut weights = BTreeMap::<String, ([f64; 7], [f64; 7], f64, usize)>::new();
     {
-        let mut statement = transaction.prepare("SELECT diary_date,ratio,nutrition_json FROM domain_meal_projection WHERE diary_date BETWEEN ?1 AND ?2").map_err(|error|error.to_string())?;
+        let mut statement = transaction.prepare("SELECT diary_date,ratio,nutrition_json FROM domain_active_meal_projection WHERE diary_date BETWEEN ?1 AND ?2").map_err(|error|error.to_string())?;
         let rows = statement
             .query_map([start, end], |row| {
                 Ok((
@@ -254,7 +254,7 @@ pub fn export_domain_json(app: AppHandle) -> Result<Value, String> {
         .as_object()
         .ok_or("领域仓库格式无效。")?
         .clone();
-    data.insert("schemaVersion".into(), json!(8));
+    data.insert("schemaVersion".into(), json!(9));
     data.insert(
         "inputArtifacts".into(),
         crate::artifacts::manifest(&connection)?,

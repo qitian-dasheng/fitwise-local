@@ -225,6 +225,28 @@ fn selected(state: &Map<String, Value>, version_id: &str) -> Result<(Definition,
     Ok((definition, version))
 }
 
+pub(crate) fn historical_portion(
+    state: &Map<String, Value>,
+    version_id: &str,
+    quantity: f64,
+    unit: &str,
+) -> Result<Value, String> {
+    let raw = array(state, "foodDefinitionVersions")?
+        .iter()
+        .find(|v| v["id"] == version_id)
+        .ok_or("找不到营养版本。")?;
+    let version: Version = serde_json::from_value(raw.clone()).map_err(|e| e.to_string())?;
+    let definition = array(state, "foodDefinitions")?
+        .iter()
+        .find(|d| d["id"] == version.food_id)
+        .ok_or("找不到食物身份。")?;
+    let unit: FoodUnit = serde_json::from_value(json!(unit)).map_err(|_| "计量单位无效。")?;
+    let preview = portion(&version, quantity, unit)?;
+    Ok(
+        json!({"definition":definition,"version":version,"quantity":quantity,"unit":unit,"factor":preview["factor"],"basisQuantity":preview["basisQuantity"],"nutrition":preview["nutrition"]}),
+    )
+}
+
 pub(crate) fn apply(
     state: &mut Map<String, Value>,
     kind: &str,
@@ -384,6 +406,7 @@ pub(crate) fn search_state(
         }
         let last_used = array(state, "meals")?
             .iter()
+            .filter(|meal| meal["status"].as_str().is_none_or(|v| v == "active"))
             .filter(|meal| meal["foodDefinitionId"] == definition.id)
             .filter_map(|meal| meal["createdAt"].as_str())
             .max();

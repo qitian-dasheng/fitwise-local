@@ -35,13 +35,14 @@ export interface NutritionSummary {
   totals: Record<NutrientKey, number>;
   coverage: Record<NutrientKey, number>;
 }
+export const activeMeals = (entries: MealEntry[]) => entries.filter(item => !item.status || item.status === "active");
 
 export function summarizeMeals(entries: MealEntry[]): NutritionSummary {
   const totals = Object.fromEntries(nutrientKeys.map((key) => [key, 0])) as Record<NutrientKey, number>;
   const knownWeights = Object.fromEntries(nutrientKeys.map((key) => [key, 0])) as Record<NutrientKey, number>;
   const allWeights = Object.fromEntries(nutrientKeys.map((key) => [key, 0])) as Record<NutrientKey, number>;
 
-  for (const entry of entries) {
+  for (const entry of activeMeals(entries)) {
     const ratio = Math.max(0, Math.min(1, entry.consumedRatio));
     for (const key of nutrientKeys) {
       allWeights[key] += ratio;
@@ -85,7 +86,7 @@ export function completedDateSet(checkIns: DailyCheckIn[]) {
 export function completedDayCalorieAverage(entries: MealEntry[], checkIns: DailyCheckIn[]) {
   const completed = completedDateSet(checkIns);
   const grouped = new Map<string, MealEntry[]>();
-  for (const entry of entries) {
+  for (const entry of activeMeals(entries)) {
     if (!completed.has(entry.date)) continue;
     grouped.set(entry.date, [...(grouped.get(entry.date) ?? []), entry]);
   }

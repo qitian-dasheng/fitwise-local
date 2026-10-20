@@ -96,6 +96,11 @@ export interface UserProfile {
 
 export interface MealEntry {
   id: string;
+  status?: "active" | "superseded" | "void";
+  supersedesId?: string;
+  supersededBy?: string;
+  correctedAt?: string;
+  correctionReason?: string;
   date: ISODate;
   type: MealType;
   name: string;
@@ -158,7 +163,12 @@ export interface RecipeIngredient {
   name: string;
   amount: number;
   unit: "g" | "ml" | "piece";
-  measurementBasis: "raw" | "cooked" | "package";
+  measurementBasis: "raw" | "cooked" | "package" | "edible";
+  foodVersionId?: string;
+  nutritionQuantity?: number;
+  nutritionUnit?: FoodUnit;
+  foodSnapshot?: MealEntry["foodSnapshot"];
+  inventoryConfirmed?: boolean;
 }
 
 export interface RecipeVersion {
@@ -171,6 +181,8 @@ export interface RecipeVersion {
   totalMinutes: number;
   equipment: string[];
   source: DataSource;
+  confirmedBy?: string;
+  confirmedAt?: string;
   createdAt: string;
 }
 
@@ -191,6 +203,8 @@ export interface PreparedBatch {
 
 export interface ConsumptionEvent {
   id: string;
+  status?: "active" | "superseded" | "void";
+  supersedesId?: string;
   batchId: string;
   date: ISODate;
   mealType: MealType;
@@ -360,3 +374,24 @@ export const nutrientKeys = [
 ] as const;
 
 export type NutrientKey = (typeof nutrientKeys)[number];
+
+export interface MealCorrectionInput {
+  mealId: string;
+  reason: string;
+  date?: string;
+  type?: MealType;
+  quantity?: number;
+  unit?: FoodUnit;
+  ratio?: number;
+  name?: string;
+  amountLabel?: string;
+  nutrients?: Partial<Record<NutrientKey, number>>;
+}
+export interface RecipeInput {
+  name: string;
+  totalMinutes: number;
+  equipment: string[];
+  ingredients: { foodVersionId: string; quantity: number; unit: FoodUnit; inventoryFoodId: string; inventoryUnit: InventoryLot["unit"]; inventoryConfirmed: boolean }[];
+  recipeId?: string;
+  expectedVersionId?: string;
+}

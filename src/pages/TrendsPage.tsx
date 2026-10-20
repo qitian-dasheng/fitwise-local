@@ -2,7 +2,7 @@ import { diaryToday, shiftDiaryDate, type DiaryDateProps } from "../domain/diary
 import { DiaryDateControl } from "../components/DiaryDateControl";
 import { Activity, CalendarCheck, Dumbbell, Scale } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { activeMeasurements, completedDayCalorieAverage, movingAverage, summarizeMeals } from "../domain/calculations";
+import { activeMeals, activeMeasurements, completedDayCalorieAverage, movingAverage, summarizeMeals } from "../domain/calculations";
 import { PageHeader } from "../components/PageHeader";
 import { useAppStore } from "../store/appStore";
 import { usePeriodSummary } from "../data/domainQueries";
@@ -20,10 +20,10 @@ export function TrendsPage({ date = diaryToday(), onDateChange }: DiaryDateProps
   const weights = currentMeasurements.map((item) => ({ date: item.date, value: item.weightKg }));
   const avg = movingAverage(weights);
   const weightData = period.data ? period.data.measurements.map((item) => ({ date: item.date.slice(5), weight: item.weightKg, average: item.average })) : weights.map((item, index) => ({ fullDate: item.date, date: item.date.slice(5), weight: item.value, average: avg[index].value })).filter(item => item.fullDate >= start);
-  const calorieData = period.data ? period.data.days.map((day) => ({ date: day.date.slice(5), calories: day.mealCount > 0 && day.coverage.calories === 100 ? Math.round(day.totals.calories) : null, complete: day.complete })) : Array.from({ length: 7 }, (_, index) => {
+  const calorieData = period.data ? period.data.days.map((day) => ({ date: day.date.slice(5), calories: day.mealCount > 0 && activeMeals(meals).filter(m => m.date === day.date).every(m => m.nutrition.calories.state !== "unknown") ? Math.round(day.totals.calories) : null, complete: day.complete })) : Array.from({ length: 7 }, (_, index) => {
     const date = shiftDiaryDate(end, index - 6);
-    const entries = meals.filter((item) => item.date === date);
-    return { date: date.slice(5), calories: entries.length > 0 && summarizeMeals(entries).coverage.calories === 100 ? Math.round(summarizeMeals(entries).totals.calories) : null, complete: checkIns.some((item) => item.date === date && item.complete) };
+    const entries = activeMeals(meals).filter((item) => item.date === date);
+    return { date: date.slice(5), calories: entries.length > 0 && entries.every(m => m.nutrition.calories.state !== "unknown") ? Math.round(summarizeMeals(entries).totals.calories) : null, complete: checkIns.some((item) => item.date === date && item.complete) };
   });
   const averageCalories = period.data ? period.data.completedDayCalorieAverage : completedDayCalorieAverage(meals.filter((item) => item.date >= start && item.date <= end), checkIns);
   const workoutMinutes = period.data?.workoutMinutes ?? workouts.filter((item) => item.date >= start && item.date <= end).reduce((sum, item) => sum + item.durationMinutes, 0);

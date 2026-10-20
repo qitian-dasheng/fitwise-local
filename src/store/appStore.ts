@@ -16,6 +16,7 @@ import type {
   FoodDefinitionInput,
   FoodMealInput,
   ReceivePurchaseInput, InventoryCountInput, InventoryDisposalInput,
+  MealCorrectionInput, RecipeInput,
 } from "../domain/types";
 import { enqueueDomainCommand, executeDomainCommand, type DomainCommandKind } from "../data/domainCommands";
 import { appStorage, flushAppStorageWrites, isTauriRuntime, suppressNextAppStorageWrite } from "../data/storage";
@@ -25,9 +26,11 @@ import { diaryToday, ratioPercent } from "../domain/diary";
 
 const uid = () => crypto.randomUUID();
 const reopenedCheckIns = (state: AppState, date: string) => state.checkIns.map(item => item.date === date && item.complete ? { ...item, complete: false, completedAt: undefined } : item);
-export interface ActionResult { error?: string; duplicate?: boolean; isOutlier?: boolean; foodId?: string; foodVersionId?: string; mealIds?: string[] }
+export interface ActionResult { error?: string; duplicate?: boolean; isOutlier?: boolean; foodId?: string; foodVersionId?: string; mealIds?: string[]; recipeVersionId?: string; date?: string }
 
 interface AppActions {
+  correctMeal: (input: MealCorrectionInput, voided: boolean, commandId?: string) => Promise<ActionResult>;
+  saveRecipe: (input: RecipeInput, commandId?: string) => Promise<ActionResult>;
   saveFoodDefinition: (input: FoodDefinitionInput, foodId?: string, expectedVersionId?: string, commandId?: string) => Promise<ActionResult>;
   setFoodFavorite: (foodId: string, favorite: boolean, commandId?: string) => Promise<ActionResult>;
   recordFoodMeal: (input: FoodMealInput, commandId?: string) => Promise<ActionResult>;
@@ -87,6 +90,14 @@ export const useAppStore = create<AppStore>()(
       };
       return ({
       ...(isTauriRuntime() ? createPersonalState() : initialState),
+      async correctMeal(input, voided, commandId = uid()) {
+        if (!isTauriRuntime()) return { error: "餐食纠错需要桌面版，由 Rust 在同一事务中更新日记和熟食批次；浏览器预览不模拟正式写入。" };
+        return submit(voided ? "void_meal" : "revise_meal", { ...input }, commandId);
+      },
+      async saveRecipe(input, commandId = uid()) {
+        if (!isTauriRuntime()) return { error: "菜谱保存需要桌面版，由 Rust 校验营养版本、换算与库存关联。" };
+        return submit("save_recipe_version", { ...input }, commandId);
+      },
       async saveFoodDefinition(input, foodId, expectedVersionId, commandId = uid()) {
         if (isTauriRuntime()) return submit(foodId ? "revise_food_definition" : "save_food_definition", { input, ...(foodId ? { foodId, expectedVersionId } : {}) }, commandId);
         try { const saved = saveFoodInState(get(), input, commandId, foodId, expectedVersionId); set(saved.state); return saved.result; }

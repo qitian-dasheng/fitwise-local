@@ -84,7 +84,7 @@ export function searchFoodState(state: AppState, query: string, mode: "all" | "r
     if (!`${definition.name} ${definition.brand ?? ""}`.toLowerCase().includes(needle) || (mode === "favorites" && !definition.favorite)) return [];
     const version = state.foodDefinitionVersions.find((item) => item.id === definition.activeVersionId);
     if (!version) return [];
-    const lastUsedAt = state.meals.filter((item) => item.foodDefinitionId === definition.id).map((item) => item.createdAt).sort().at(-1);
+    const lastUsedAt = state.meals.filter((item) => (!item.status || item.status === "active") && item.foodDefinitionId === definition.id).map((item) => item.createdAt).sort().at(-1);
     if (mode === "recent" && !lastUsedAt) return [];
     const item: FoodLibraryItem = { definition, version, lastUsedAt };
     for (const [key, unit] of [["per100g", "g"], ["per100ml", "ml"]] as const) {

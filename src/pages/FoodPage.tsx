@@ -2,18 +2,24 @@ import { diaryToday, ratioPercent, type DiaryDateProps } from "../domain/diary";
 import { DiaryDateControl } from "../components/DiaryDateControl";
 import { AlertTriangle, ChefHat, Plus, ShieldCheck, Trash2, Utensils } from "lucide-react";
 import { useState } from "react";
-import { summarizeMeals } from "../domain/calculations";
-import type { MealType } from "../domain/types";
+import { activeMeals, summarizeMeals } from "../domain/calculations";
+import type { MealEntry, RecipeVersion, MealType } from "../domain/types";
 import { useAppStore } from "../store/appStore";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { useConfirmedAction } from "../components/useConfirmedAction";
 import type { ActionResult } from "../store/appStore";
 import { FoodLibraryModal } from "../components/FoodLibraryModal";
+import { MealCorrectionModal } from "../components/MealCorrectionModal";
+import { RecipeEditor } from "../components/RecipeEditor";
+import { latestRecipes } from "../domain/recipes";
 
 const mealLabels: Record<MealType, string> = { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", snack: "加餐" };
 
 export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps = {}) {
+  const [correction,setCorrection]=useState<MealEntry|null>(null);
+  const [recipeEditor,setRecipeEditor]=useState<RecipeVersion|"new"|null>(null);
+  const [selectedRecipeId,setSelectedRecipeId]=useState("");
   const [mealOpen, setMealOpen] = useState(false);
   const [manualMeal, setManualMeal] = useState(false);
   const [initialMealType, setInitialMealType] = useState<MealType>("breakfast");
@@ -38,9 +44,10 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   const consumeBatch = useAppStore((state) => state.consumeBatch);
   const discardBatchRemainder = useAppStore((state) => state.discardBatchRemainder);
   const today = date;
-  const todayMeals = meals.filter((item) => item.date === today);
+  const todayMeals = activeMeals(meals).filter((item) => item.date === today);
   const total = summarizeMeals(todayMeals);
-  const recipe = recipes[0];
+  const recipeOptions=latestRecipes(recipes);
+  const recipe = recipeOptions.find(r=>r.id===selectedRecipeId)??recipeOptions[0];
   const activeBatches = batches.filter((item) => item.status === "open" && item.remainingRatio > 0);
   const todayBatches = batches.filter((item) => item.date === today);
   const selectedBatch = batches.find((item) => item.id === batchOpen);
@@ -72,6 +79,7 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
                       <div className="meal-icon"><Utensils size={16} /></div>
                       <div><strong>{item.name}</strong><span>{item.amountLabel} · {item.confidence === "high" ? "已确认" : "估算"}</span></div>
                       <b>{item.nutrition.calories.state === "unknown" ? "未知" : Math.round((item.nutrition.calories.value ?? 0) * item.consumedRatio)}</b>
+                      <button className="text-button" onClick={()=>setCorrection(item)}>更正／作废</button>
                     </div>
                   )) : <button className="empty-entry" onClick={() => openMeal(type)}><Plus size={15} /> 添加{mealLabels[type]}</button>}
                 </div>
@@ -81,6 +89,8 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
         </section>
 
         <section className="stack">
+          <div className="button-row"><button className="button secondary" onClick={()=>setRecipeEditor("new")}>新建菜谱</button>{recipe&&<button className="button secondary" onClick={()=>setRecipeEditor(recipe)}>修订当前菜谱</button>}</div>
+          {recipeOptions.length>0&&<label className="recipe-picker"><span>选择标准菜谱（每道菜的最新版本）</span><select aria-label="选择标准菜谱" value={recipe?.id??""} onChange={e=>setSelectedRecipeId(e.target.value)}>{recipeOptions.map(r=><option key={r.id} value={r.id}>{r.name} · v{r.version}</option>)}</select></label>}
           {recipe ? <article className="card recipe-card">
             <div className="recipe-visual"><ChefHat size={32} /></div>
             <p className="eyebrow">标准菜谱 · v{recipe.version}</p>
@@ -100,8 +110,11 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
         </section>
       </div>
 
-      {todayBatches.length > 0 && <section className="card batch-history"><div className="card-heading compact"><div><p className="eyebrow">原料、进食、浪费分账</p><h2>所选日制作批次</h2></div><span className="status-pill neutral">{todayBatches.length} 批</span></div>{todayBatches.map((batch) => { const consumed = consumptionEvents.filter((item) => item.batchId === batch.id); const waste = wasteEvents.filter((item) => item.batchId === batch.id); return <div className="batch-history-row" key={batch.id}><div><strong>{recipes.find((item) => item.id === batch.recipeVersionId)?.name ?? "未知菜谱"}</strong><span>{consumed.length ? consumed.map((item) => `${mealLabels[item.mealType]} ${ratioPercent(item.ratio)}%`).join(" · ") : "尚未记录进食"}</span></div><div><small>已吃</small><b>{ratioPercent(batch.consumedRatio)}%</b></div><div><small>保留</small><b>{ratioPercent(batch.remainingRatio)}%</b></div><div><small>丢弃</small><b>{ratioPercent(batch.wastedRatio)}%</b></div><span className={`status-pill ${batch.status === "open" ? "warning" : "success"}`}>{batch.status === "open" ? "仍有剩余" : waste.length ? "已结束 · 含浪费" : "已吃完"}</span></div>; })}</section>}
+      {todayBatches.length > 0 && <section className="card batch-history"><div className="card-heading compact"><div><p className="eyebrow">原料、进食、浪费分账</p><h2>所选日制作批次</h2></div><span className="status-pill neutral">{todayBatches.length} 批</span></div>{todayBatches.map((batch) => { const consumed = consumptionEvents.filter((item) => item.batchId === batch.id && (!item.status||item.status==="active")); const waste = wasteEvents.filter((item) => item.batchId === batch.id); return <div className="batch-history-row" key={batch.id}><div><strong>{recipes.find((item) => item.id === batch.recipeVersionId)?.name ?? "未知菜谱"}</strong><span>{consumed.length ? consumed.map((item) => `${mealLabels[item.mealType]} ${ratioPercent(item.ratio)}%`).join(" · ") : "尚未记录进食"}</span></div><div><small>已吃</small><b>{ratioPercent(batch.consumedRatio)}%</b></div><div><small>保留</small><b>{ratioPercent(batch.remainingRatio)}%</b></div><div><small>丢弃</small><b>{ratioPercent(batch.wastedRatio)}%</b></div><span className={`status-pill ${batch.status === "open" ? "warning" : "success"}`}>{batch.status === "open" ? "仍有剩余" : waste.length ? "已结束 · 含浪费" : "已吃完"}</span></div>; })}</section>}
 
+      {correction&&<MealCorrectionModal meal={correction} onClose={()=>setCorrection(null)} onSaved={onDateChange}/>}
+      {recipeEditor&&<RecipeEditor recipe={recipeEditor==="new"?undefined:recipeEditor} onClose={()=>setRecipeEditor(null)} onSaved={setSelectedRecipeId}/>}
+      {meals.some(m=>m.date===date&&m.status&&m.status!=="active")&&<details className="card meal-correction-history"><summary>查看所选日修订／作废的原始记录</summary>{meals.filter(m=>m.date===date&&m.status&&m.status!=="active").map(m=><article key={m.id}><strong>{m.name} · {m.status==="void"?"已作废":"已修订"}</strong><p>{m.date} · {m.amountLabel} · 原始营养 {m.nutrition.calories.state==="unknown"?"未知":m.nutrition.calories.value} kcal（参考规格，非重新入账）</p><p>原因：{m.correctionReason}；原记录 ID：{m.id}</p></article>)}</details>}
       {mealOpen && <><div hidden={manualMeal}><FoodLibraryModal initialType={initialMealType} initialDate={date} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onManual={() => setManualMeal(true)} /></div>{manualMeal && <MealModal initialType={initialMealType} initialDate={date} onBack={() => setManualMeal(false)} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onSave={addMeal}/>}</>}
       {cookOpen && recipe && (
         <Modal title="确认制作整锅菜" onClose={() => { if (!busyAction) setCookOpen(false); }}>

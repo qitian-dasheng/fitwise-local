@@ -547,6 +547,9 @@ fn execute_with_connection(
     if !matches!(
         request.kind.as_str(),
         "save_food_definition"
+            | "revise_meal"
+            | "void_meal"
+            | "save_recipe_version"
             | "revise_food_definition"
             | "set_food_favorite"
             | "record_food_meal"
@@ -619,6 +622,15 @@ fn execute_with_connection(
     let (version, mut state) =
         load_command_state(&transaction, request.bootstrap_state.as_deref())?;
     let mutation = match request.kind.as_str() {
+        "revise_meal" | "void_meal" => crate::meal_corrections::apply(
+            &mut state,
+            &request.kind,
+            &request.payload,
+            &request.command_id,
+        )?,
+        "save_recipe_version" => {
+            crate::recipes::apply(&mut state, &request.payload, &request.command_id)?
+        }
         "save_food_definition"
         | "revise_food_definition"
         | "set_food_favorite"
@@ -745,6 +757,471 @@ mod tests {
 
     fn food_payload() -> Value {
         json!({"input":{"name":"燕麦","brand":"example","measurementBasis":"packaged","basis":{"quantity":100,"unit":"g"},"energyUnit":"kcal","nutrients":{"calories":400,"protein":12,"fat":0},"conversions":[{"unit":"package","quantity":1,"basisQuantity":200}],"source":"label"}})
+    }
+
+    #[test]
+    fn manual_meal_corrections_keep_originals_reopen_both_dates_and_project_only_active_rows() {
+        let mut c = connection();
+        let today = now_and_date().1;
+        let yesterday = (chrono::NaiveDate::parse_from_str(&today, "%Y-%m-%d").unwrap()
+            - chrono::Days::new(1))
+        .to_string();
+        let first=execute_with_connection(&mut c,request("correction-first","add_meal",json!({"name":"外食","date":yesterday,"type":"lunch","amountLabel":"误记一份","calories":200,"protein":10}),Some(bootstrap()))).unwrap();
+        let id = first.state["meals"][0]["id"].clone();
+        let original_nutrition = first.state["meals"][0]["nutrition"].clone();
+        for (key, date) in [("complete-old", &yesterday), ("complete-new", &today)] {
+            execute_with_connection(
+                &mut c,
+                request(
+                    key,
+                    "set_day_complete",
+                    json!({"date":date,"complete":true}),
+                    None,
+                ),
+            )
+            .unwrap();
+        }
+        let input = json!({"mealId":id,"reason":"日期与热量误记","date":today,"type":"dinner","name":"更正外食","amountLabel":"半份","nutrients":{"calories":100,"protein":0}});
+        let changed = execute_with_connection(
+            &mut c,
+            request("correction-second", "revise_meal", input.clone(), None),
+        )
+        .unwrap();
+        assert_eq!(changed.state["meals"][0]["nutrition"], original_nutrition);
+        assert_eq!(changed.state["meals"][0]["status"], "superseded");
+        assert_eq!(
+            changed.state["meals"][1]["nutrition"]["protein"]["state"],
+            "zero"
+        );
+        assert_eq!(
+            changed.state["meals"][1]["nutrition"]["fiber"]["state"],
+            "unknown"
+        );
+        assert!(changed.state["checkIns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|v| v["complete"] == false));
+        let summary = crate::domain_queries::period_summary(&c, &yesterday, &today).unwrap();
+        assert_eq!(summary["days"][0]["mealCount"], 0);
+        assert_eq!(summary["days"][1]["totals"]["calories"], 100.0);
+        assert!(
+            execute_with_connection(
+                &mut c,
+                request("correction-second", "revise_meal", input.clone(), None)
+            )
+            .unwrap()
+            .replayed
+        );
+        let before = load_envelope(&c).unwrap();
+        assert!(execute_with_connection(
+            &mut c,
+            request("correction-stale", "revise_meal", input, None)
+        )
+        .is_err());
+        assert_eq!(load_envelope(&c).unwrap(), before);
+        let new_id = changed.result["mealId"].clone();
+        execute_with_connection(
+            &mut c,
+            request(
+                "correction-void",
+                "void_meal",
+                json!({"mealId":new_id,"reason":"重复录入"}),
+                None,
+            ),
+        )
+        .unwrap();
+        let summary = crate::domain_queries::period_summary(&c, &today, &today).unwrap();
+        assert_eq!(summary["days"][0]["mealCount"], 0);
+        assert!(summary["completedDayCalorieAverage"].is_null());
+        assert_eq!(changed.state["inventory"], first.state["inventory"]);
+    }
+
+    #[test]
+    fn portion_correction_uses_the_original_food_version_even_after_library_revision() {
+        let mut c = connection();
+        let today = now_and_date().1;
+        execute_with_connection(
+            &mut c,
+            request(
+                "correct-food",
+                "save_food_definition",
+                food_payload(),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        let first=execute_with_connection(&mut c,request("correct-food-meal","record_food_meal",json!({"date":today,"type":"breakfast","entries":[{"foodVersionId":"food-version-correct-food","quantity":500,"unit":"g"}]}),None)).unwrap();
+        let original = first.state["meals"][0].clone();
+        let mut revision = food_payload();
+        revision["foodId"] = json!("food-correct-food");
+        revision["expectedVersionId"] = json!("food-version-correct-food");
+        revision["input"]["nutrients"]["calories"] = json!(800);
+        execute_with_connection(
+            &mut c,
+            request(
+                "correct-food-new-version",
+                "revise_food_definition",
+                revision,
+                None,
+            ),
+        )
+        .unwrap();
+        let result=execute_with_connection(&mut c,request("correct-food-portion","revise_meal",json!({"mealId":original["id"],"reason":"500 克误录，应为 50 克","date":today,"type":"breakfast","quantity":50,"unit":"g"}),None)).unwrap();
+        assert_eq!(
+            result.state["meals"][0]["foodSnapshot"],
+            original["foodSnapshot"]
+        );
+        assert_eq!(
+            result.state["meals"][1]["nutrition"]["calories"]["value"],
+            200.0
+        );
+        assert_eq!(
+            result.state["meals"][1]["foodSnapshot"]["version"]["id"],
+            "food-version-correct-food"
+        );
+        assert_eq!(
+            result.state["meals"][1]["foodSnapshot"]["definition"],
+            original["foodSnapshot"]["definition"]
+        );
+        assert_eq!(
+            crate::domain_queries::period_summary(&c, &today, &today).unwrap()["days"][0]["totals"]
+                ["calories"],
+            200.0
+        );
+    }
+
+    #[test]
+    fn batch_corrections_update_events_without_refunding_raw_stock_or_eating_waste() {
+        let mut c = connection();
+        let today = now_and_date().1;
+        let prepared = execute_with_connection(
+            &mut c,
+            request(
+                "correct-batch-cook",
+                "prepare_recipe",
+                json!({"recipeVersionId":"recipe-1"}),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        let batch_id = prepared.result["batchId"].clone();
+        let eaten = execute_with_connection(
+            &mut c,
+            request(
+                "correct-batch-eat",
+                "consume_batch",
+                json!({"batchId":batch_id,"mealType":"lunch","ratio":0.75}),
+                None,
+            ),
+        )
+        .unwrap();
+        let meal_id = eaten.state["meals"][0]["id"].clone();
+        execute_with_connection(
+            &mut c,
+            request(
+                "correct-batch-waste",
+                "discard_batch",
+                json!({"batchId":batch_id,"reason":"discarded"}),
+                None,
+            ),
+        )
+        .unwrap();
+        let changed=execute_with_connection(&mut c,request("correct-batch-revise","revise_meal",json!({"mealId":meal_id,"date":today,"type":"dinner","ratio":0.5,"reason":"午餐比例记多了"}),None)).unwrap();
+        assert_eq!(changed.state["inventory"], prepared.state["inventory"]);
+        assert_eq!(
+            changed.state["inventoryMovements"],
+            prepared.state["inventoryMovements"]
+        );
+        assert_eq!(changed.state["batches"][0]["consumedRatio"], 0.5);
+        assert_eq!(changed.state["batches"][0]["remainingRatio"], 0.25);
+        assert_eq!(changed.state["batches"][0]["wastedRatio"], 0.25);
+        assert_eq!(
+            changed.state["consumptionEvents"][0]["status"],
+            "superseded"
+        );
+        assert_eq!(changed.state["consumptionEvents"][1]["ratio"], 0.5);
+        let new_id = changed.result["mealId"].clone();
+        let before = load_envelope(&c).unwrap();
+        assert!(execute_with_connection(&mut c,request("correct-batch-over","revise_meal",json!({"mealId":new_id,"date":today,"type":"dinner","ratio":0.8,"reason":"不能吃掉浪费部分"}),None)).is_err());
+        assert_eq!(load_envelope(&c).unwrap(), before);
+        let voided = execute_with_connection(
+            &mut c,
+            request(
+                "correct-batch-void",
+                "void_meal",
+                json!({"mealId":new_id,"reason":"实际没有吃，全部记错"}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(voided.state["batches"][0]["consumedRatio"], 0.0);
+        assert_eq!(voided.state["batches"][0]["remainingRatio"], 0.75);
+        assert_eq!(voided.state["wasteEvents"][0]["ratio"], 0.25);
+        assert_eq!(
+            crate::domain_queries::period_summary(&c, &today, &today).unwrap()["days"][0]
+                ["mealCount"],
+            0
+        );
+        assert!(
+            execute_with_connection(
+                &mut c,
+                request(
+                    "correct-batch-void",
+                    "void_meal",
+                    json!({"mealId":new_id,"reason":"实际没有吃，全部记错"}),
+                    None
+                )
+            )
+            .unwrap()
+            .replayed
+        );
+    }
+
+    fn recipe_payload(quantity: f64) -> Value {
+        json!({"name":"自制燕麦","totalMinutes":10,"equipment":["电磁炉"],"ingredients":[{"foodVersionId":"food-version-recipe-food","quantity":quantity,"unit":"package","inventoryFoodId":"tofu","inventoryUnit":"g","inventoryConfirmed":true}]})
+    }
+
+    #[test]
+    fn schema_8_upgrade_and_restart_keep_originals_and_correction_request_identity() {
+        let directory =
+            std::env::temp_dir().join(format!("fitwise-corrections-v9-{}", rand::random::<u64>()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("fitwise.db");
+        let mut c = Connection::open(&path).unwrap();
+        let today = now_and_date().1;
+        let first=execute_with_connection(&mut c,request("restart-meal-first","add_meal",json!({"name":"早餐","date":today,"type":"breakfast","amountLabel":"一份","calories":300,"protein":10}),Some(bootstrap()))).unwrap();
+        let id = first.state["meals"][0]["id"].clone();
+        let before = load_envelope(&c).unwrap();
+        c.execute_batch("DROP VIEW domain_active_meal_projection; INSERT INTO domain_upgrade_reports(version,report_json,created_at) VALUES(8,'{}','old');").unwrap();
+        crate::domain_upgrade::upgrade(&mut c, &path).unwrap();
+        assert_eq!(load_envelope(&c).unwrap(), before);
+        assert!(c
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM domain_upgrade_reports WHERE version=9)",
+                [],
+                |r| r.get::<_, bool>(0)
+            )
+            .unwrap());
+        assert_eq!(
+            std::fs::read_dir(directory.join("upgrade-backups"))
+                .unwrap()
+                .count(),
+            1
+        );
+        let correction = json!({"mealId":id,"reason":"多记一倍","date":today,"type":"breakfast","name":"早餐","amountLabel":"半份","nutrients":{"calories":150,"protein":5}});
+        let changed = execute_with_connection(
+            &mut c,
+            request(
+                "restart-meal-revised",
+                "revise_meal",
+                correction.clone(),
+                None,
+            ),
+        )
+        .unwrap();
+        let new_id = changed.result["mealId"].clone();
+        drop(c);
+        let mut c = Connection::open(&path).unwrap();
+        assert!(
+            execute_with_connection(
+                &mut c,
+                request("restart-meal-revised", "revise_meal", correction, None)
+            )
+            .unwrap()
+            .replayed
+        );
+        assert_eq!(
+            crate::domain_queries::period_summary(&c, &today, &today).unwrap()["days"][0]["totals"]
+                ["calories"],
+            150.0
+        );
+        let result = execute_with_connection(
+            &mut c,
+            request(
+                "restart-meal-voided",
+                "void_meal",
+                json!({"mealId":new_id,"reason":"误录"}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(result.state["meals"].as_array().unwrap().len(), 2);
+        drop(c);
+        let c = Connection::open(&path).unwrap();
+        let loaded: Value = serde_json::from_str(&load_envelope(&c).unwrap().unwrap()).unwrap();
+        assert_eq!(loaded["state"]["meals"][0]["status"], "superseded");
+        assert_eq!(loaded["state"]["meals"][1]["status"], "void");
+        assert_eq!(
+            crate::domain_queries::period_summary(&c, &today, &today).unwrap()["days"][0]
+                ["mealCount"],
+            0
+        );
+        drop(c);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn unknown_ingredient_nutrition_is_not_promoted_to_known_recipe_total() {
+        let mut c = connection();
+        execute_with_connection(
+            &mut c,
+            request(
+                "recipe-food",
+                "save_food_definition",
+                food_payload(),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        let mut unknown = food_payload();
+        unknown["input"]["nutrients"] = json!({"protein":0,"fiber":0});
+        execute_with_connection(
+            &mut c,
+            request("recipe-unknown-food", "save_food_definition", unknown, None),
+        )
+        .unwrap();
+        let mut input = recipe_payload(0.25);
+        input["ingredients"].as_array_mut().unwrap().push(json!({"foodVersionId":"food-version-recipe-unknown-food","quantity":10,"unit":"g","inventoryFoodId":"food-recipe-unknown-food","inventoryUnit":"g","inventoryConfirmed":true}));
+        let saved = execute_with_connection(
+            &mut c,
+            request("recipe-unknown-total", "save_recipe_version", input, None),
+        )
+        .unwrap();
+        let recipe = &saved.state["recipes"][1];
+        assert_eq!(recipe["nutrition"]["calories"]["state"], "unknown");
+        assert!(recipe["nutrition"]["calories"].get("value").is_none());
+        assert_eq!(recipe["nutrition"]["protein"]["value"], 6.0);
+        assert_eq!(recipe["nutrition"]["fiber"]["state"], "unknown");
+    }
+
+    #[test]
+    fn custom_recipe_converts_portions_pins_versions_and_preserves_existing_batches() {
+        let mut c = connection();
+        execute_with_connection(
+            &mut c,
+            request(
+                "recipe-food",
+                "save_food_definition",
+                food_payload(),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        let recipe = execute_with_connection(
+            &mut c,
+            request(
+                "custom-recipe-first",
+                "save_recipe_version",
+                recipe_payload(0.25),
+                None,
+            ),
+        )
+        .unwrap();
+        let version_id = recipe.result["recipeVersionId"].clone();
+        let recipe_id = recipe.result["recipeId"].clone();
+        let saved = recipe.state["recipes"][1].clone();
+        assert_eq!(saved["ingredients"][0]["amount"], 50.0);
+        assert_eq!(saved["nutrition"]["calories"]["value"], 200.0);
+        assert_eq!(saved["nutrition"]["fat"]["state"], "zero");
+        assert_eq!(saved["nutrition"]["fiber"]["state"], "unknown");
+        let prepared = execute_with_connection(
+            &mut c,
+            request(
+                "custom-recipe-cook",
+                "prepare_recipe",
+                json!({"recipeVersionId":version_id}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(prepared.state["inventory"][0]["remainingAmount"], 150.0);
+        let mut revised = recipe_payload(0.5);
+        revised["recipeId"] = recipe_id;
+        revised["expectedVersionId"] = version_id.clone();
+        let result = execute_with_connection(
+            &mut c,
+            request(
+                "custom-recipe-second",
+                "save_recipe_version",
+                revised.clone(),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(result.state["recipes"][1], saved);
+        assert_eq!(result.state["recipes"][2]["version"], 2);
+        assert_eq!(
+            result.state["recipes"][2]["nutrition"]["calories"]["value"],
+            400.0
+        );
+        assert_eq!(result.state["batches"][0]["recipeVersionId"], version_id);
+        assert_eq!(result.state["inventory"], prepared.state["inventory"]);
+        let before = load_envelope(&c).unwrap();
+        assert!(execute_with_connection(
+            &mut c,
+            request("custom-recipe-stale", "save_recipe_version", revised, None)
+        )
+        .is_err());
+        assert_eq!(load_envelope(&c).unwrap(), before);
+        assert!(
+            execute_with_connection(
+                &mut c,
+                request(
+                    "custom-recipe-first",
+                    "save_recipe_version",
+                    recipe_payload(0.25),
+                    None
+                )
+            )
+            .unwrap()
+            .replayed
+        );
+    }
+
+    #[test]
+    fn recipe_invalid_units_unconfirmed_or_wrong_brand_roll_back_entire_operation() {
+        let mut c = connection();
+        execute_with_connection(
+            &mut c,
+            request(
+                "recipe-food",
+                "save_food_definition",
+                food_payload(),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        execute_with_connection(
+            &mut c,
+            request(
+                "recipe-other-food",
+                "save_food_definition",
+                food_payload(),
+                None,
+            ),
+        )
+        .unwrap();
+        let before = load_envelope(&c).unwrap();
+        for (id, field, value) in [
+            ("recipe-bad-confirm", "inventoryConfirmed", json!(false)),
+            ("recipe-bad-unit", "inventoryUnit", json!("ml")),
+            (
+                "recipe-bad-brand",
+                "inventoryFoodId",
+                json!("food-recipe-other-food"),
+            ),
+            ("recipe-bad-quantity", "quantity", json!(0)),
+        ] {
+            let mut input = recipe_payload(0.25);
+            input["ingredients"][0][field] = value;
+            assert!(execute_with_connection(
+                &mut c,
+                request(id, "save_recipe_version", input, None)
+            )
+            .is_err());
+            assert_eq!(load_envelope(&c).unwrap(), before);
+        }
     }
 
     #[test]
