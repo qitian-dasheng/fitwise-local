@@ -1,0 +1,27 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "轻衡：启动 Web 预览",
+      "type": "shell",
+      "command": "npm run dev",
+      "isBackground": true,
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "轻衡：运行测试",
+      "type": "shell",
+      "command": "npm test",
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
+      "label": "轻衡：生产构建",
+      "type": "shell",
+      "command": "npm run build",
+      "problemMatcher": ["$tsc"],
+      "group": "build"
+    }
+  ]
+}
