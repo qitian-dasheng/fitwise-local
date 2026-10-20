@@ -518,90 +518,7 @@ fn receive_purchase(
     payload: &Value,
     command_id: &str,
 ) -> Result<CommandMutation, String> {
-    let purchase_id = payload_str(payload, "purchaseId")?.to_owned();
-    let purchase_index = array(state, "purchases")?
-        .iter()
-        .position(|value| value.get("id").and_then(Value::as_str) == Some(&purchase_id))
-        .ok_or_else(|| "找不到待收货采购。".to_string())?;
-    let purchase = array(state, "purchases")?[purchase_index].clone();
-    if purchase.get("status").and_then(Value::as_str) == Some("received") {
-        return Err("这笔采购已经确认收货。".into());
-    }
-    if purchase.get("status").and_then(Value::as_str) == Some("cancelled") {
-        return Err("已取消的采购不能确认收货。".into());
-    }
-    let name = purchase
-        .get("name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "采购缺少商品名称。".to_string())?;
-    let amount = purchase
-        .get("amount")
-        .and_then(Value::as_f64)
-        .filter(|value| *value > 0.0)
-        .ok_or_else(|| "采购数量无效。".to_string())?;
-    let unit = purchase
-        .get("unit")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "采购单位无效。".to_string())?;
-    let price = purchase
-        .get("priceCny")
-        .and_then(Value::as_f64)
-        .filter(|value| *value >= 0.0)
-        .ok_or_else(|| "采购价格无效。".to_string())?;
-    let confidence = purchase
-        .get("confidence")
-        .and_then(Value::as_str)
-        .unwrap_or("medium");
-    let platform = purchase
-        .get("platform")
-        .and_then(Value::as_str)
-        .unwrap_or("other");
-    let (now, date) = now_and_date();
-    let lot_id = format!("lot-{command_id}");
-    let food_id = if let Some(food_id) = purchase.get("foodId").and_then(Value::as_str) {
-        food_id.to_owned()
-    } else {
-        crate::record_commands::resolve_food_id(state, &purchase, &purchase_id)?
-    };
-
-    array_mut(state, "purchases")?[purchase_index]
-        .as_object_mut()
-        .ok_or_else(|| "采购格式无效。".to_string())?
-        .insert("status".into(), json!("received"));
-    array_mut(state, "inventory")?.push(json!({
-        "id": lot_id,
-        "foodId": food_id,
-        "name": name,
-        "purchasedAmount": amount,
-        "remainingAmount": amount,
-        "unit": unit,
-        "purchasePriceCny": price,
-        "purchasedAt": date,
-        "receivedAt": date,
-        "opened": false,
-        "confidence": confidence,
-        "source": platform,
-    }));
-    array_mut(state, "inventoryMovements")?.push(json!({
-        "id": format!("{command_id}:movement"),
-        "lotId": lot_id,
-        "type": "purchase",
-        "amount": amount,
-        "reason": "确认收货",
-        "createdAt": now,
-    }));
-    array_mut(state, "auditEvents")?.push(json!({
-        "id": format!("{command_id}:audit"),
-        "eventType": "purchase_received",
-        "entityType": "inventory_lot",
-        "entityId": lot_id,
-        "payload": { "purchaseId": purchase_id, "amount": amount, "unit": unit, "commandId": command_id },
-        "createdAt": now,
-    }));
-    Ok(CommandMutation {
-        applied: true,
-        result: json!({ "lotId": lot_id }),
-    })
+    crate::inventory_ops::apply(state, "receive_purchase", payload, command_id)
 }
 
 fn adjust_inventory(
@@ -609,49 +526,7 @@ fn adjust_inventory(
     payload: &Value,
     command_id: &str,
 ) -> Result<CommandMutation, String> {
-    let lot_id = payload_str(payload, "lotId")?.to_owned();
-    let remaining_amount = payload_number(payload, "remainingAmount")?;
-    if remaining_amount < 0.0 {
-        return Err("盘点后的库存不能小于 0。".into());
-    }
-    let reason = payload_str(payload, "reason")?.to_owned();
-    let lot_index = array(state, "inventory")?
-        .iter()
-        .position(|value| value.get("id").and_then(Value::as_str) == Some(&lot_id))
-        .ok_or_else(|| "找不到库存批次。".to_string())?;
-    let current = array(state, "inventory")?[lot_index]
-        .get("remainingAmount")
-        .and_then(Value::as_f64)
-        .ok_or_else(|| "库存余量无效。".to_string())?;
-    let delta = round_ratio(remaining_amount - current);
-    let (now, _) = now_and_date();
-    array_mut(state, "inventory")?[lot_index]
-        .as_object_mut()
-        .ok_or_else(|| "库存批次格式无效。".to_string())?
-        .insert(
-            "remainingAmount".into(),
-            json!(round_ratio(remaining_amount)),
-        );
-    array_mut(state, "inventoryMovements")?.push(json!({
-        "id": format!("{command_id}:movement"),
-        "lotId": lot_id,
-        "type": "adjustment",
-        "amount": delta,
-        "reason": reason,
-        "createdAt": now,
-    }));
-    array_mut(state, "auditEvents")?.push(json!({
-        "id": format!("{command_id}:audit"),
-        "eventType": "inventory_adjusted",
-        "entityType": "inventory_lot",
-        "entityId": lot_id,
-        "payload": { "previousAmount": current, "remainingAmount": remaining_amount, "delta": delta, "reason": reason, "commandId": command_id },
-        "createdAt": now,
-    }));
-    Ok(CommandMutation {
-        applied: true,
-        result: json!({}),
-    })
+    crate::inventory_ops::apply(state, "adjust_inventory", payload, command_id)
 }
 
 fn execute_with_connection(
@@ -674,6 +549,10 @@ fn execute_with_connection(
             | "set_checkin"
             | "set_day_complete"
             | "add_purchase"
+            | "revise_purchase"
+            | "close_purchase"
+            | "update_purchase_payment"
+            | "dispose_inventory"
             | "select_plan"
             | "add_inbox_item"
             | "set_inbox_status"
@@ -747,6 +626,16 @@ fn execute_with_connection(
         "discard_batch" => discard_batch(&mut state, &request.payload, &request.command_id)?,
         "receive_purchase" => receive_purchase(&mut state, &request.payload, &request.command_id)?,
         "adjust_inventory" => adjust_inventory(&mut state, &request.payload, &request.command_id)?,
+        "add_purchase"
+        | "revise_purchase"
+        | "close_purchase"
+        | "update_purchase_payment"
+        | "dispose_inventory" => crate::inventory_ops::apply(
+            &mut state,
+            &request.kind,
+            &request.payload,
+            &request.command_id,
+        )?,
         _ => crate::record_commands::apply(
             &mut state,
             &request.kind,
@@ -987,6 +876,221 @@ mod tests {
             .unwrap()
             .applied
         );
+    }
+
+    #[test]
+    fn packaged_purchase_partial_receipt_close_refund_and_count_are_transactional() {
+        let mut connection = connection();
+        let input = json!({"name":"测试酸奶","platform":"pinduoduo","amount":1,"unit":"pack","packaging":{"count":2,"container":"bag","contentAmount":1,"contentUnit":"kg"},"packagingConfirmed":true,"priceCny":18.78,"paidCny":0,"orderedAt":"2026-10-19T18:17:31+08:00","expectedArrival":"2026-10-22","status":"ordered","confidence":"high"});
+        let first = execute_with_connection(
+            &mut connection,
+            request(
+                "order-spec-001",
+                "add_purchase",
+                input.clone(),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        let id = first.state["purchases"][0]["id"].as_str().unwrap();
+        assert_eq!(
+            first.state["purchases"][0]["orderedAt"],
+            "2026-10-19T10:17:31+00:00"
+        );
+        assert_eq!(first.state["purchases"][0]["paidCny"], 0.0);
+        assert_eq!(first.state["inventory"].as_array().unwrap().len(), 2);
+        assert!(
+            execute_with_connection(
+                &mut connection,
+                request("order-spec-001", "add_purchase", input, None)
+            )
+            .unwrap()
+            .replayed
+        );
+        let receipt = json!({"purchaseId":id,"quantity":0.5,"actualAmount":980,"costCny":9.39,"receivedAt":now_and_date().1,"expiresAt":"2099-01-01","final":false,"reason":"实称 980 克"});
+        let received = execute_with_connection(
+            &mut connection,
+            request(
+                "receipt-spec-001",
+                "receive_purchase",
+                receipt.clone(),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            received.state["purchases"][0]["status"],
+            "partially_received"
+        );
+        assert_eq!(received.state["inventory"][2]["remainingAmount"], 980.0);
+        assert_eq!(received.state["inventory"][2]["unit"], "g");
+        assert_eq!(received.state["inventory"][2]["purchaseId"], id);
+        assert!(received.state["inventory"][2]["specification"]
+            .as_str()
+            .unwrap()
+            .contains("袋"));
+        assert!(
+            execute_with_connection(
+                &mut connection,
+                request("receipt-spec-001", "receive_purchase", receipt, None)
+            )
+            .unwrap()
+            .replayed
+        );
+        let closed = execute_with_connection(
+            &mut connection,
+            request(
+                "close-spec-001",
+                "close_purchase",
+                json!({"purchaseId":id,"reason":"缺货，不再补发"}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(closed.state["purchases"][0]["closedQuantity"], 0.5);
+        assert_eq!(closed.state["inventory"].as_array().unwrap().len(), 3);
+        execute_with_connection(
+            &mut connection,
+            request(
+                "payment-spec-001",
+                "update_purchase_payment",
+                json!({"purchaseId":id,"paidCny":18.78,"refundedCny":0,"reason":"已核对扣款"}),
+                None,
+            ),
+        )
+        .unwrap();
+        let loss = json!({"lotId":"lot-receipt-spec-001","amount":200,"kind":"return","refundCny":1.88,"reason":"已退回且退款到账"});
+        let returned = execute_with_connection(
+            &mut connection,
+            request("return-spec-001", "dispose_inventory", loss.clone(), None),
+        )
+        .unwrap();
+        assert_eq!(returned.state["inventory"][2]["remainingAmount"], 780.0);
+        assert_eq!(returned.state["purchases"][0]["refundedCny"], 1.88);
+        assert!(
+            execute_with_connection(
+                &mut connection,
+                request("return-spec-001", "dispose_inventory", loss, None)
+            )
+            .unwrap()
+            .replayed
+        );
+        let before = load_envelope(&connection).unwrap();
+        assert!(execute_with_connection(&mut connection,request("count-spec-bad","adjust_inventory",json!({"lotId":"lot-receipt-spec-001","remainingAmount":981,"reason":"不能补回退货"}),None)).is_err());
+        assert_eq!(load_envelope(&connection).unwrap(), before);
+        let counted=execute_with_connection(&mut connection,request("count-spec-001","adjust_inventory",json!({"lotId":"lot-receipt-spec-001","remainingAmount":750,"opened":true,"expiresAt":null,"reason":"重新称重盘点"}),None)).unwrap();
+        assert_eq!(counted.state["inventory"][2]["remainingAmount"], 750.0);
+        assert_eq!(counted.state["inventory"][2]["opened"], true);
+        assert!(counted.state["inventory"][2].get("expiresAt").is_none());
+        assert!(counted.state["inventory"][2]["lastCountedAt"].is_string());
+        let summary = crate::domain_queries::inventory_summary(&connection).unwrap();
+        assert!(summary["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|v| v["purchaseId"] == id && v["lastCountedAt"].is_string()));
+        assert_eq!(counted.state["meals"], first.state["meals"]);
+        assert_eq!(counted.state["recipes"], first.state["recipes"]);
+    }
+
+    #[test]
+    fn legacy_order_revision_and_failed_refund_do_not_lose_data_or_mutate_stock() {
+        let mut connection = connection();
+        let mut legacy: Value = serde_json::from_str(&bootstrap()).unwrap();
+        legacy["state"]["purchases"] = json!([{"id":"legacy-order","name":"酸奶","foodId":"food-legacy-order","platform":"online","amount":2000,"unit":"g","priceCny":18.78,"status":"ordered","confidence":"high"}]);
+        let revised = json!({"purchaseId":"legacy-order","name":"酸奶","foodId":"food-legacy-order","platform":"pinduoduo","amount":1,"unit":"pack","packaging":{"count":2,"container":"bag","contentAmount":1,"contentUnit":"kg"},"packagingConfirmed":true,"priceCny":18.78,"orderedAt":"2026-10-19T10:17:31Z","status":"ordered","confidence":"high"});
+        let edit = execute_with_connection(
+            &mut connection,
+            request(
+                "revise-legacy-001",
+                "revise_purchase",
+                revised,
+                Some(legacy.to_string()),
+            ),
+        )
+        .unwrap();
+        assert_eq!(edit.state["purchases"][0]["platform"], "pinduoduo");
+        assert!(edit.state["purchases"][0].get("paidCny").is_none());
+        let recv = execute_with_connection(
+            &mut connection,
+            request(
+                "recv-legacy-001",
+                "receive_purchase",
+                json!({"purchaseId":"legacy-order"}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(recv.state["inventory"][2]["purchasedAmount"], 2000.0);
+        let before = load_envelope(&connection).unwrap();
+        assert!(execute_with_connection(&mut connection,request("bad-refund-001","dispose_inventory",json!({"lotId":"lot-recv-legacy-001","amount":10,"kind":"return","refundCny":1,"reason":"付款未知不能记退款"}),None)).is_err());
+        assert_eq!(load_envelope(&connection).unwrap(), before);
+        let waste = execute_with_connection(
+            &mut connection,
+            request(
+                "waste-legacy-001",
+                "dispose_inventory",
+                json!({"lotId":"lot-recv-legacy-001","amount":100,"kind":"waste","reason":"腐坏"}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(waste.state["inventory"][2]["remainingAmount"], 1900.0);
+        assert!(waste.state["purchases"][0].get("paidCny").is_none());
+    }
+
+    #[test]
+    fn packaged_400g_cooks_300g_and_preserves_100g_without_double_deduction() {
+        let mut connection = connection();
+        let mut initial: Value = serde_json::from_str(&bootstrap()).unwrap();
+        initial["state"]["inventory"] = json!([]);
+        let input = json!({"name":"豆腐","foodId":"tofu","platform":"jd","amount":1,"unit":"bag","packaging":{"count":1,"container":"bag","contentAmount":400,"contentUnit":"g"},"packagingConfirmed":true,"priceCny":4,"status":"ordered","confidence":"high"});
+        let order = execute_with_connection(
+            &mut connection,
+            request(
+                "400g-order-01",
+                "add_purchase",
+                input,
+                Some(initial.to_string()),
+            ),
+        )
+        .unwrap();
+        let id = order.state["purchases"][0]["id"].as_str().unwrap();
+        execute_with_connection(
+            &mut connection,
+            request(
+                "400g-receive-01",
+                "receive_purchase",
+                json!({"purchaseId":id}),
+                None,
+            ),
+        )
+        .unwrap();
+        let prepared = execute_with_connection(
+            &mut connection,
+            request(
+                "400g-cooking-01",
+                "prepare_recipe",
+                json!({"recipeVersionId":"recipe-1"}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(prepared.state["inventory"][0]["remainingAmount"], 100.0);
+        assert_eq!(prepared.state["meals"], json!([]));
+        let summary = crate::domain_queries::inventory_summary(&connection).unwrap();
+        assert_eq!(summary["remainingCostCny"], 1.0);
+        let replay = execute_with_connection(
+            &mut connection,
+            request(
+                "400g-cooking-01",
+                "prepare_recipe",
+                json!({"recipeVersionId":"recipe-1"}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(replay.state["inventory"][0]["remainingAmount"], 100.0);
     }
 
     fn bootstrap() -> String {

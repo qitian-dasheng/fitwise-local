@@ -232,6 +232,13 @@ export interface InventoryLot {
   confidence: Confidence;
   source?: string;
   nutrition?: NutritionFacts;
+  purchaseId?: string;
+  receiptId?: string;
+  specification?: string;
+  lastCountedAt?: string;
+  openedAt?: string;
+  returnedAmount?: number;
+  wastedAmount?: number;
 }
 
 export type InventoryMovementType = "purchase" | "cooking" | "waste" | "adjustment" | "return";
@@ -244,17 +251,42 @@ export interface InventoryMovement {
   createdAt: string;
 }
 
+export type PurchaseUnit = "g" | "kg" | "ml" | "l" | "piece" | "bag" | "box" | "bottle" | "pack";
+export type PurchasePlatform = "duoduo" | "pinduoduo" | "taobao" | "tmall" | "jd" | "douyin" | "meituan" | "online" | "supermarket" | "other";
+export interface PurchasePackaging { count: number; container: "bag" | "box" | "bottle" | "piece"; contentAmount: number; contentUnit: "g" | "kg" | "ml" | "l" | "piece" }
+export interface PurchaseReceipt {
+  id: string; lotId: string; quantity: number; actualAmount: number; unit: InventoryLot["unit"]; costCny: number;
+  name: string; foodId: string; receivedAt: string; expiresAt?: string; reason: string; replacement: boolean;
+}
+export interface ReceivePurchaseInput {
+  purchaseId: string; quantity: number; actualAmount: number; costCny: number; receivedAt: string; expiresAt?: string;
+  final: boolean; reason: string; replacement?: { name: string; foodId?: string };
+}
+export interface InventoryCountInput { lotId: string; remainingAmount: number; opened: boolean; expiresAt: string | null; reason: string }
+export interface InventoryDisposalInput { lotId: string; amount: number; kind: "return" | "waste"; reason: string; refundCny?: number }
+
 export interface PurchaseDraft {
   id: string;
   foodId?: string;
   name: string;
-  platform: "duoduo" | "online" | "supermarket" | "other";
+  platform: PurchasePlatform;
+  platformName?: string;
   url?: string;
   amount: number;
-  unit: "g" | "ml" | "piece";
+  unit: PurchaseUnit;
+  packaging?: PurchasePackaging;
+  packagingConfirmed?: boolean;
+  orderedAt?: string;
+  timezone?: string;
+  createdAt?: string;
+  paidCny?: number;
+  refundedCny?: number;
+  receipts?: PurchaseReceipt[];
+  closedQuantity?: number;
+  closedReason?: string;
   priceCny: number;
   expectedArrival?: ISODate;
-  status: "draft" | "ordered" | "received" | "cancelled";
+  status: "draft" | "ordered" | "partially_received" | "received" | "cancelled" | "closed";
   confidence: Confidence;
 }
 

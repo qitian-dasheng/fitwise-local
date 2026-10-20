@@ -4,51 +4,6 @@ use crate::domain_commands::{
 use chrono::NaiveDate;
 use serde_json::{json, Map, Value};
 
-pub(crate) fn resolve_food_id(
-    state: &Map<String, Value>,
-    input: &Value,
-    fallback: &str,
-) -> Result<String, String> {
-    let name = payload_str(input, "name")?;
-    let unit = payload_str(input, "unit")?;
-    let mut candidates = std::collections::BTreeSet::new();
-    let mut known = std::collections::BTreeSet::new();
-    for item in array(state, "inventory")?.iter().chain(
-        array(state, "recipes")?
-            .iter()
-            .flat_map(|recipe| recipe["ingredients"].as_array().into_iter().flatten()),
-    ) {
-        if let Some(id) = item["foodId"].as_str() {
-            if item["unit"] == unit {
-                known.insert(id.to_owned());
-                if item["name"]
-                    .as_str()
-                    .is_some_and(|value| value.trim() == name.trim())
-                {
-                    candidates.insert(id.to_owned());
-                }
-            }
-        }
-    }
-    if let Some(id) = input
-        .get("foodId")
-        .and_then(Value::as_str)
-        .filter(|value| !value.is_empty())
-    {
-        if !known.contains(id) {
-            return Err("关联食材不存在或计量单位不匹配。".into());
-        }
-        return Ok(id.to_owned());
-    }
-    if candidates.len() > 1 {
-        return Err("有多个同名食材，请明确选择关联食材。".into());
-    }
-    Ok(candidates
-        .into_iter()
-        .next()
-        .unwrap_or_else(|| format!("food-{fallback}")))
-}
-
 fn optional_number(payload: &Value, key: &str) -> Result<Option<f64>, String> {
     match payload.get(key) {
         None | Some(Value::Null) => Ok(None),
@@ -305,40 +260,7 @@ pub(crate) fn apply(
             )?;
         }
         "add_purchase" => {
-            let food_id = resolve_food_id(state, payload, &id)?;
-            let name = payload_str(payload, "name")?;
-            let platform = choice(
-                payload,
-                "platform",
-                &["duoduo", "online", "supermarket", "other"],
-            )?;
-            let unit = choice(payload, "unit", &["g", "ml", "piece"])?;
-            let amount = positive(payload, "amount")?;
-            let price = nonnegative(payload, "priceCny")?;
-            let status = choice(payload, "status", &["draft", "ordered"])?;
-            let confidence = choice(payload, "confidence", &["high", "medium", "low"])?;
-            let mut purchase = json!({"id":id,"foodId":food_id,"name":name,"platform":platform,"amount":amount,"unit":unit,"priceCny":price,"status":status,"confidence":confidence});
-            for key in ["url", "expectedArrival"] {
-                if let Some(value) = payload
-                    .get(key)
-                    .and_then(Value::as_str)
-                    .filter(|value| !value.is_empty())
-                {
-                    if key == "expectedArrival" {
-                        date(&json!({"date":value}))?;
-                    }
-                    purchase[key] = json!(value);
-                }
-            }
-            array_mut(state, "purchases")?.push(purchase);
-            audit(
-                state,
-                command_id,
-                "purchase_created",
-                "purchase_draft",
-                &id,
-                json!({"status":status}),
-            )?;
+            return crate::inventory_ops::apply(state, kind, payload, command_id);
         }
         "select_plan" => {
             let plan_id = payload_str(payload, "planId")?;

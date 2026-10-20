@@ -5,6 +5,7 @@ mod domain_queries;
 mod domain_store;
 mod domain_upgrade;
 mod food_library;
+mod inventory_ops;
 mod record_commands;
 mod upload;
 

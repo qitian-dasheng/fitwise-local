@@ -82,7 +82,7 @@ pub(crate) fn upgrade(connection: &mut Connection, database_path: &Path) -> Resu
     if table_exists(connection, "domain_upgrade_reports")? {
         let done: bool = connection
             .query_row(
-                "SELECT EXISTS(SELECT 1 FROM domain_upgrade_reports WHERE version = 6)",
+                "SELECT EXISTS(SELECT 1 FROM domain_upgrade_reports WHERE version = 7)",
                 [],
                 |row| row.get(0),
             )
@@ -100,7 +100,7 @@ pub(crate) fn upgrade(connection: &mut Connection, database_path: &Path) -> Resu
             .join("upgrade-backups");
         fs::create_dir_all(&folder).map_err(|error| error.to_string())?;
         let path = folder.join(format!(
-            "before-schema-6-{}.db",
+            "before-schema-7-{}.db",
             Utc::now().format("%Y%m%dT%H%M%S%f")
         ));
         let mut destination = Connection::open(&path).map_err(|error| error.to_string())?;
@@ -149,8 +149,8 @@ pub(crate) fn upgrade(connection: &mut Connection, database_path: &Path) -> Resu
     if before != after {
         return Err("升级后数据对账不一致，已保留升级前副本，请停止录入并恢复检查。".into());
     }
-    let report = json!({"version":6,"reconciled":true,"before":before,"after":after,"backupPath":backup_path,"backupEncrypted":false});
-    transaction.execute("INSERT INTO domain_upgrade_reports (version,backup_path,report_json,created_at) VALUES (6,?1,?2,?3)",rusqlite::params![backup_path,report.to_string(),Utc::now().to_rfc3339()]).map_err(|error| error.to_string())?;
+    let report = json!({"version":7,"reconciled":true,"before":before,"after":after,"backupPath":backup_path,"backupEncrypted":false});
+    transaction.execute("INSERT INTO domain_upgrade_reports (version,backup_path,report_json,created_at) VALUES (7,?1,?2,?3)",rusqlite::params![backup_path,report.to_string(),Utc::now().to_rfc3339()]).map_err(|error| error.to_string())?;
     transaction.commit().map_err(|error| error.to_string())
 }
 
@@ -233,7 +233,7 @@ mod tests {
         assert_eq!(envelope["state"]["foodDefinitions"], json!([]));
         let raw: String = connection
             .query_row(
-                "SELECT report_json FROM domain_upgrade_reports WHERE version=6",
+                "SELECT report_json FROM domain_upgrade_reports WHERE version=7",
                 [],
                 |row| row.get(0),
             )

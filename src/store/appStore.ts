@@ -7,7 +7,6 @@ import type {
   AppState,
   AiSettings,
   InboxItem,
-  InventoryLot,
   MealEntry,
   MealType,
   PlanCandidate,
@@ -16,10 +15,12 @@ import type {
   WorkoutSession,
   FoodDefinitionInput,
   FoodMealInput,
+  ReceivePurchaseInput, InventoryCountInput, InventoryDisposalInput,
 } from "../domain/types";
 import { enqueueDomainCommand, executeDomainCommand, type DomainCommandKind } from "../data/domainCommands";
 import { appStorage, flushAppStorageWrites, isTauriRuntime, suppressNextAppStorageWrite } from "../data/storage";
 import { foodMealEntries, saveFoodInState } from "../domain/foodLibrary";
+import { applyInventoryOperation } from "../domain/purchases";
 
 const uid = () => crypto.randomUUID();
 export interface ActionResult { error?: string; duplicate?: boolean; isOutlier?: boolean; foodId?: string; foodVersionId?: string; mealIds?: string[] }
@@ -41,6 +42,12 @@ interface AppActions {
   setCheckIn: (input: { hunger?: number; energy?: number }, commandId?: string) => Promise<ActionResult>;
   toggleDayComplete: (commandId?: string) => Promise<ActionResult>;
   addPurchase: (draft: Omit<PurchaseDraft, "id">, commandId?: string) => Promise<ActionResult>;
+  revisePurchase: (purchaseId:string,draft:Omit<PurchaseDraft,"id">,commandId?:string)=>Promise<ActionResult>;
+  receivePurchaseActual: (input:ReceivePurchaseInput,commandId?:string)=>Promise<ActionResult>;
+  closePurchase: (purchaseId:string,reason:string,commandId?:string)=>Promise<ActionResult>;
+  recordPurchasePayment: (purchaseId:string,paidCny:number,refundedCny:number,reason:string,commandId?:string)=>Promise<ActionResult>;
+  countInventory: (input:InventoryCountInput,commandId?:string)=>Promise<ActionResult>;
+  disposeInventory: (input:InventoryDisposalInput,commandId?:string)=>Promise<ActionResult>;
   receivePurchase: (purchaseId: string, commandId?: string) => Promise<{ error?: string }>;
   adjustInventory: (lotId: string, remainingAmount: number, reason: string, commandId?: string) => Promise<{ error?: string }>;
   selectPlan: (planId: string, commandId?: string) => Promise<ActionResult>;
@@ -69,6 +76,10 @@ export const useAppStore = create<AppStore>()(
       const submit = async (kind: DomainCommandKind, payload: Record<string, unknown>, commandId: string): Promise<ActionResult> => {
         try { return (await commit<ActionResult>(kind, payload, commandId)).result; }
         catch (cause) { return { error: cause instanceof Error ? cause.message : String(cause) }; }
+      };
+      const inventoryCommand = async (kind:DomainCommandKind,payload:Record<string,unknown>,commandId:string):Promise<ActionResult>=>{
+        if(isTauriRuntime())return submit(kind,payload,commandId);
+        try{set(applyInventoryOperation(get(),kind,payload,commandId));return {};}catch(cause){return {error:cause instanceof Error?cause.message:String(cause)};}
       };
       return ({
       ...(isTauriRuntime() ? createPersonalState() : initialState),
@@ -181,74 +192,19 @@ export const useAppStore = create<AppStore>()(
         return {};
       },
       async addPurchase(draft, commandId = uid()) {
-        if (isTauriRuntime()) return submit("add_purchase", draft, commandId);
-        if (!draft.name.trim() || !Number.isFinite(draft.amount) || draft.amount <= 0 || !Number.isFinite(draft.priceCny) || draft.priceCny < 0) return { error: "请检查商品、数量和价格。" };
-        set((state) => ({ purchases: [...state.purchases, { ...draft, id: uid() }] }));
-        return {};
+        return inventoryCommand("add_purchase",{...draft},commandId);
       },
+      async revisePurchase(purchaseId,draft,commandId=uid()){return inventoryCommand("revise_purchase",{...draft,purchaseId},commandId);},
+      async receivePurchaseActual(input,commandId=uid()){return inventoryCommand("receive_purchase",{...input},commandId);},
+      async closePurchase(purchaseId,reason,commandId=uid()){return inventoryCommand("close_purchase",{purchaseId,reason},commandId);},
+      async recordPurchasePayment(purchaseId,paidCny,refundedCny,reason,commandId=uid()){return inventoryCommand("update_purchase_payment",{purchaseId,paidCny,refundedCny,reason},commandId);},
+      async countInventory(input,commandId=uid()){return inventoryCommand("adjust_inventory",{...input},commandId);},
+      async disposeInventory(input,commandId=uid()){return inventoryCommand("dispose_inventory",{...input},commandId);},
       async receivePurchase(purchaseId, commandId = uid()) {
-        if (isTauriRuntime()) {
-          try {
-            await commit<{ lotId: string }>(
-              "receive_purchase",
-              { purchaseId },
-              commandId,
-            );
-            return {};
-          } catch (cause) {
-            return { error: cause instanceof Error ? cause.message : String(cause) };
-          }
-        }
-        const purchase = get().purchases.find((item) => item.id === purchaseId);
-        if (!purchase || purchase.status === "received") return { error: "这笔采购已经收货或不存在。" };
-        const lot: InventoryLot = {
-          id: uid(),
-          foodId: purchase.foodId ?? get().inventory.find((item) => item.name === purchase.name && item.unit === purchase.unit)?.foodId ?? `food-${purchase.id}`,
-          name: purchase.name,
-          purchasedAmount: purchase.amount,
-          remainingAmount: purchase.amount,
-          unit: purchase.unit,
-          purchasePriceCny: purchase.priceCny,
-          purchasedAt: format(new Date(), "yyyy-MM-dd"),
-          receivedAt: format(new Date(), "yyyy-MM-dd"),
-          opened: false,
-          confidence: purchase.confidence,
-          source: purchase.platform,
-        };
-        set((state) => ({
-          purchases: state.purchases.map((item) => (item.id === purchaseId ? { ...item, status: "received" } : item)),
-          inventory: [...state.inventory, lot],
-          inventoryMovements: [
-            ...state.inventoryMovements,
-            { id: uid(), lotId: lot.id, type: "purchase", amount: lot.purchasedAmount, reason: "确认收货", createdAt: new Date().toISOString() },
-          ],
-        }));
-        return {};
+        return inventoryCommand("receive_purchase",{purchaseId},commandId);
       },
       async adjustInventory(lotId, remainingAmount, reason, commandId = uid()) {
-        if (isTauriRuntime()) {
-          try {
-            await commit<Record<string, never>>(
-              "adjust_inventory",
-              { lotId, remainingAmount, reason },
-              commandId,
-            );
-            return {};
-          } catch (cause) {
-            return { error: cause instanceof Error ? cause.message : String(cause) };
-          }
-        }
-        const current = get().inventory.find((item) => item.id === lotId);
-        if (!current || remainingAmount < 0) return { error: "库存批次不存在或数量无效。" };
-        const delta = remainingAmount - current.remainingAmount;
-        set((state) => ({
-          inventory: state.inventory.map((item) => (item.id === lotId ? { ...item, remainingAmount } : item)),
-          inventoryMovements: [
-            ...state.inventoryMovements,
-            { id: uid(), lotId, type: "adjustment", amount: delta, reason, createdAt: new Date().toISOString() },
-          ],
-        }));
-        return {};
+        return inventoryCommand("adjust_inventory",{lotId,remainingAmount,reason},commandId);
       },
       async selectPlan(planId, commandId = uid()) {
         if (isTauriRuntime()) return submit("select_plan", { planId }, commandId);

@@ -98,7 +98,7 @@ export function SettingsPage() {
     try {
     const state = useAppStore.getState();
     const data = {
-      schemaVersion: 6,
+      schemaVersion: 7,
       exportedAt: new Date().toISOString(),
       app: "Fitwise Local",
       profile: state.profile,

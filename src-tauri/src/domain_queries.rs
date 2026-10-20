@@ -215,10 +215,15 @@ pub(crate) fn inventory_summary(connection: &Connection) -> Result<Value, String
         return Ok(Value::Null);
     }
     let mut items = Vec::new();
-    let mut statement = transaction.prepare("SELECT id,food_id,name,remaining_amount,purchased_amount,price_cny,unit,opened,expires_at,purchased_at,source,confidence FROM domain_inventory_projection ORDER BY opened DESC,COALESCE(expires_at,'9999-12-31'),purchased_at,id").map_err(|error|error.to_string())?;
-    let rows = statement.query_map([],|row|Ok(json!({"id":row.get::<_,String>(0)?,"foodId":row.get::<_,String>(1)?,"name":row.get::<_,String>(2)?,"remainingAmount":row.get::<_,f64>(3)?,"purchasedAmount":row.get::<_,f64>(4)?,"purchasePriceCny":row.get::<_,f64>(5)?,"unit":row.get::<_,String>(6)?,"opened":row.get::<_,bool>(7)?,"expiresAt":row.get::<_,Option<String>>(8)?,"purchasedAt":row.get::<_,String>(9)?,"source":row.get::<_,Option<String>>(10)?,"confidence":row.get::<_,Option<String>>(11)?}))).map_err(|error|error.to_string())?;
+    let mut statement = transaction.prepare("SELECT e.payload_json FROM domain_inventory_projection p JOIN domain_entities e ON e.collection='inventory' AND e.entity_id=p.id ORDER BY p.opened DESC,COALESCE(p.expires_at,'9999-12-31'),p.purchased_at,p.id").map_err(|error|error.to_string())?;
+    let rows = statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?;
     for row in rows {
-        items.push(row.map_err(|error| error.to_string())?);
+        items.push(
+            serde_json::from_str::<Value>(&row.map_err(|error| error.to_string())?)
+                .map_err(|error| error.to_string())?,
+        );
     }
     let remaining_cost: f64 = items
         .iter()
@@ -249,7 +254,7 @@ pub fn export_domain_json(app: AppHandle) -> Result<Value, String> {
         .as_object()
         .ok_or("领域仓库格式无效。")?
         .clone();
-    data.insert("schemaVersion".into(), json!(6));
+    data.insert("schemaVersion".into(), json!(7));
     data.insert("persistVersion".into(), envelope["version"].clone());
     data.insert("exportedAt".into(), json!(Utc::now().to_rfc3339()));
     data.insert("app".into(), json!("Fitwise Local"));

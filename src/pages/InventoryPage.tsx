@@ -1,96 +1,45 @@
-import { differenceInCalendarDays, format } from "date-fns";
-import { Box, Check, PackageCheck, Plus, RefreshCcw, ShoppingBag } from "lucide-react";
+import { Box, PackageCheck, Plus, RefreshCcw, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import { PageHeader } from "../components/PageHeader";
-import { Modal } from "../components/Modal";
 import { useAppStore } from "../store/appStore";
-import type { PurchaseDraft } from "../domain/types";
-import { useConfirmedAction } from "../components/useConfirmedAction";
-import type { ActionResult } from "../store/appStore";
+import type { InventoryLot, PurchaseDraft } from "../domain/types";
 import { useInventorySummary } from "../data/domainQueries";
+import { displayOrderedAt, platformLabels, purchaseSpecification, purchaseStatusLabels, purchaseUnitLabels, quantityText, receivedQuantity, shanghaiDate } from "../domain/purchases";
+import { InventoryLotModal, PurchaseActionModal, PurchaseModal, ReceivePurchaseModal } from "../components/PurchaseDialogs";
 
+type OrderAction={id:string;mode:"edit"|"receive"|"close"|"payment"};
 export function InventoryPage() {
-  const [purchaseOpen, setPurchaseOpen] = useState(false);
-  const [receivingId, setReceivingId] = useState<string | null>(null);
-  const [receiveCommandIds, setReceiveCommandIds] = useState<Record<string, string>>({});
-  const [message, setMessage] = useState("");
-  const localInventory = useAppStore((state) => state.inventory);
-  const query = useInventorySummary();
-  const inventory = query.data?.items ?? localInventory;
-  const purchases = useAppStore((state) => state.purchases);
-  const addPurchase = useAppStore((state) => state.addPurchase);
-  const receivePurchase = useAppStore((state) => state.receivePurchase);
-  const totalValue = query.data?.remainingCostCny ?? inventory.reduce((sum, item) => sum + (item.purchasedAmount > 0 ? item.purchasePriceCny * (item.remainingAmount / item.purchasedAmount) : 0), 0);
-  const expiring = inventory.filter((item) => item.expiresAt && differenceInCalendarDays(new Date(item.expiresAt), new Date()) <= 3 && item.remainingAmount > 0);
-
-  if (query.loading || query.error) return <div className="page"><PageHeader eyebrow="库存" title="食材库存" description={query.error ? "读取库存失败，请重新打开此页面后重试。" : "正在读取库存…"}/>{query.error && <p className="form-error" role="alert">{query.error}</p>}</div>;
-
-  return (
-    <div className="page">
-      <PageHeader eyebrow="原料与成本" title="食材库存" description="库存是可校正的估计，而不是不可修改的绝对真值。" action={<button className="button primary" onClick={() => setPurchaseOpen(true)}><Plus size={17} /> 记录采购</button>} />
-      {message && <div className="settings-notice card" role="status">{message}</div>}
-      <div className="metric-row">
-        <Metric icon={<Box />} label="在库批次" value={`${inventory.filter((item) => item.remainingAmount > 0).length} 个`} />
-        <Metric icon={<RefreshCcw />} label="已开封" value={`${inventory.filter((item) => item.opened && item.remainingAmount > 0).length} 个`} />
-        <Metric icon={<PackageCheck />} label="三日内到期" value={`${expiring.length} 个`} warning={expiring.length > 0} />
-        <Metric icon={<ShoppingBag />} label="剩余库存成本" value={`¥ ${totalValue.toFixed(2)}`} />
-      </div>
-
-      <section className="card table-card">
-        <div className="card-heading compact"><div><p className="eyebrow">FEFO</p><h2>库存批次</h2></div><span className="status-pill neutral">已开封 → 临期 → 先购买</span></div>
-        <div className="data-table">
-          <div className="table-row table-head"><span>食材</span><span>余量</span><span>状态</span><span>到期</span><span>来源</span></div>
-          {[...inventory].sort((a, b) => Number(b.opened) - Number(a.opened) || (a.expiresAt ?? "9999").localeCompare(b.expiresAt ?? "9999")).map((item) => {
-            const percent = Math.max(0, (item.remainingAmount / item.purchasedAmount) * 100);
-            const days = item.expiresAt ? differenceInCalendarDays(new Date(item.expiresAt), new Date()) : null;
-            return (
-              <div className="table-row" key={item.id}>
-                <span><strong>{item.name}</strong><small>批次 {item.id.slice(-6)}</small></span>
-                <span><strong>{item.remainingAmount} {item.unit}</strong><i className="stock-bar"><i style={{ width: `${percent}%` }} /></i></span>
-                <span>{item.opened ? <em className="status-pill warning">已开封</em> : <em className="status-pill neutral">未开封</em>}</span>
-                <span className={days !== null && days <= 3 ? "warning-text" : ""}>{days === null ? "未设置" : days < 0 ? "已过期" : `${days} 天`}</span>
-                <span>{item.source ?? "手工"}</span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {purchases.length > 0 && <section className="card"><div className="card-heading compact"><div><p className="eyebrow">采购流水</p><h2>待收货</h2></div></div><div className="purchase-list">{purchases.filter((item) => item.status !== "received").map((item) => <div className="purchase-row" key={item.id}><div><strong>{item.name}</strong><span>{item.platform} · {item.amount}{item.unit} · ¥{item.priceCny}</span></div><span>{item.expectedArrival ?? "未设置到货日"}</span><button className="button secondary small" disabled={receivingId !== null} onClick={async () => { const commandId = receiveCommandIds[item.id] ?? crypto.randomUUID(); setReceiveCommandIds((current) => ({ ...current, [item.id]: commandId })); setReceivingId(item.id); const result = await receivePurchase(item.id, commandId); setReceivingId(null); if (result.error) { setMessage(result.error); } else { setMessage(`${item.name} 已确认收货并建立库存批次。`); setReceiveCommandIds((current) => { const next = { ...current }; delete next[item.id]; return next; }); } }}><Check size={15} /> {receivingId === item.id ? "处理中…" : "确认收货"}</button></div>)}</div></section>}
-
-      {purchaseOpen && <PurchaseModal onClose={() => setPurchaseOpen(false)} onSave={addPurchase} />}
-    </div>
-  );
+  const [purchaseOpen,setPurchaseOpen]=useState(false);const [orderAction,setOrderAction]=useState<OrderAction|null>(null);const [lotAction,setLotAction]=useState<{id:string;mode:"count"|"return"|"waste"}|null>(null);
+  const [filter,setFilter]=useState<"pending"|"all"|"finished">("pending");const [showEmpty,setShowEmpty]=useState(false);
+  const state=useAppStore();const query=useInventorySummary();const inventory=query.data?.items??state.inventory;const purchases=state.purchases;
+  const selectedOrder=purchases.find(p=>p.id===orderAction?.id);const selectedLot=inventory.find(l=>l.id===lotAction?.id);
+  const today=shanghaiDate();const soon=shanghaiDate(new Date(Date.now()+3*864e5).toISOString());const pending=(p:PurchaseDraft)=>["ordered","partially_received","draft"].includes(p.status);
+  const active=inventory.filter(i=>i.remainingAmount>0);const expiring=active.filter(i=>i.expiresAt&&i.expiresAt<=soon);
+  const total=query.data?.remainingCostCny??active.reduce((sum,i)=>sum+(i.purchasedAmount>0?i.purchasePriceCny*i.remainingAmount/i.purchasedAmount:0),0);
+  const visibleOrders=[...purchases].reverse().filter(p=>filter==="all"||(filter==="pending"?pending(p):!pending(p)));
+  const visibleLots=[...inventory].filter(l=>showEmpty||l.remainingAmount>0).sort((a,b)=>Number(b.opened)-Number(a.opened)||(a.expiresAt??"9999").localeCompare(b.expiresAt??"9999")||a.purchasedAt.localeCompare(b.purchasedAt));
+  if(query.loading||query.error)return <div className="page"><PageHeader eyebrow="库存" title="食材库存" description={query.error?"读取失败，请重新打开页面后重试。":"正在读取库存…"}/>{query.error&&<p className="form-error" role="alert">{query.error}</p>}</div>;
+  return <div className="page inventory-page"><PageHeader eyebrow="原料与成本" title="食材库存" description="订单保留包装规格，库存按实际收货入库；盘点、退货与损耗均可追溯。" action={<button className="button primary" onClick={()=>setPurchaseOpen(true)}><Plus size={17}/> 记录采购</button>}/>
+    <div className="metric-row"><Metric icon={<Box/>} label="在库批次" value={`${active.length} 个`}/><Metric icon={<RefreshCcw/>} label="已开封批次" value={`${active.filter(i=>i.opened).length} 个`}/><Metric icon={<PackageCheck/>} label="三日内到期（含过期）" value={`${expiring.length} 个`}/><Metric icon={<ShoppingBag/>} label="剩余食材成本（非已付金额）" value={`¥ ${total.toFixed(2)}`}/></div>
+    <section className="card inventory-section"><div className="card-heading compact"><div><p className="eyebrow">FEFO · 每个实收批次单独核对</p><h2>库存批次</h2></div><label className="checkbox-label"><input type="checkbox" checked={showEmpty} onChange={e=>setShowEmpty(e.target.checked)}/> 显示已用尽</label></div>
+      {!visibleLots.length?<div className="inventory-empty"><PackageCheck size={28}/><strong>还没有{showEmpty?"":"可用的"}库存批次</strong><p>已下单不会自动入库。收到实物后，在采购流水核对实际收货。</p></div>:<div className="inventory-table"><div className="inventory-table-row inventory-table-head"><span>食材 / 商品</span><span>余量</span><span>开封 / 到期</span><span>最近盘点</span><span>操作</span></div>{visibleLots.map(lot=><div className="inventory-table-row" key={lot.id}><div><strong>{lot.name}</strong><small>{platformLabels[lot.source as keyof typeof platformLabels]??lot.source??"手工"} · 批次 {lot.id.slice(-6)}</small><small>{lot.specification??"旧批次未保存包装规格"}</small></div><div><strong>{quantityText(lot.remainingAmount)} {purchaseUnitLabels[lot.unit]}</strong><small>实收 {quantityText(lot.purchasedAmount)} {purchaseUnitLabels[lot.unit]}</small><i className="stock-bar"><i style={{width:`${Math.min(100,Math.max(0,lot.remainingAmount/lot.purchasedAmount*100))}%`}}/></i></div><div><span className={`status-pill ${lot.opened?"warning":"neutral"}`}>{lot.opened?"已开封":"未开封"}</span><small className={lot.expiresAt&&lot.expiresAt<=soon?"warning-text":""}>{lot.expiresAt?`${lot.expiresAt}${lot.expiresAt<today?" · 已过期":""}`:"未设置到期日"}</small></div><div><span>{lot.lastCountedAt?displayOrderedAt(lot.lastCountedAt):"尚未盘点"}</span></div><div className="inventory-row-actions"><button className="button secondary small" onClick={()=>setLotAction({id:lot.id,mode:"count"})}>盘点 / 编辑</button><button className="text-button" disabled={lot.remainingAmount<=0} onClick={()=>setLotAction({id:lot.id,mode:"return"})}>退货</button><button className="text-button warning-text" disabled={lot.remainingAmount<=0} onClick={()=>setLotAction({id:lot.id,mode:"waste"})}>腐坏 / 损耗</button></div></div>)}</div>}
+    </section>
+    <section className="card inventory-section purchase-ledger"><div className="card-heading compact"><div><p className="eyebrow">采购流水 · 订单、收货、资金分开</p><h2>采购订单</h2></div><span className="status-pill neutral">待处理 {purchases.filter(pending).length} 笔</span></div>
+      <div className="purchase-filters" role="group" aria-label="采购筛选">{([["pending","待处理"],["finished","已结束"],["all","全部记录"]] as const).map(([value,label])=><button key={value} aria-pressed={filter===value} className={filter===value?"active":""} onClick={()=>setFilter(value)}>{label}</button>)}</div>
+      {!visibleOrders.length?<div className="inventory-empty"><ShoppingBag size={28}/><strong>{purchases.length?"当前筛选下没有订单":"还没有采购订单"}</strong><p>支持“1 kg × 2 袋”等包装规格，确认收货前不会改变库存。</p></div>:<div className="purchase-cards">{visibleOrders.map(p=><article className="purchase-order-card" key={p.id}>
+        <div className="purchase-order-heading"><div><span className="purchase-platform">{p.platform==="other"?p.platformName||platformLabels.other:platformLabels[p.platform]}</span><h3>{p.name}</h3><p className="purchase-specification">{purchaseSpecification(p)}</p></div><span className={`status-pill ${pending(p)?"warning":"neutral"}`}>{purchaseStatusLabels[p.status]}</span></div>
+        <dl className="purchase-facts"><div><dt>订单金额</dt><dd>¥{p.priceCny.toFixed(2)}</dd></div><div><dt>累计已付款</dt><dd>{p.paidCny===undefined?"未核对":`¥${p.paidCny.toFixed(2)}${p.paidCny===0?" · 尚未付款":""}`}</dd></div><div><dt>已到账退款</dt><dd>{p.refundedCny===undefined?"未核对":`¥${p.refundedCny.toFixed(2)}`}</dd></div><div><dt>下单时间</dt><dd>{displayOrderedAt(p.orderedAt)}</dd></div><div><dt>预计到货</dt><dd>{p.expectedArrival??"未设置"}</dd></div><div><dt>实际收货</dt><dd>{p.receipts?.length?`${quantityText(receivedQuantity(p))} ${purchaseUnitLabels[p.unit]} · ${p.receipts.length} 批`:p.status==="received"?"旧版已收货（无明细）":"尚未收货"}</dd></div></dl>
+        {p.closedQuantity!==undefined&&p.closedQuantity>0&&<p className="purchase-close-note">未收部分已结束：{quantityText(p.closedQuantity)} {purchaseUnitLabels[p.unit]} · {p.closedReason}</p>}
+        {!!p.receipts?.length&&<details className="purchase-receipts"><summary>查看 {p.receipts.length} 次收货明细</summary>{p.receipts.map(r=><div key={r.id}><strong>{r.name}{r.replacement?"（替换）":""}</strong><span>{r.receivedAt} · 实收 {quantityText(r.actualAmount)} {purchaseUnitLabels[r.unit]} · 成本 ¥{r.costCny.toFixed(2)}</span><small>{r.reason}</small></div>)}</details>}
+        <div className="purchase-order-footer"><span className="form-hint">{p.url?"已保存商品链接":"未保存商品链接"}</span><div className="button-row">{["ordered","partially_received"].includes(p.status)&&<><button className="button secondary small" onClick={()=>setOrderAction({id:p.id,mode:"close"})}>取消未收部分</button>{!p.receipts?.length&&<button className="button secondary small" onClick={()=>setOrderAction({id:p.id,mode:"edit"})}>修订订单</button>}<button className="button primary small" onClick={()=>setOrderAction({id:p.id,mode:"receive"})}>核对收货</button></>}<button className="button secondary small" onClick={()=>setOrderAction({id:p.id,mode:"payment"})}>核对付款</button></div></div>
+      </article>)}</div>}
+    </section>
+    {!!state.inventoryMovements.length&&<section className="card inventory-section"><div className="card-heading"><div><p className="eyebrow">流水与审计</p><h2>最近库存变动</h2></div><span>最近 20 条</span></div><div className="inventory-movements">{state.inventoryMovements.slice(-20).reverse().map(m=>{const lot=inventory.find(l=>l.id===m.lotId);return <div key={m.id}><strong>{lot?.name??"历史批次"}</strong><span>{{purchase:"收货",cooking:"制作",waste:"损耗",adjustment:"盘点",return:"退货"}[m.type]} · {m.amount>0?"+":""}{quantityText(m.amount)} {lot?purchaseUnitLabels[lot.unit]:""}</span><span>{m.reason}</span><small>{displayOrderedAt(m.createdAt)}</small></div>;})}</div></section>}
+    {purchaseOpen&&<PurchaseModal onClose={()=>setPurchaseOpen(false)}/>}
+    {selectedOrder&&orderAction?.mode==="edit"&&<PurchaseModal item={selectedOrder} onClose={()=>setOrderAction(null)}/>}
+    {selectedOrder&&orderAction?.mode==="receive"&&<ReceivePurchaseModal purchase={selectedOrder} onClose={()=>setOrderAction(null)}/>}
+    {selectedOrder&&(orderAction?.mode==="close"||orderAction?.mode==="payment")&&<PurchaseActionModal purchase={selectedOrder} mode={orderAction.mode} onClose={()=>setOrderAction(null)}/>}
+    {selectedLot&&lotAction&&<InventoryLotModal lot={selectedLot as InventoryLot} mode={lotAction.mode} onClose={()=>setLotAction(null)}/>}
+  </div>;
 }
-
-function Metric({ icon, label, value, warning }: { icon: React.ReactNode; label: string; value: string; warning?: boolean }) {
-  return <article className={`metric-card icon-metric ${warning ? "warn-card" : ""}`}><span className="metric-icon">{icon}</span><div><span>{label}</span><strong>{value}</strong></div></article>;
-}
-
-type PurchaseInput = Omit<PurchaseDraft, "id">;
-
-function PurchaseModal({ onClose, onSave }: { onClose: () => void; onSave: (draft: PurchaseInput, commandId?: string) => Promise<ActionResult> }) {
-  const action = useConfirmedAction();
-  const recipes = useAppStore((state) => state.recipes);
-  const inventory = useAppStore((state) => state.inventory);
-  const [foodId,setFoodId] = useState("");
-  const foodOptions = [...new Map([...inventory,...recipes.flatMap((recipe)=>recipe.ingredients)].map((item)=>[item.foodId,item])).values()];
-  const [form, setForm] = useState<{
-    name: string;
-    platform: PurchaseDraft["platform"];
-    url: string;
-    amount: string;
-    unit: PurchaseDraft["unit"];
-    priceCny: string;
-    expectedArrival: string;
-  }>({ name: "", platform: "duoduo", url: "", amount: "", unit: "g", priceCny: "", expectedArrival: format(new Date(Date.now() + 864e5), "yyyy-MM-dd") });
-  return <Modal title="创建待确认采购" onClose={() => { if (!action.busy) onClose(); }}><form className="form" onSubmit={async (event) => { event.preventDefault(); const input: PurchaseInput = { ...form, foodId:foodId || undefined, amount: Number(form.amount), priceCny: Number(form.priceCny), status: "ordered", confidence: "high" }; const result = await action.run(JSON.stringify(input), (id) => onSave(input, id)); if (!result.error) onClose(); }}>
-    <label><span>食材或商品</span><input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="例如 猪里脊" /></label>
-    <label><span>关联食材（用于收货后匹配菜谱）</span><select value={foodId} onChange={(event)=>{setFoodId(event.target.value);const food=foodOptions.find((item)=>item.foodId===event.target.value);if(food)setForm({...form,name:form.name||food.name,unit:food.unit});}}><option value="">按名称匹配，或创建新食材</option>{foodOptions.map((food)=><option key={food.foodId} value={food.foodId}>{food.name} · {food.unit}</option>)}</select></label>
-    <div className="form-grid"><label><span>渠道</span><select value={form.platform} onChange={(event) => setForm({ ...form, platform: event.target.value as typeof form.platform })}><option value="duoduo">多多买菜</option><option value="online">普通网购</option><option value="supermarket">超市</option><option value="other">其他</option></select></label><label><span>预计到货</span><input type="date" value={form.expectedArrival} onChange={(event) => setForm({ ...form, expectedArrival: event.target.value })} /></label></div>
-    <div className="form-grid"><label><span>数量</span><input required type="number" min="0" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} /></label><label><span>单位</span><select value={form.unit} onChange={(event) => setForm({ ...form, unit: event.target.value as typeof form.unit })}><option value="g">克</option><option value="ml">毫升</option><option value="piece">个</option></select></label></div>
-    <label><span>实付金额</span><input required type="number" min="0" step="0.01" value={form.priceCny} onChange={(event) => setForm({ ...form, priceCny: event.target.value })} /></label>
-    <label><span>商品链接（可选）</span><input value={form.url} onChange={(event) => setForm({ ...form, url: event.target.value })} placeholder="粘贴商品链接" /></label>
-    <p className="form-hint">“已下单”不会增加库存；确认实际收货后才建立库存批次。</p>{action.message && <p className="form-error" role="alert">{action.message}</p>}<button className="button primary wide" type="submit" disabled={action.busy}>{action.busy ? "正在保存…" : "保存为已下单"}</button>
-  </form></Modal>;
-}
+function Metric({icon,label,value}:{icon:React.ReactNode;label:string;value:string}){return <article className="metric-card icon-metric"><span className="metric-icon">{icon}</span><div><span>{label}</span><strong>{value}</strong></div></article>;}
