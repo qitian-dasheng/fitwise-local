@@ -8,7 +8,9 @@ use tauri::{AppHandle, Manager};
 
 pub(crate) const STORAGE_NAME: &str = "fitwise-app-state-v1";
 const SINGLETONS: [&str; 2] = ["profile", "aiSettings"];
-const COLLECTIONS: [&str; 14] = [
+const COLLECTIONS: [&str; 16] = [
+    "foodDefinitions",
+    "foodDefinitionVersions",
     "meals",
     "checkIns",
     "measurements",
@@ -80,6 +82,7 @@ pub(crate) fn apply_repository_schema(connection: &Connection) -> Result<(), Str
         include_str!("../migrations/0003_domain_entity_store.sql"),
         include_str!("../migrations/0004_domain_commands.sql"),
         include_str!("../migrations/0005_queries_and_request_identity.sql"),
+        include_str!("../migrations/0006_food_library.sql"),
     ] {
         connection
             .execute_batch(sql)
@@ -274,38 +277,44 @@ pub(crate) fn import_legacy_state(
 pub(crate) fn normalize_legacy_envelope(raw: &str) -> Result<String, String> {
     let mut envelope: Value = serde_json::from_str(raw).map_err(|error| error.to_string())?;
     let version = envelope["version"].as_i64().ok_or("状态缺少版本。")?;
-    if version == 3 {
+    if version == 4 {
         return Ok(raw.to_owned());
     }
-    if version != 2 {
+    if version != 2 && version != 3 {
         return Err("此持久化版本暂不受支持，请保留原数据库并检查升级路径。".into());
     }
     let state = envelope
         .get_mut("state")
         .and_then(Value::as_object_mut)
         .ok_or("旧版状态无效。")?;
-    for key in ["consumptionEvents", "wasteEvents", "auditEvents"] {
+    for key in ["foodDefinitions", "foodDefinitionVersions"] {
         state.entry(key).or_insert_with(|| serde_json::json!([]));
     }
-    if let Some(batches) = state.get_mut("batches").and_then(Value::as_array_mut) {
-        for batch in batches {
-            let consumed = batch["consumedRatio"].as_f64().unwrap_or(0.0);
-            let wasted = batch["wastedRatio"].as_f64().unwrap_or(0.0);
-            let remaining = batch["remainingRatio"]
-                .as_f64()
-                .unwrap_or((1.0 - consumed - wasted).max(0.0));
-            batch["remainingRatio"] = serde_json::json!(remaining);
-            batch["status"] = serde_json::json!(if remaining > 0.0 { "open" } else { "closed" });
+    if version == 2 {
+        for key in ["consumptionEvents", "wasteEvents", "auditEvents"] {
+            state.entry(key).or_insert_with(|| serde_json::json!([]));
         }
-    }
-    if let Some(measurements) = state.get_mut("measurements").and_then(Value::as_array_mut) {
-        for measurement in measurements {
-            if measurement.get("status").is_none() {
-                measurement["status"] = serde_json::json!("active");
+        if let Some(batches) = state.get_mut("batches").and_then(Value::as_array_mut) {
+            for batch in batches {
+                let consumed = batch["consumedRatio"].as_f64().unwrap_or(0.0);
+                let wasted = batch["wastedRatio"].as_f64().unwrap_or(0.0);
+                let remaining = batch["remainingRatio"]
+                    .as_f64()
+                    .unwrap_or((1.0 - consumed - wasted).max(0.0));
+                batch["remainingRatio"] = serde_json::json!(remaining);
+                batch["status"] =
+                    serde_json::json!(if remaining > 0.0 { "open" } else { "closed" });
+            }
+        }
+        if let Some(measurements) = state.get_mut("measurements").and_then(Value::as_array_mut) {
+            for measurement in measurements {
+                if measurement.get("status").is_none() {
+                    measurement["status"] = serde_json::json!("active");
+                }
             }
         }
     }
-    envelope["version"] = serde_json::json!(3);
+    envelope["version"] = serde_json::json!(4);
     serde_json::to_string(&envelope).map_err(|error| error.to_string())
 }
 
@@ -445,7 +454,7 @@ mod tests {
             serde_json::json!([{"id":"batch-old","consumedRatio":0.75,"wastedRatio":0.25}]);
         let normalized: Value =
             serde_json::from_str(&normalize_legacy_envelope(&legacy.to_string()).unwrap()).unwrap();
-        assert_eq!(normalized["version"], 3);
+        assert_eq!(normalized["version"], 4);
         assert_eq!(normalized["state"]["batches"][0]["remainingRatio"], 0.0);
         assert_eq!(normalized["state"]["batches"][0]["status"], "closed");
         assert_eq!(normalized["state"]["meals"][0], legacy["state"]["meals"][0]);
@@ -487,7 +496,10 @@ mod tests {
         let imported = import_legacy_state(&mut connection, STORAGE_NAME)
             .unwrap()
             .unwrap();
-        assert_eq!(imported, legacy);
+        let imported: Value = serde_json::from_str(&imported).unwrap();
+        let original: Value = serde_json::from_str(&legacy).unwrap();
+        assert_eq!(imported["version"], 4);
+        assert_eq!(imported["state"], original["state"]);
         let loaded: Value =
             serde_json::from_str(&load_envelope(&connection).unwrap().unwrap()).unwrap();
         assert_eq!(loaded["state"]["meals"][0]["name"], "legacy");

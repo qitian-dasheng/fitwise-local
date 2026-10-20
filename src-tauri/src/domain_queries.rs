@@ -249,7 +249,7 @@ pub fn export_domain_json(app: AppHandle) -> Result<Value, String> {
         .as_object()
         .ok_or("领域仓库格式无效。")?
         .clone();
-    data.insert("schemaVersion".into(), json!(5));
+    data.insert("schemaVersion".into(), json!(6));
     data.insert("persistVersion".into(), envelope["version"].clone());
     data.insert("exportedAt".into(), json!(Utc::now().to_rfc3339()));
     data.insert("app".into(), json!("Fitwise Local"));
@@ -262,7 +262,7 @@ pub fn get_domain_upgrade_report(app: AppHandle) -> Result<Value, String> {
     let connection = open_database(&app)?;
     let raw: String = connection
         .query_row(
-            "SELECT report_json FROM domain_upgrade_reports WHERE version=5",
+            "SELECT report_json FROM domain_upgrade_reports ORDER BY version DESC LIMIT 1",
             [],
             |row| row.get(0),
         )

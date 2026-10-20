@@ -664,7 +664,11 @@ fn execute_with_connection(
     }
     if !matches!(
         request.kind.as_str(),
-        "add_meal"
+        "save_food_definition"
+            | "revise_food_definition"
+            | "set_food_favorite"
+            | "record_food_meal"
+            | "add_meal"
             | "add_weight"
             | "add_workout"
             | "set_checkin"
@@ -729,6 +733,15 @@ fn execute_with_connection(
     let (version, mut state) =
         load_command_state(&transaction, request.bootstrap_state.as_deref())?;
     let mutation = match request.kind.as_str() {
+        "save_food_definition"
+        | "revise_food_definition"
+        | "set_food_favorite"
+        | "record_food_meal" => crate::food_library::apply(
+            &mut state,
+            &request.kind,
+            &request.payload,
+            &request.command_id,
+        )?,
         "prepare_recipe" => prepare_recipe(&mut state, &request.payload, &request.command_id)?,
         "consume_batch" => consume_batch(&mut state, &request.payload, &request.command_id)?,
         "discard_batch" => discard_batch(&mut state, &request.payload, &request.command_id)?,
@@ -808,6 +821,172 @@ mod tests {
             .unwrap();
         ensure_repository_schema(&connection).unwrap();
         connection
+    }
+
+    fn food_payload() -> Value {
+        json!({"input":{"name":"燕麦","brand":"example","measurementBasis":"packaged","basis":{"quantity":100,"unit":"g"},"energyUnit":"kcal","nutrients":{"calories":400,"protein":12,"fat":0},"conversions":[{"unit":"package","quantity":1,"basisQuantity":200}],"source":"label"}})
+    }
+
+    #[test]
+    fn food_library_reopens_and_replays_without_changing_history_or_inventory() {
+        let directory = std::env::temp_dir().join(format!(
+            "fitwise-food-integration-{}",
+            rand::random::<u64>()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("fitwise.db");
+        let mut connection = Connection::open(&path).unwrap();
+        let food = execute_with_connection(
+            &mut connection,
+            request(
+                "food-command-01",
+                "save_food_definition",
+                food_payload(),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        assert_eq!(food.state["meals"], json!([]));
+        assert_eq!(food.state["inventoryMovements"], json!([]));
+        let inventory = food.state["inventory"].clone();
+        let recipe = food.state["recipes"].clone();
+        let replay = execute_with_connection(
+            &mut connection,
+            request(
+                "food-command-01",
+                "save_food_definition",
+                food_payload(),
+                None,
+            ),
+        )
+        .unwrap();
+        assert!(replay.replayed);
+        assert_eq!(replay.state["foodDefinitions"].as_array().unwrap().len(), 1);
+        execute_with_connection(
+            &mut connection,
+            request(
+                "favorite-command-01",
+                "set_food_favorite",
+                json!({"foodId":"food-food-command-01","favorite":true}),
+                None,
+            ),
+        )
+        .unwrap();
+        let meal_input = json!({"date":"2026-10-20","type":"breakfast","entries":[{"foodVersionId":"food-version-food-command-01","quantity":50,"unit":"g"},{"foodVersionId":"food-version-food-command-01","quantity":0.25,"unit":"package"}]});
+        let first = execute_with_connection(
+            &mut connection,
+            request(
+                "food-meal-command-01",
+                "record_food_meal",
+                meal_input.clone(),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            first.state["meals"][0]["nutrition"]["calories"]["value"],
+            200.0
+        );
+        assert_eq!(
+            first.state["meals"][1]["nutrition"]["calories"]["value"],
+            200.0
+        );
+        assert_eq!(first.state["inventory"], inventory);
+        drop(connection);
+        let mut connection = Connection::open(&path).unwrap();
+        let replay = execute_with_connection(
+            &mut connection,
+            request("food-meal-command-01", "record_food_meal", meal_input, None),
+        )
+        .unwrap();
+        assert!(replay.replayed);
+        assert_eq!(replay.state["meals"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            crate::food_library::search_state(
+                replay.state.as_object().unwrap(),
+                "example",
+                "favorites"
+            )
+            .unwrap()
+            .len(),
+            1
+        );
+        assert_eq!(
+            crate::food_library::search_state(replay.state.as_object().unwrap(), "", "recent")
+                .unwrap()
+                .len(),
+            1
+        );
+        let mut revised = food_payload();
+        revised["foodId"] = json!("food-food-command-01");
+        revised["expectedVersionId"] = json!("food-version-food-command-01");
+        revised["input"]["nutrients"]["calories"] = json!(450);
+        let result = execute_with_connection(
+            &mut connection,
+            request(
+                "revision-command-01",
+                "revise_food_definition",
+                revised,
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(result.state["meals"], first.state["meals"]);
+        assert_eq!(result.state["recipes"], recipe);
+        assert_eq!(result.state["inventory"], inventory);
+        let envelope: Value =
+            serde_json::from_str(&load_envelope(&connection).unwrap().unwrap()).unwrap();
+        assert_eq!(envelope["version"], 4);
+        assert_eq!(
+            envelope["state"]["foodDefinitionVersions"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        drop(connection);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn food_batch_failure_is_atomic_and_changed_replay_is_rejected() {
+        let mut connection = connection();
+        execute_with_connection(
+            &mut connection,
+            request(
+                "food-command-01",
+                "save_food_definition",
+                food_payload(),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        let before = load_envelope(&connection).unwrap();
+        let bad_input = json!({"date":"2026-10-20","type":"lunch","entries":[{"foodVersionId":"food-version-food-command-01","quantity":50,"unit":"g"},{"foodVersionId":"food-version-food-command-01","quantity":10,"unit":"ml"}]});
+        assert!(execute_with_connection(
+            &mut connection,
+            request("food-meal-failed-01", "record_food_meal", bad_input, None)
+        )
+        .unwrap_err()
+        .contains("换算"));
+        assert_eq!(load_envelope(&connection).unwrap(), before);
+        let mut changed = food_payload();
+        changed["input"]["nutrients"]["calories"] = json!(999);
+        assert!(execute_with_connection(
+            &mut connection,
+            request("food-command-01", "save_food_definition", changed, None)
+        )
+        .unwrap_err()
+        .contains("命令内容"));
+        let good_input = json!({"date":"2026-10-20","type":"lunch","entries":[{"foodVersionId":"food-version-food-command-01","quantity":50,"unit":"g"}]});
+        assert!(
+            execute_with_connection(
+                &mut connection,
+                request("food-meal-failed-01", "record_food_meal", good_input, None)
+            )
+            .unwrap()
+            .applied
+        );
     }
 
     fn bootstrap() -> String {

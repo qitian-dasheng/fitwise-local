@@ -7,7 +7,7 @@ export function useConfirmedAction() {
   const commands = useRef(new Map<string, string>());
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  async function run(key: string, action: (commandId: string) => Promise<ActionResult>) {
+  async function run(key: string, action: (commandId: string) => Promise<ActionResult>): Promise<ActionResult> {
     if (inFlight.current) return { error: "正在保存上一项操作。" };
     const commandId = commands.current.get(key) ?? crypto.randomUUID();
     commands.current.set(key, commandId);

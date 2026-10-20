@@ -134,6 +134,8 @@ const plans: PlanCandidate[] = [
 ];
 
 export const initialState: AppState = {
+  foodDefinitions: [],
+  foodDefinitionVersions: [],
   profile: {
     name: "风那不谈",
     sex: "male",

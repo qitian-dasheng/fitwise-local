@@ -3,6 +3,10 @@ import type { AppState } from "../domain/types";
 import { flushAppStorageWrites } from "./storage";
 
 export type DomainCommandKind =
+  | "save_food_definition"
+  | "revise_food_definition"
+  | "set_food_favorite"
+  | "record_food_meal"
   | "add_meal"
   | "add_weight"
   | "add_workout"
@@ -38,6 +42,8 @@ export function enqueueDomainCommand<T>(operation: () => Promise<T>): Promise<T>
 }
 
 const stateKeys = [
+  "foodDefinitions",
+  "foodDefinitionVersions",
   "profile",
   "meals",
   "checkIns",
@@ -58,7 +64,7 @@ const stateKeys = [
 
 function serializeBootstrapState(state: AppState) {
   const snapshot = Object.fromEntries(stateKeys.map((key) => [key, state[key]])) as unknown as AppState;
-  return JSON.stringify({ state: snapshot, version: 3 });
+  return JSON.stringify({ state: snapshot, version: 4 });
 }
 
 export async function executeDomainCommand<TResult>(

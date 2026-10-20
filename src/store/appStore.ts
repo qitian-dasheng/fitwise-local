@@ -14,14 +14,20 @@ import type {
   PreparedBatch,
   PurchaseDraft,
   WorkoutSession,
+  FoodDefinitionInput,
+  FoodMealInput,
 } from "../domain/types";
 import { enqueueDomainCommand, executeDomainCommand, type DomainCommandKind } from "../data/domainCommands";
 import { appStorage, flushAppStorageWrites, isTauriRuntime, suppressNextAppStorageWrite } from "../data/storage";
+import { foodMealEntries, saveFoodInState } from "../domain/foodLibrary";
 
 const uid = () => crypto.randomUUID();
-export interface ActionResult { error?: string; duplicate?: boolean; isOutlier?: boolean }
+export interface ActionResult { error?: string; duplicate?: boolean; isOutlier?: boolean; foodId?: string; foodVersionId?: string; mealIds?: string[] }
 
 interface AppActions {
+  saveFoodDefinition: (input: FoodDefinitionInput, foodId?: string, expectedVersionId?: string, commandId?: string) => Promise<ActionResult>;
+  setFoodFavorite: (foodId: string, favorite: boolean, commandId?: string) => Promise<ActionResult>;
+  recordFoodMeal: (input: FoodMealInput, commandId?: string) => Promise<ActionResult>;
   addMeal: (input: {
     name: string;
     type: MealType;
@@ -66,6 +72,25 @@ export const useAppStore = create<AppStore>()(
       };
       return ({
       ...(isTauriRuntime() ? createPersonalState() : initialState),
+      async saveFoodDefinition(input, foodId, expectedVersionId, commandId = uid()) {
+        if (isTauriRuntime()) return submit(foodId ? "revise_food_definition" : "save_food_definition", { input, ...(foodId ? { foodId, expectedVersionId } : {}) }, commandId);
+        try { const saved = saveFoodInState(get(), input, commandId, foodId, expectedVersionId); set(saved.state); return saved.result; }
+        catch (cause) { return { error: String(cause) }; }
+      },
+      async setFoodFavorite(foodId, favorite, commandId = uid()) {
+        if (isTauriRuntime()) return submit("set_food_favorite", { foodId, favorite }, commandId);
+        if (!get().foodDefinitions.some((item) => item.id === foodId)) return { error: "找不到食物。" };
+        set((state) => ({ foodDefinitions: state.foodDefinitions.map((item) => item.id === foodId ? { ...item, favorite } : item) }));
+        return {};
+      },
+      async recordFoodMeal(input, commandId = uid()) {
+        if (isTauriRuntime()) return submit("record_food_meal", { ...input }, commandId);
+        try {
+          const entries = foodMealEntries(get(), input, commandId);
+          set((state) => ({ meals: [...state.meals, ...entries], auditEvents: [...state.auditEvents, { id: `${commandId}:audit`, eventType: "record_food_meal", entityType: "food_library", payload: { commandId, mealIds: entries.map((item) => item.id) }, createdAt: new Date().toISOString() }] }));
+          return { mealIds: entries.map((item) => item.id) };
+        } catch (cause) { return { error: String(cause) }; }
+      },
       async addMeal(input, commandId = uid()) {
         if (isTauriRuntime()) return submit("add_meal", input, commandId);
         if (!input.name.trim() || !input.amountLabel.trim() || !Number.isFinite(input.calories) || input.calories < 0 || !Number.isFinite(input.protein) || input.protein < 0 || (input.fiber !== undefined && (!Number.isFinite(input.fiber) || input.fiber < 0))) return { error: "请检查名称、份量和营养值。" };
@@ -425,8 +450,8 @@ export const useAppStore = create<AppStore>()(
     {
       name: "fitwise-app-state-v1",
       storage: createJSONStorage(() => appStorage),
-      version: 3,
-      migrate(persistedState) {
+      version: 4,
+      migrate(persistedState, version) {
         const persisted = persistedState as Partial<AppState>;
         type LegacyBatch = Omit<PreparedBatch, "remainingRatio" | "status"> & Partial<Pick<PreparedBatch, "remainingRatio" | "status">>;
         const migratedBatches = ((persisted.batches ?? []) as LegacyBatch[]).map((batch) => {
@@ -435,13 +460,15 @@ export const useAppStore = create<AppStore>()(
           return { ...batch, remainingRatio, status: remainingRatio > 0 ? "open" as const : "closed" as const };
         });
         return {
-          ...initialState,
+          ...(isTauriRuntime() ? createPersonalState() : initialState),
           ...persisted,
-          batches: migratedBatches,
+          foodDefinitions: persisted.foodDefinitions ?? [],
+          foodDefinitionVersions: persisted.foodDefinitionVersions ?? [],
+          batches: version < 3 ? migratedBatches : (persisted.batches ?? []),
           consumptionEvents: persisted.consumptionEvents ?? [],
           wasteEvents: persisted.wasteEvents ?? [],
           auditEvents: persisted.auditEvents ?? [],
-          measurements: (persisted.measurements ?? initialState.measurements).map((item) => ({ ...item, status: item.status ?? "active" })),
+          measurements: version < 3 ? (persisted.measurements ?? []).map((item) => ({ ...item, status: item.status ?? "active" })) : (persisted.measurements ?? []),
           aiSettings: { ...initialState.aiSettings, ...persisted.aiSettings },
         } as AppStore;
       },

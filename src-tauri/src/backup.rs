@@ -567,6 +567,19 @@ mod tests {
                  INSERT INTO app_kv VALUES ('state', '{\"ok\":true}', '2026-10-20T00:00:00Z');",
             )
             .unwrap();
+        crate::domain_store::ensure_repository_schema(&source).unwrap();
+        let food_payload = serde_json::json!({"id":"food-backup-test","name":"燕麦","activeVersionId":"food-version-backup-test"}).to_string();
+        let version_payload = serde_json::json!({"id":"food-version-backup-test","foodId":"food-backup-test","version":1,"basis":{"quantity":100,"unit":"g"},"nutrition":{"calories":{"state":"known","value":400},"fiber":{"state":"unknown"}}}).to_string();
+        for (collection, id, payload) in [
+            ("foodDefinitions", "food-backup-test", &food_payload),
+            (
+                "foodDefinitionVersions",
+                "food-version-backup-test",
+                &version_payload,
+            ),
+        ] {
+            source.execute("INSERT INTO domain_entities(collection,entity_id,payload_json,sort_index,updated_at) VALUES(?1,?2,?3,0,'now')",rusqlite::params![collection,id,payload]).unwrap();
+        }
         drop(source);
 
         assert_eq!(
@@ -587,6 +600,19 @@ mod tests {
             })
             .unwrap();
         assert_eq!(value, "{\"ok\":true}");
+        for (id, original) in [
+            ("food-backup-test", food_payload),
+            ("food-version-backup-test", version_payload),
+        ] {
+            let payload: String = restored_connection
+                .query_row(
+                    "SELECT payload_json FROM domain_entities WHERE entity_id=?1",
+                    [id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(payload, original);
+        }
         drop(restored_connection);
         fs::remove_dir_all(directory).unwrap();
     }

@@ -4,6 +4,7 @@ mod domain_commands;
 mod domain_queries;
 mod domain_store;
 mod domain_upgrade;
+mod food_library;
 mod record_commands;
 mod upload;
 
@@ -31,6 +32,8 @@ pub fn run() {
             domain_queries::query_inventory_summary,
             domain_queries::export_domain_json,
             domain_queries::get_domain_upgrade_report,
+            food_library::search_food_library,
+            food_library::preview_food_portion,
             upload::start_mobile_upload,
             upload::stop_mobile_upload
         ])

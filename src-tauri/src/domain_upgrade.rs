@@ -39,7 +39,9 @@ fn source_state(connection: &Connection) -> Result<Option<String>, String> {
 fn reconciliation(raw: Option<&str>) -> Result<Value, String> {
     let envelope: Value = match raw {
         Some(raw) => {
-            serde_json::from_str(raw).map_err(|error| format!("升级前数据格式无效：{error}"))?
+            let normalized = crate::domain_store::normalize_legacy_envelope(raw)?;
+            serde_json::from_str(&normalized)
+                .map_err(|error| format!("升级前数据格式无效：{error}"))?
         }
         None => return Ok(json!({"initialized":false})),
     };
@@ -80,7 +82,7 @@ pub(crate) fn upgrade(connection: &mut Connection, database_path: &Path) -> Resu
     if table_exists(connection, "domain_upgrade_reports")? {
         let done: bool = connection
             .query_row(
-                "SELECT EXISTS(SELECT 1 FROM domain_upgrade_reports WHERE version = 5)",
+                "SELECT EXISTS(SELECT 1 FROM domain_upgrade_reports WHERE version = 6)",
                 [],
                 |row| row.get(0),
             )
@@ -98,7 +100,7 @@ pub(crate) fn upgrade(connection: &mut Connection, database_path: &Path) -> Resu
             .join("upgrade-backups");
         fs::create_dir_all(&folder).map_err(|error| error.to_string())?;
         let path = folder.join(format!(
-            "before-schema-5-{}.db",
+            "before-schema-6-{}.db",
             Utc::now().format("%Y%m%dT%H%M%S%f")
         ));
         let mut destination = Connection::open(&path).map_err(|error| error.to_string())?;
@@ -120,18 +122,130 @@ pub(crate) fn upgrade(connection: &mut Connection, database_path: &Path) -> Resu
         .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
         .map_err(|error| error.to_string())?;
     apply_repository_schema(&transaction)?;
+    if let Some(raw) = load_envelope(&transaction)? {
+        let original: Value = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+        let normalized = crate::domain_store::normalize_legacy_envelope(&raw)?;
+        let hash = format!("{:x}", Sha256::digest(normalized.as_bytes()));
+        if original["version"] == 2 {
+            let normalized: Value =
+                serde_json::from_str(&normalized).map_err(|error| error.to_string())?;
+            crate::domain_store::write_transaction(
+                &transaction,
+                normalized["state"].as_object().ok_or("旧版状态无效。")?,
+                4,
+                &hash,
+                &Utc::now().to_rfc3339(),
+            )?;
+        } else {
+            transaction
+                .execute(
+                    "UPDATE domain_state_meta SET persist_version=4, content_sha256=?1 WHERE id=1",
+                    [hash],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+    }
     let after = reconciliation(source_state(&transaction)?.as_deref())?;
     if before != after {
         return Err("升级后数据对账不一致，已保留升级前副本，请停止录入并恢复检查。".into());
     }
-    let report = json!({"version":5,"reconciled":true,"before":before,"after":after,"backupPath":backup_path,"backupEncrypted":false});
-    transaction.execute("INSERT INTO domain_upgrade_reports (version,backup_path,report_json,created_at) VALUES (5,?1,?2,?3)",rusqlite::params![backup_path,report.to_string(),Utc::now().to_rfc3339()]).map_err(|error| error.to_string())?;
+    let report = json!({"version":6,"reconciled":true,"before":before,"after":after,"backupPath":backup_path,"backupEncrypted":false});
+    transaction.execute("INSERT INTO domain_upgrade_reports (version,backup_path,report_json,created_at) VALUES (6,?1,?2,?3)",rusqlite::params![backup_path,report.to_string(),Utc::now().to_rfc3339()]).map_err(|error| error.to_string())?;
     transaction.commit().map_err(|error| error.to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn schema_v5_upgrade_only_adds_empty_library_and_preserves_all_entities() {
+        let directory =
+            std::env::temp_dir().join(format!("fitwise-v5-to-v6-{}", rand::random::<u64>()));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("fitwise.db");
+        let mut connection = Connection::open(&path).unwrap();
+        crate::domain_store::ensure_repository_schema(&connection).unwrap();
+        connection.execute_batch("DROP VIEW domain_food_library_projection; DROP INDEX idx_domain_food_version_meals;").unwrap();
+        let mut state = serde_json::Map::new();
+        state.insert("profile".into(), json!({"name":"test"}));
+        state.insert("aiSettings".into(), json!({"provider":"openai"}));
+        for key in [
+            "foodDefinitions",
+            "foodDefinitionVersions",
+            "meals",
+            "checkIns",
+            "measurements",
+            "workouts",
+            "recipes",
+            "batches",
+            "consumptionEvents",
+            "wasteEvents",
+            "auditEvents",
+            "inventory",
+            "inventoryMovements",
+            "purchases",
+            "inbox",
+            "plans",
+        ] {
+            state.insert(key.into(), json!([]));
+        }
+        state.insert("meals".into(), json!([{"id":"old-manual-meal","nutrition":{"calories":{"state":"known","value":800}},"consumedRatio":0.75}]));
+        state.insert(
+            "inventory".into(),
+            json!([{"id":"lot","remainingAmount":100,"unit":"g"}]),
+        );
+        state.insert("batches".into(), json!([{"id":"batch","consumedRatio":0.75,"remainingRatio":0.25,"wastedRatio":0.0,"status":"open"}]));
+        state.insert(
+            "recipes".into(),
+            json!([{"id":"old-recipe","nutrition":{"protein":{"state":"known","value":119.57}}}]),
+        );
+        let transaction = connection.transaction().unwrap();
+        crate::domain_store::write_transaction(&transaction, &state, 3, "original-hash", "now")
+            .unwrap();
+        transaction.commit().unwrap();
+        let before: Vec<(String, String)> = {
+            let mut statement = connection
+                .prepare("SELECT entity_id,payload_json FROM domain_entities ORDER BY entity_id")
+                .unwrap();
+            let rows = statement
+                .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap();
+            rows
+        };
+        upgrade(&mut connection, &path).unwrap();
+        let after: Vec<(String, String)> = {
+            let mut statement = connection
+                .prepare("SELECT entity_id,payload_json FROM domain_entities ORDER BY entity_id")
+                .unwrap();
+            let rows = statement
+                .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap();
+            rows
+        };
+        assert_eq!(before, after);
+        let envelope: Value =
+            serde_json::from_str(&load_envelope(&connection).unwrap().unwrap()).unwrap();
+        assert_eq!(envelope["version"], 4);
+        assert_eq!(envelope["state"]["foodDefinitions"], json!([]));
+        let raw: String = connection
+            .query_row(
+                "SELECT report_json FROM domain_upgrade_reports WHERE version=6",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let report: Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(report["before"], report["after"]);
+        assert_eq!(report["before"]["caloriesKcal"], 600.0);
+        assert_eq!(report["before"]["inventory"][0]["remainingAmount"], 100);
+        assert!(Path::new(report["backupPath"].as_str().unwrap()).exists());
+        drop(connection);
+        fs::remove_dir_all(directory).unwrap();
+    }
     #[test]
     fn failed_migration_rolls_back_schema_and_keeps_verified_backup() {
         let directory =

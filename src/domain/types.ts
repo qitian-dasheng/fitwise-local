@@ -23,6 +23,63 @@ export interface NutritionFacts {
   sodium: NutrientValue;
 }
 
+export type FoodUnit = "g" | "ml" | "piece" | "serving" | "package";
+export type FoodMeasurementBasis = "raw" | "cooked" | "packaged" | "edible";
+export interface FoodUnitConversion {
+  unit: FoodUnit;
+  quantity: number;
+  basisQuantity: number;
+}
+export interface FoodDefinitionInput {
+  name: string;
+  brand?: string;
+  measurementBasis: FoodMeasurementBasis;
+  basis: { quantity: number; unit: FoodUnit };
+  energyUnit: "kcal" | "kJ";
+  nutrients: Partial<Record<NutrientKey, number>>;
+  conversions: FoodUnitConversion[];
+  source: DataSource;
+}
+export interface FoodDefinition {
+  id: string;
+  name: string;
+  brand?: string;
+  measurementBasis: FoodMeasurementBasis;
+  activeVersionId: string;
+  favorite: boolean;
+  createdAt: string;
+}
+export interface FoodDefinitionVersion {
+  id: string;
+  foodId: string;
+  version: number;
+  basis: FoodDefinitionInput["basis"];
+  energyUnit: "kcal" | "kJ";
+  labelNutrients: FoodDefinitionInput["nutrients"];
+  conversions: FoodUnitConversion[];
+  nutrition: NutritionFacts;
+  source: DataSource;
+  confirmedBy: string;
+  confirmedAt: string;
+}
+export interface FoodMealInput {
+  date: string;
+  type: MealType;
+  entries: { foodVersionId: string; quantity: number; unit: FoodUnit }[];
+}
+export interface FoodLibraryItem {
+  definition: FoodDefinition;
+  version: FoodDefinitionVersion;
+  per100g?: NutritionFacts;
+  per100ml?: NutritionFacts;
+  lastUsedAt?: string;
+}
+export interface FoodMealPreview {
+  nutrition: NutritionFacts;
+  factor: number;
+  basisQuantity: number;
+}
+
 export interface UserProfile {
   name: string;
   sex: "male" | "female" | "other";
@@ -49,6 +106,16 @@ export interface MealEntry {
   confidence: Confidence;
   preparedBatchId?: string;
   consumptionEventId?: string;
+  foodDefinitionId?: string;
+  foodVersionId?: string;
+  foodSnapshot?: {
+    definition: FoodDefinition;
+    version: FoodDefinitionVersion;
+    quantity: number;
+    unit: FoodUnit;
+    factor: number;
+    basisQuantity: number;
+  };
   createdAt: string;
 }
 
@@ -230,6 +297,8 @@ export interface AiSettings {
 }
 
 export interface AppState {
+  foodDefinitions: FoodDefinition[];
+  foodDefinitionVersions: FoodDefinitionVersion[];
   profile: UserProfile;
   meals: MealEntry[];
   checkIns: DailyCheckIn[];

@@ -8,11 +8,15 @@ import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { useConfirmedAction } from "../components/useConfirmedAction";
 import type { ActionResult } from "../store/appStore";
+import { FoodLibraryModal } from "../components/FoodLibraryModal";
 
 const mealLabels: Record<MealType, string> = { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", snack: "加餐" };
 
 export function FoodPage() {
   const [mealOpen, setMealOpen] = useState(false);
+  const [manualMeal, setManualMeal] = useState(false);
+  const [initialMealType, setInitialMealType] = useState<MealType>("breakfast");
+  function openMeal(type: MealType = "breakfast") { setManualMeal(false); setInitialMealType(type); setMealOpen(true); }
   const [cookOpen, setCookOpen] = useState(false);
   const [batchOpen, setBatchOpen] = useState<string | null>(null);
   const [consumeRatio, setConsumeRatio] = useState("50");
@@ -42,7 +46,7 @@ export function FoodPage() {
 
   return (
     <div className="page">
-      <PageHeader eyebrow="实际摄入" title="饮食日记" description="计划只是计划，只有确认吃下的食物才会进入趋势。" action={<button className="button primary" onClick={() => setMealOpen(true)}><Plus size={17} /> 添加食物</button>} />
+      <PageHeader eyebrow="实际摄入" title="饮食日记" description="新食物确认一次规格，以后选择食物、填写吃了多少，自动计算营养。" action={<button className="button primary" onClick={() => openMeal()}><Plus size={17} /> 添加食物</button>} />
       {statusMessage && <div className="settings-notice card" role="status">{statusMessage}</div>}
       <div className="metric-row">
         <Metric label="今日热量" value={`${Math.round(total.totals.calories)} kcal`} note={`覆盖率 ${total.coverage.calories}%`} />
@@ -64,9 +68,9 @@ export function FoodPage() {
                     <div className="food-entry" key={item.id}>
                       <div className="meal-icon"><Utensils size={16} /></div>
                       <div><strong>{item.name}</strong><span>{item.amountLabel} · {item.confidence === "high" ? "已确认" : "估算"}</span></div>
-                      <b>{Math.round((item.nutrition.calories.value ?? 0) * item.consumedRatio)}</b>
+                      <b>{item.nutrition.calories.state === "unknown" ? "未知" : Math.round((item.nutrition.calories.value ?? 0) * item.consumedRatio)}</b>
                     </div>
-                  )) : <button className="empty-entry" onClick={() => setMealOpen(true)}><Plus size={15} /> 添加{mealLabels[type]}</button>}
+                  )) : <button className="empty-entry" onClick={() => openMeal(type)}><Plus size={15} /> 添加{mealLabels[type]}</button>}
                 </div>
               );
             })}
@@ -95,7 +99,7 @@ export function FoodPage() {
 
       {todayBatches.length > 0 && <section className="card batch-history"><div className="card-heading compact"><div><p className="eyebrow">原料、进食、浪费分账</p><h2>今日熟食批次</h2></div><span className="status-pill neutral">{todayBatches.length} 批</span></div>{todayBatches.map((batch) => { const consumed = consumptionEvents.filter((item) => item.batchId === batch.id); const waste = wasteEvents.filter((item) => item.batchId === batch.id); return <div className="batch-history-row" key={batch.id}><div><strong>{recipes.find((item) => item.id === batch.recipeVersionId)?.name ?? "未知菜谱"}</strong><span>{consumed.length ? consumed.map((item) => `${mealLabels[item.mealType]} ${Math.round(item.ratio * 100)}%`).join(" · ") : "尚未记录进食"}</span></div><div><small>已吃</small><b>{Math.round(batch.consumedRatio * 100)}%</b></div><div><small>保留</small><b>{Math.round(batch.remainingRatio * 100)}%</b></div><div><small>丢弃</small><b>{Math.round(batch.wastedRatio * 100)}%</b></div><span className={`status-pill ${batch.status === "open" ? "warning" : "success"}`}>{batch.status === "open" ? "仍有剩余" : waste.length ? "已结束 · 含浪费" : "已吃完"}</span></div>; })}</section>}
 
-      {mealOpen && <MealModal onClose={() => setMealOpen(false)} onSave={addMeal} />}
+      {mealOpen && (manualMeal ? <MealModal initialType={initialMealType} onClose={() => setMealOpen(false)} onSave={addMeal} /> : <FoodLibraryModal initialType={initialMealType} onClose={() => setMealOpen(false)} onManual={() => setManualMeal(true)} />)}
       {cookOpen && (
         <Modal title="确认制作整锅菜" onClose={() => setCookOpen(false)}>
           <div className="form">
@@ -125,11 +129,11 @@ function Metric({ label, value, note }: { label: string; value: string; note: st
   return <article className="metric-card"><span>{label}</span><strong>{value}</strong><small>{note}</small></article>;
 }
 
-function MealModal({ onClose, onSave }: { onClose: () => void; onSave: (input: { name: string; type: MealType; amountLabel: string; calories: number; protein: number; fiber?: number }, commandId?: string) => Promise<ActionResult> }) {
-  const [form, setForm] = useState({ name: "", type: "breakfast" as MealType, amountLabel: "", calories: "", protein: "", fiber: "" });
+function MealModal({ onClose, onSave, initialType }: { onClose: () => void; initialType: MealType; onSave: (input: { name: string; type: MealType; amountLabel: string; calories: number; protein: number; fiber?: number }, commandId?: string) => Promise<ActionResult> }) {
+  const [form, setForm] = useState({ name: "", type: initialType, amountLabel: "", calories: "", protein: "", fiber: "" });
   const action = useConfirmedAction();
   return (
-    <Modal title="添加确认过的食物" onClose={() => { if (!action.busy) onClose(); }}>
+    <Modal title="仅记录本次餐食" onClose={() => { if (!action.busy) onClose(); }}>
       <form className="form" onSubmit={async (event) => { event.preventDefault(); const input = { ...form, calories: Number(form.calories), protein: Number(form.protein), fiber: form.fiber ? Number(form.fiber) : undefined }; const result = await action.run(JSON.stringify(input), (id) => onSave(input, id)); if (!result.error) onClose(); }}>
         <label><span>餐次</span><select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as MealType })}>{Object.entries(mealLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
         <label><span>食物或菜品名称</span><input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="例如 鸡蛋、燕麦与无糖酸奶" /></label>
