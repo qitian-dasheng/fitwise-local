@@ -1,5 +1,6 @@
 mod backup;
 mod credentials;
+mod domain_store;
 mod upload;
 
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -18,6 +19,12 @@ pub fn run() {
             version: 2,
             description: "batch_consumption_and_waste_events",
             sql: include_str!("../migrations/0002_batch_events.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 3,
+            description: "domain_entity_store",
+            sql: include_str!("../migrations/0003_domain_entity_store.sql"),
             kind: MigrationKind::Up,
         },
     ];
@@ -39,6 +46,10 @@ pub fn run() {
             credentials::save_ai_credential,
             credentials::delete_ai_credential,
             credentials::get_ai_credential_status,
+            domain_store::domain_storage_get,
+            domain_store::domain_storage_remove,
+            domain_store::domain_storage_set,
+            domain_store::get_domain_storage_status,
             upload::start_mobile_upload,
             upload::stop_mobile_upload
         ])

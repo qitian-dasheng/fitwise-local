@@ -1,7 +1,9 @@
 import type { StateStorage } from "zustand/middleware";
+import { invoke } from "@tauri-apps/api/core";
 
 const DB_URL = "sqlite:fitwise.db";
 let dbPromise: Promise<import("@tauri-apps/plugin-sql").default> | null = null;
+let writeQueue: Promise<void> = Promise.resolve();
 
 function isTauri() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -23,27 +25,26 @@ async function getDb() {
 export const appStorage: StateStorage = {
   async getItem(name) {
     if (!isTauri()) return localStorage.getItem(name);
-    const db = await getDb();
-    const rows = await db.select<{ value: string }[]>("SELECT value FROM app_kv WHERE key = $1", [name]);
-    return rows[0]?.value ?? null;
+    await getDb();
+    await writeQueue.catch(() => undefined);
+    return invoke<string | null>("domain_storage_get", { name });
   },
   async setItem(name, value) {
     if (!isTauri()) {
       localStorage.setItem(name, value);
       return;
     }
-    const db = await getDb();
-    await db.execute(
-      "INSERT INTO app_kv (key, value, updated_at) VALUES ($1, $2, $3) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
-      [name, value, new Date().toISOString()],
-    );
+    await getDb();
+    writeQueue = writeQueue.catch(() => undefined).then(() => invoke<void>("domain_storage_set", { name, value }));
+    await writeQueue;
   },
   async removeItem(name) {
     if (!isTauri()) {
       localStorage.removeItem(name);
       return;
     }
-    const db = await getDb();
-    await db.execute("DELETE FROM app_kv WHERE key = $1", [name]);
+    await getDb();
+    writeQueue = writeQueue.catch(() => undefined).then(() => invoke<void>("domain_storage_remove", { name }));
+    await writeQueue;
   },
 };

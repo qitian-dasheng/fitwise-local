@@ -23,6 +23,14 @@ interface RestoreStartupReport {
   safetyCopyPath?: string | null;
 }
 
+interface DomainStorageStatus {
+  initialized: boolean;
+  persistVersion?: number | null;
+  revision?: number | null;
+  entityCount: number;
+  updatedAt?: string | null;
+}
+
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 const formatBytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 
@@ -43,6 +51,7 @@ export function SettingsPage() {
   const [credentialConfigured, setCredentialConfigured] = useState(false);
   const [credentialBusy, setCredentialBusy] = useState(false);
   const [restoreScheduled, setRestoreScheduled] = useState(false);
+  const [storageStatus, setStorageStatus] = useState<DomainStorageStatus | null>(null);
   const budget = aiBudgetState(aiSettings);
   const providerErrors = validateProviderSettings(aiSettings);
 
@@ -64,6 +73,13 @@ export function SettingsPage() {
       })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    void invoke<DomainStorageStatus>("get_domain_storage_status")
+      .then(setStorageStatus)
+      .catch(() => setStorageStatus(null));
+  }, [auditEventCount]);
 
   function exportJson() {
     const state = useAppStore.getState();
@@ -233,8 +249,8 @@ export function SettingsPage() {
           <div className="settings-list"><div><span>阶段体重</span><b>{profile.startWeightKg} → {profile.targetWeightKg} kg</b></div><div><span>每日热量</span><b>{profile.dailyCalories.min}–{profile.dailyCalories.max} kcal</b></div><div><span>蛋白质 / 纤维</span><b>{profile.proteinTargetG} g / {profile.fiberTargetG} g</b></div><div><span>设备</span><b>{profile.equipment.join("、")}</b></div></div>
         </section>
         <section className="card settings-section">
-          <div className="settings-title"><HardDrive/><div><h2>存储与附件</h2><p>结构化状态已进入 SQLite；附件体积统计、缩略图和 2 GB 提醒尚待接通。</p></div></div>
-          <div className="storage-bar"><i style={{width:"0%"}}/></div><div className="storage-legend"><span>结构化数据 <b>SQLite</b></span><span>审计事件 <b>{auditEventCount} 条</b></span></div>
+          <div className="settings-title"><HardDrive/><div><h2>存储与附件</h2><p>结构化状态由 Rust 事务拆分为 SQLite 领域实体；附件体积统计、缩略图和 2 GB 提醒尚待接通。</p></div></div>
+          <div className="storage-bar"><i style={{width:"0%"}}/></div><div className="storage-legend"><span>领域仓库 <b>{storageStatus?.initialized ? `修订 ${storageStatus.revision}` : "等待首次写入"}</b></span><span>实体 / 审计 <b>{storageStatus?.entityCount ?? 0} / {auditEventCount} 条</b></span></div>
         </section>
         <section className="card settings-section">
           <div className="settings-title"><LockKeyhole/><div><h2>数据库加密备份与恢复验证</h2><p>Argon2id + AES-256-GCM；口令不会被保存，忘记后无法恢复。附件打包与自动轮换尚未启用。</p></div></div>
