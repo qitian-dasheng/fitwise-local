@@ -257,7 +257,25 @@ async fn receive_upload(
         )
     })
     .await;
-    match saved {Ok(Ok(_))=>{},_=>return (StatusCode::BAD_REQUEST,Html(message_html("未保存：格式不支持、图片过大、会话结束或存储失败。请检查后重新提交；不会保存半份内容。"))).into_response()}
+    match saved {
+        Ok(Ok(_)) => {}
+        Ok(Err(error)) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Html(message_html(upload_failure_message(&error))),
+            )
+                .into_response()
+        }
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(message_html(
+                    "本机接收任务中断，未保存本次内容。请重新生成上传会话。",
+                )),
+            )
+                .into_response()
+        }
+    }
     let _ = context.app.emit("mobile-inbox-changed", ());
     (
         StatusCode::OK,
@@ -321,4 +339,40 @@ fn message_html(message: &str) -> String {
         "轻衡收件箱",
         &format!("<h1>{message}</h1><p>正式记录仍需要在电脑端检查和确认。</p>"),
     )
+}
+
+// Return only fixed public messages, not database errors, local paths, or text
+// supplied in an attachment. Never interpolate untrusted errors into HTML.
+fn upload_failure_message(error: &str) -> &'static str {
+    if error.contains("1600 万像素") {
+        "图片超过 1600 万像素，请先缩小图片再上传。本次内容未保存。"
+    } else if error.contains("20 MB") || error.contains("10000 字") {
+        "单次最多 8 个附件、合计 20 MB，文字最多 10000 字。请减少内容后重试；本次未保存。"
+    } else if error.contains("目前支持") {
+        "仅支持 PNG、JPEG、WebP 及 PDF 原件。HEIC 请先转换；修改后缀无效。本次内容未保存。"
+    } else if error.contains("会话") {
+        "上传会话已结束或网络不再可信，请在电脑重新生成二维码。本次内容未保存。"
+    } else if error.contains("解码") {
+        "图片损坏或无法读取，请重新导出为 PNG/JPEG 后上传。本次内容未保存。"
+    } else if error.contains("同一接收请求") {
+        "这一页面已提交过不同内容，请重新扫码打开上传页。本次改动未保存。"
+    } else {
+        "电脑存储或文件处理失败，未保存本次内容。请检查可用空间并在电脑端重试。"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn upload_errors_are_actionable_and_do_not_echo_private_or_html_content() {
+        assert!(upload_failure_message("图片超过 1600 万像素").contains("缩小"));
+        assert!(upload_failure_message("目前支持 PNG").contains("HEIC"));
+        assert!(upload_failure_message("上传会话已结束").contains("二维码"));
+        let html = message_html(upload_failure_message(
+            "<script>alert(1)</script> C:\\private.db",
+        ));
+        assert!(!html.contains("<script>"));
+        assert!(!html.contains("private.db"));
+    }
 }

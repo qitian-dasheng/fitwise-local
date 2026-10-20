@@ -20,19 +20,21 @@ export interface PeriodSummary {
 interface InventorySummary { items: InventoryLot[]; remainingCostCny: number }
 
 function useDomainQuery<T>(command: string, args: Record<string, string>, dependency: unknown) {
-  const [result, setResult] = useState<{ data?: T | null; error: string }>({ error: "" });
+  const [result, setResult] = useState<{ key?: string; data?: T | null; error: string }>({ error: "" });
   const serialized = JSON.stringify(args);
+  const key = command + serialized;
   useEffect(() => {
     if (!isTauriRuntime()) return;
     let disposed = false;
     void enqueueDomainCommand(async () => {
       await flushAppStorageWrites();
       return invoke<T | null>(command, JSON.parse(serialized));
-    }).then((data) => { if (!disposed) setResult({ data, error: "" }); })
-      .catch((cause) => { if (!disposed) setResult({ error: String(cause) }); });
+    }).then((data) => { if (!disposed) setResult({ key, data, error: "" }); })
+      .catch((cause) => { if (!disposed) setResult({ key, error: String(cause) }); });
     return () => { disposed = true; };
-  }, [command, serialized, dependency]);
-  return { ...result, loading: isTauriRuntime() && result.data === undefined && !result.error };
+  }, [command, serialized, dependency, key]);
+  const current = result.key === key ? result : { error: "", data: undefined };
+  return { ...current, loading: isTauriRuntime() && current.data === undefined && !current.error };
 }
 
 export function usePeriodSummary(start: string, end: string) {

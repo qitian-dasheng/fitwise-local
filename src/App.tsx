@@ -3,6 +3,7 @@ import { Component, lazy, Suspense, useEffect, useLayoutEffect, useState, type E
 import { useAppStore } from "./store/appStore";
 import { listen } from "@tauri-apps/api/event";
 import { notifyInputs, useInputReceipts } from "./data/artifacts";
+import { diaryToday } from "./domain/diary";
 
 const TodayPage = lazy(() => import("./pages/TodayPage").then((module) => ({ default: module.TodayPage })));
 const FoodPage = lazy(() => import("./pages/FoodPage").then((module) => ({ default: module.FoodPage })));
@@ -53,6 +54,21 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
 
 export default function App() {
   const [page, setPage] = useState("today");
+  const [date, setDate] = useState(diaryToday);
+  useEffect(() => {
+    let previousToday = diaryToday();
+    const tick = () => {
+      const nextToday = diaryToday();
+      if (previousToday !== nextToday) {
+        const oldToday = previousToday;
+        setDate(current => current === oldToday ? nextToday : current);
+        previousToday = nextToday;
+      }
+    };
+    const timer = window.setInterval(tick, 30000);
+    window.addEventListener("focus", tick);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", tick); };
+  }, []);
   const [collapsed, setCollapsed] = useState(false);
   const intake=useInputReceipts();
   const inboxCount = useAppStore((state) => state.inbox.filter((item) => item.status === "unreviewed").length)+intake.data.unreviewedCount;
@@ -71,12 +87,12 @@ export default function App() {
   }, [page]);
 
   const content = {
-    today: <TodayPage goTo={setPage} />,
-    food: <FoodPage />,
-    workout: <WorkoutPage />,
+    today: <TodayPage goTo={setPage} date={date} onDateChange={setDate} />,
+    food: <FoodPage date={date} onDateChange={setDate} />,
+    workout: <WorkoutPage date={date} onDateChange={setDate} />,
     inventory: <InventoryPage />,
     plan: <PlanPage />,
-    trends: <TrendsPage />,
+    trends: <TrendsPage date={date} onDateChange={setDate} />,
     inbox: <InboxPage />,
     assistant: <AssistantPage />,
     settings: <SettingsPage />,

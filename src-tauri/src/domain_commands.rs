@@ -338,6 +338,9 @@ fn consume_batch(
     if ratio <= 0.0 || ratio > 1.0 {
         return Err("进食比例必须大于 0 且不超过 1。".into());
     }
+    if (ratio * 10000.0 - (ratio * 10000.0).round()).abs() > 1e-7 {
+        return Err("比例最多支持百分比小数点后两位。".into());
+    }
     let ratio_is_estimated = payload
         .get("ratioIsEstimated")
         .and_then(Value::as_bool)
@@ -364,10 +367,10 @@ fn consume_batch(
                     .and_then(Value::as_f64)
                     .unwrap_or(0.0)
         });
-    if ratio > remaining + 0.0001 {
+    if ratio > remaining + 1e-8 {
         return Err(format!(
             "最多只能记录剩余整锅的 {}%。",
-            (remaining * 100.0).round()
+            (remaining * 10000.0).round() / 100.0
         ));
     }
     let recipe_id = batch_snapshot
@@ -383,7 +386,11 @@ fn consume_batch(
         .get("name")
         .and_then(Value::as_str)
         .unwrap_or("未命名菜谱");
-    let (now, date) = now_and_date();
+    let (now, today) = now_and_date();
+    let date = crate::record_commands::date(payload)?;
+    if date.as_str() < batch_snapshot["date"].as_str().unwrap_or(&today) || date > today {
+        return Err("进食日期不能早于制作日或晚于今天。".into());
+    }
     let next_remaining = round_ratio((remaining - ratio).max(0.0));
     let event_id = format!("{command_id}:consumption");
     let meal_id = format!("{command_id}:meal");
@@ -406,7 +413,7 @@ fn consume_batch(
             "ratioIsEstimated".into(),
             json!(previously_estimated || ratio_is_estimated),
         );
-        if next_remaining <= 0.0001 {
+        if next_remaining == 0.0 {
             batch.insert("status".into(), json!("closed"));
             batch.insert("closedAt".into(), json!(now));
         }
@@ -425,7 +432,7 @@ fn consume_batch(
         "date": date,
         "type": meal_type,
         "name": recipe_name,
-        "amountLabel": format!("整锅的 {}%{}", (ratio * 100.0).round(), if ratio_is_estimated { "（估算）" } else { "" }),
+        "amountLabel": format!("整锅的 {}%{}", (ratio * 10000.0).round() / 100.0, if ratio_is_estimated { "（估算）" } else { "" }),
         "nutrition": recipe.get("nutrition").cloned().unwrap_or_else(|| json!({})),
         "consumedRatio": ratio,
         "source": recipe.get("source").cloned().unwrap_or_else(|| json!("manual")),
@@ -653,6 +660,30 @@ fn execute_with_connection(
         });
     }
 
+    // A completed diary is a reviewed snapshot, not a permanent flag. Later food
+    // changes require another explicit confirmation before joining weekly averages.
+    if matches!(
+        request.kind.as_str(),
+        "add_meal" | "record_food_meal" | "consume_batch"
+    ) {
+        let date = crate::record_commands::date(&request.payload)?;
+        let mut reopened = false;
+        for item in array_mut(&mut state, "checkIns")? {
+            if item["date"].as_str() == Some(&date) && item["complete"] == true {
+                let item = item.as_object_mut().ok_or("每日状态格式无效。")?;
+                item.insert("complete".into(), json!(false));
+                item.remove("completedAt");
+                reopened = true;
+            }
+        }
+        if reopened {
+            array_mut(&mut state, "auditEvents")?.push(json!({
+                "id": format!("{}:reopen", request.command_id), "eventType": "diet_day_reopened",
+                "entityType": "diary", "payload": { "date": date, "commandId": request.command_id },
+                "createdAt": Utc::now().to_rfc3339(),
+            }));
+        }
+    }
     let envelope = serde_json::to_string(&json!({
         "state": Value::Object(state.clone()),
         "version": version,
@@ -714,6 +745,277 @@ mod tests {
 
     fn food_payload() -> Value {
         json!({"input":{"name":"燕麦","brand":"example","measurementBasis":"packaged","basis":{"quantity":100,"unit":"g"},"energyUnit":"kcal","nutrients":{"calories":400,"protein":12,"fat":0},"conversions":[{"unit":"package","quantity":1,"basisQuantity":200}],"source":"label"}})
+    }
+
+    #[test]
+    fn whole_manual_day_survives_restart_and_late_food_requires_review() {
+        let directory =
+            std::env::temp_dir().join(format!("fitwise-whole-day-{}", rand::random::<u64>()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("fitwise.db");
+        let mut connection = Connection::open(&path).unwrap();
+        let today = now_and_date().1;
+        let mut initial: Value = serde_json::from_str(&bootstrap()).unwrap();
+        initial["state"]["inventory"] = json!([]);
+        let food = execute_with_connection(
+            &mut connection,
+            request(
+                "whole-day-food",
+                "save_food_definition",
+                food_payload(),
+                Some(initial.to_string()),
+            ),
+        )
+        .unwrap();
+        assert_eq!(food.state["meals"], json!([]));
+        let breakfast = json!({"date":today,"type":"breakfast","entries":[{"foodVersionId":"food-version-whole-day-food","quantity":50,"unit":"g"}]});
+        execute_with_connection(
+            &mut connection,
+            request(
+                "whole-day-breakfast",
+                "record_food_meal",
+                breakfast.clone(),
+                None,
+            ),
+        )
+        .unwrap();
+        let order = execute_with_connection(&mut connection, request("whole-day-order", "add_purchase", json!({"name":"豆腐","foodId":"tofu","platform":"pinduoduo","amount":1,"unit":"bag","packaging":{"count":1,"container":"bag","contentAmount":400,"contentUnit":"g"},"packagingConfirmed":true,"priceCny":4,"status":"ordered","confidence":"high"}), None)).unwrap();
+        assert_eq!(order.state["inventory"], json!([]));
+        let purchase_id = order.state["purchases"][0]["id"].clone();
+        execute_with_connection(
+            &mut connection,
+            request(
+                "whole-day-receipt",
+                "receive_purchase",
+                json!({"purchaseId":purchase_id}),
+                None,
+            ),
+        )
+        .unwrap();
+        let cook = execute_with_connection(
+            &mut connection,
+            request(
+                "whole-day-cook",
+                "prepare_recipe",
+                json!({"recipeVersionId":"recipe-1"}),
+                None,
+            ),
+        )
+        .unwrap();
+        let batch_id = cook.result["batchId"].clone();
+        assert_eq!(cook.state["inventory"][0]["remainingAmount"], 100.0);
+        assert_eq!(cook.state["meals"].as_array().unwrap().len(), 1);
+        for (id, meal_type, ratio) in [
+            ("whole-day-lunch", "lunch", 0.35),
+            ("whole-day-dinner", "dinner", 0.4),
+        ] {
+            execute_with_connection(
+                &mut connection,
+                request(
+                    id,
+                    "consume_batch",
+                    json!({"batchId":batch_id,"mealType":meal_type,"ratio":ratio,"date":today}),
+                    None,
+                ),
+            )
+            .unwrap();
+        }
+        let finished = execute_with_connection(
+            &mut connection,
+            request(
+                "whole-day-waste",
+                "discard_batch",
+                json!({"batchId":batch_id,"reason":"discarded"}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(finished.state["batches"][0]["consumedRatio"], 0.75);
+        assert_eq!(finished.state["wasteEvents"][0]["ratio"], 0.25);
+        assert_eq!(
+            finished.state["inventoryMovements"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        execute_with_connection(
+            &mut connection,
+            request(
+                "whole-day-weight",
+                "add_weight",
+                json!({"date":today,"weightKg":82.5}),
+                None,
+            ),
+        )
+        .unwrap();
+        execute_with_connection(
+            &mut connection,
+            request(
+                "whole-day-workout",
+                "add_workout",
+                json!({"date":today,"name":"步行","type":"步行","durationMinutes":22}),
+                None,
+            ),
+        )
+        .unwrap();
+        execute_with_connection(
+            &mut connection,
+            request(
+                "whole-day-ratings",
+                "set_checkin",
+                json!({"date":today,"hunger":3,"energy":4}),
+                None,
+            ),
+        )
+        .unwrap();
+        let complete = json!({"date":today,"complete":true});
+        execute_with_connection(
+            &mut connection,
+            request(
+                "whole-day-complete",
+                "set_day_complete",
+                complete.clone(),
+                None,
+            ),
+        )
+        .unwrap();
+        let summary = crate::domain_queries::period_summary(&connection, &today, &today).unwrap();
+        assert_eq!(summary["completedDayCalorieAverage"], 800.0);
+        assert_eq!(summary["workoutMinutes"], 22.0);
+        assert_eq!(summary["latestWeightKg"], 82.5);
+        drop(connection);
+        let mut connection = Connection::open(&path).unwrap();
+        let replay = execute_with_connection(
+            &mut connection,
+            request("whole-day-breakfast", "record_food_meal", breakfast, None),
+        )
+        .unwrap();
+        assert!(replay.replayed);
+        assert_eq!(replay.state["meals"].as_array().unwrap().len(), 3);
+        assert_eq!(replay.state["checkIns"][0]["complete"], true);
+        let late = json!({"date":today,"type":"snack","name":"临时外食","amountLabel":"一份","calories":100,"protein":0});
+        let reopened = execute_with_connection(
+            &mut connection,
+            request("whole-day-late", "add_meal", late.clone(), None),
+        )
+        .unwrap();
+        assert_eq!(reopened.state["checkIns"][0]["complete"], false);
+        assert_eq!(reopened.state["checkIns"][0]["hunger"], 3.0);
+        assert!(
+            crate::domain_queries::period_summary(&connection, &today, &today).unwrap()
+                ["completedDayCalorieAverage"]
+                .is_null()
+        );
+        assert_eq!(reopened.state["inventory"][0]["remainingAmount"], 100.0);
+        execute_with_connection(
+            &mut connection,
+            request("whole-day-reconfirm", "set_day_complete", complete, None),
+        )
+        .unwrap();
+        // A delayed retry must not reopen the newly reviewed day or add a second meal.
+        assert!(
+            execute_with_connection(
+                &mut connection,
+                request("whole-day-late", "add_meal", late, None)
+            )
+            .unwrap()
+            .replayed
+        );
+        assert_eq!(
+            crate::domain_queries::period_summary(&connection, &today, &today).unwrap()
+                ["completedDayCalorieAverage"],
+            900.0
+        );
+        drop(connection);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn tiny_remaining_batch_can_be_finished_without_overcount_or_silent_rounding() {
+        let mut connection = connection();
+        let prepared = execute_with_connection(
+            &mut connection,
+            request(
+                "tiny-cook",
+                "prepare_recipe",
+                json!({"recipeVersionId":"recipe-1"}),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        let batch_id = prepared.result["batchId"].clone();
+        let first = execute_with_connection(
+            &mut connection,
+            request(
+                "tiny-consume-first",
+                "consume_batch",
+                json!({"batchId":batch_id,"mealType":"lunch","ratio":0.9999}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(first.state["batches"][0]["status"], "open");
+        assert_eq!(first.state["batches"][0]["remainingRatio"], 0.0001);
+        let before = load_envelope(&connection).unwrap();
+        for (id, ratio) in [("tiny-over", 0.0002), ("tiny-round", 0.00001)] {
+            assert!(execute_with_connection(
+                &mut connection,
+                request(
+                    id,
+                    "consume_batch",
+                    json!({"batchId":batch_id,"mealType":"dinner","ratio":ratio}),
+                    None
+                )
+            )
+            .is_err());
+            assert_eq!(load_envelope(&connection).unwrap(), before);
+        }
+        let result = execute_with_connection(
+            &mut connection,
+            request(
+                "tiny-finish",
+                "consume_batch",
+                json!({"batchId":batch_id,"mealType":"dinner","ratio":0.0001}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(result.state["batches"][0]["status"], "closed");
+        assert_eq!(result.state["batches"][0]["consumedRatio"], 1.0);
+        assert_eq!(result.state["batches"][0]["remainingRatio"], 0.0);
+        assert!(result.state["meals"][1]["amountLabel"]
+            .as_str()
+            .unwrap()
+            .contains("0.01%"));
+    }
+
+    #[test]
+    fn batch_backfill_is_date_checked_and_reopens_only_its_own_day() {
+        let mut connection = connection();
+        let today = now_and_date().1;
+        let yesterday = (chrono::NaiveDate::parse_from_str(&today, "%Y-%m-%d").unwrap()
+            - chrono::Days::new(1))
+        .to_string();
+        let mut initial: Value = serde_json::from_str(&bootstrap()).unwrap();
+        initial["state"]["checkIns"] =
+            json!([{"date":yesterday,"complete":true},{"date":today,"complete":true}]);
+        initial["state"]["batches"] = json!([{"id":"historical-batch","recipeVersionId":"recipe-1","date":yesterday,"status":"open","remainingRatio":1,"consumedRatio":0,"wastedRatio":0}]);
+        let bad = json!({"batchId":"historical-batch","mealType":"lunch","ratio":0.25,"date":"2000-01-01"});
+        assert!(execute_with_connection(
+            &mut connection,
+            request(
+                "backfill-bad",
+                "consume_batch",
+                bad,
+                Some(initial.to_string())
+            )
+        )
+        .is_err());
+        let result = execute_with_connection(&mut connection, request("backfill-good", "consume_batch", json!({"batchId":"historical-batch","mealType":"dinner","ratio":0.25,"date":yesterday}), Some(initial.to_string()))).unwrap();
+        assert_eq!(result.state["meals"][0]["date"], yesterday);
+        assert_eq!(result.state["checkIns"][0]["complete"], false);
+        assert_eq!(result.state["checkIns"][1]["complete"], true);
     }
 
     #[test]

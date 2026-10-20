@@ -1,4 +1,4 @@
-import { format } from "date-fns";
+import { diaryToday } from "../domain/diary";
 import { ArrowLeft, Plus, Search, Star, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useFoodLibrarySearch, useFoodPortionPreview } from "../data/foodLibrary";
@@ -12,14 +12,14 @@ const mealLabels = { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", sna
 const nutrientLabels = { calories: "能量", protein: "蛋白质", carbohydrates: "碳水化合物", fat: "脂肪", fiber: "膳食纤维", sugar: "糖", sodium: "钠" };
 type BasketEntry = FoodMealInput["entries"][number] & { name: string; facts: NutritionFacts };
 
-export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast" }: { onClose: () => void; onManual: () => void; initialType?: FoodMealInput["type"] }) {
+export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast", initialDate = diaryToday(), onRecorded }: { onClose: () => void; onManual: () => void; initialType?: FoodMealInput["type"]; initialDate?: string; onRecorded?: (date: string) => void }) {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<"all" | "recent" | "favorites">("all");
   const [selected, setSelected] = useState<FoodLibraryItem | null>(null);
   const [quantity, setQuantity] = useState("100");
   const [unit, setUnit] = useState<FoodUnit>("g");
   const [type, setType] = useState(initialType);
-  const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [date, setDate] = useState(initialDate);
   const [basket, setBasket] = useState<BasketEntry[]>([]);
   const [editing, setEditing] = useState<FoodLibraryItem | "new" | null>(null);
   const [notice, setNotice] = useState("");
@@ -63,9 +63,9 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast" 
         <p className="form-hint">缺少“个／份／包装”换算时，先修订规格；生重、熟重及可食部分分别建档。</p>
       </> : <p className="form-hint">选择一个食物，查看营养和摄入量换算。</p>}</div></div>
       <div className="library-basket"><h3>本次待确认 · {basket.length} 项</h3>{basket.map((entry, index) => <div className="basket-row" key={index}><div><strong>{entry.name}</strong><span>{entry.quantity}{foodUnitLabels[entry.unit]} · {nutrientLabel(entry.facts, "calories")} kcal</span></div><button className="icon-button" aria-label={`移除${entry.name}`} onClick={() => setBasket((items) => items.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={16}/></button></div>)}
-        <div className="form-grid"><label><span>日期</span><input type="date" value={date} onChange={(event) => setDate(event.target.value)}/></label><label><span>餐次</span><select value={type} onChange={(event) => setType(event.target.value as FoodMealInput["type"])}>{Object.entries(mealLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
+        <div className="form-grid"><label><span>日期</span><input type="date" required max={diaryToday()} value={date} onChange={(event) => setDate(event.target.value)}/></label><label><span>餐次</span><select value={type} onChange={(event) => setType(event.target.value as FoodMealInput["type"])}>{Object.entries(mealLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
         {action.message && <p className="form-error" role="alert">{action.message}</p>}
-        <button className="button primary wide" disabled={action.busy || !basket.length} onClick={async () => { const input: FoodMealInput = { date, type, entries: basket.map(({ foodVersionId, quantity, unit }) => ({ foodVersionId, quantity, unit })) }; const result = await action.run(JSON.stringify(input), (id) => state.recordFoodMeal(input, id)); if (!result.error) onClose(); }}>{action.busy ? "正在保存…" : `确认写入 ${basket.length} 项食物`}</button>
+        <button className="button primary wide" disabled={action.busy || !basket.length || !date || date > diaryToday()} onClick={async () => { const input: FoodMealInput = { date, type, entries: basket.map(({ foodVersionId, quantity, unit }) => ({ foodVersionId, quantity, unit })) }; const result = await action.run(JSON.stringify(input), (id) => state.recordFoodMeal(input, id)); if (!result.error) { onRecorded?.(date); onClose(); } }}>{action.busy ? "正在保存…" : `确认写入 ${basket.length} 项食物`}</button>
       </div>
     </fieldset>}
   </div></Modal>;

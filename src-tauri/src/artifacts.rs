@@ -4,7 +4,11 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::{fs, io::Cursor, path::Path};
+use std::{
+    fs,
+    io::{Cursor, Write},
+    path::Path,
+};
 use tauri::{AppHandle, Manager};
 
 pub(crate) const MAX_INPUT_BYTES: usize = 20 * 1024 * 1024;
@@ -294,6 +298,59 @@ pub async fn read_artifact_preview(
         .map_err(err)?
 }
 
+fn export_original(connection: &Connection, id: &str, output: &Path) -> Result<(), String> {
+    if !output.is_absolute() {
+        return Err("请选择绝对保存路径。".into());
+    }
+    let row: Option<(Vec<u8>, String)> = connection.query_row(
+        "SELECT original,mime FROM input_artifact_objects WHERE id=?1 AND original IS NOT NULL AND trashed_at IS NULL AND purged_at IS NULL",
+        [id], |row| Ok((row.get(0)?, row.get(1)?)),
+    ).optional().map_err(err)?;
+    let (bytes, mime) = row.ok_or("原件不存在、已清除或在回收站中，请先恢复。")?;
+    let extension = output
+        .extension()
+        .and_then(|v| v.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let valid = match mime.as_str() {
+        "image/png" => extension == "png",
+        "image/jpeg" => matches!(extension.as_str(), "jpg" | "jpeg"),
+        "image/webp" => extension == "webp",
+        "application/pdf" => extension == "pdf",
+        _ => false,
+    };
+    if !valid {
+        return Err("保存扩展名必须与原件格式一致。".into());
+    }
+    if hash(&bytes) != id {
+        return Err("原件校验失败，未导出。".into());
+    }
+    // Never overwrite a database or any other existing file, including through a
+    // symlink. The user explicitly chooses a new output in the native save dialog.
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(output)
+        .map_err(|e| format!("无法新建文件（不会覆盖已有文件，请换一个文件名）：{e}"))?;
+    file.write_all(&bytes)
+        .and_then(|_| file.sync_all())
+        .map_err(|e| format!("导出未完整写入，请检查并移除目标处的残缺副本后重试：{e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn export_artifact_original(
+    app: AppHandle,
+    id: String,
+    output_path: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        export_original(&open(&app)?, &id, Path::new(&output_path))
+    })
+    .await
+    .map_err(err)?
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Mask {
     x: f64,
@@ -543,6 +600,30 @@ mod tests {
         let c = Connection::open_in_memory().unwrap();
         crate::domain_store::ensure_repository_schema(&c).unwrap();
         c
+    }
+    #[test]
+    fn export_preserves_exact_bytes_rejects_overwrite_wrong_extension_and_trash() {
+        let mut c = conn();
+        receive(&mut c, "export-request-001", "", vec![file()], "desktop").unwrap();
+        let id = hash(&png());
+        let directory =
+            std::env::temp_dir().join(format!("fitwise-export-{}", rand::random::<u64>()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let output = directory.join("original.png");
+        export_original(&c, &id, &output).unwrap();
+        assert_eq!(std::fs::read(&output).unwrap(), png());
+        assert!(export_original(&c, &id, &output).is_err());
+        assert_eq!(std::fs::read(&output).unwrap(), png());
+        assert!(export_original(&c, &id, &directory.join("wrong.exe")).is_err());
+        assert!(!directory.join("wrong.exe").exists());
+        c.execute(
+            "UPDATE input_artifact_objects SET trashed_at='2026-10-20' WHERE id=?1",
+            [&id],
+        )
+        .unwrap();
+        assert!(export_original(&c, &id, &directory.join("trashed.png")).is_err());
+        assert!(!directory.join("trashed.png").exists());
+        std::fs::remove_dir_all(directory).unwrap();
     }
     #[test]
     fn intake_deduplicates_bytes_but_preserves_receipts_and_retry_identity() {

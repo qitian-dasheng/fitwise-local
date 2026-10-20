@@ -25,6 +25,20 @@ export function ImportInputModal({onClose}:{onClose:()=>void}){
   </form></Modal>;
 }
 interface Mask {x:number;y:number;width:number;height:number}
+export function ExportArtifactButton({item}:{item:InputReceipt}) {
+  const [busy,setBusy]=useState(false);const [message,setMessage]=useState("");
+  return <div><button type="button" className="button secondary small" disabled={busy||!item.artifactId||!!item.trashedAt||!!item.purgedAt} onClick={async()=>{
+    if(busy||!item.artifactId)return;setBusy(true);setMessage("");
+    try {
+      const extension=item.mime==="image/jpeg"?"jpg":item.mime==="image/webp"?"webp":item.mime==="application/pdf"?"pdf":"png";
+      const {save}=await import("@tauri-apps/plugin-dialog");
+      const outputPath=await save({title:"原件另存为（未遮挡，不会覆盖已有文件）",defaultPath:`轻衡原件.${extension}`,filters:[{name:"原件",extensions:[extension]}]});
+      if(!outputPath)return;
+      await invoke("export_artifact_original",{id:item.artifactId,outputPath});
+      setMessage("原件已另存。本文件未遮挡、未加密，请妥善保管。");
+    }catch(e){setMessage(String(e));}finally{setBusy(false);}
+  }}>{busy?"正在导出…":"另存原件（未遮挡）"}</button>{message&&<p role="status" className="form-hint">{message}</p>}</div>;
+}
 export function ArtifactPrivacyModal({item,onClose}:{item:InputReceipt;onClose:()=>void}){
   const [masks,setMasks]=useState<Mask[]>([]);const [start,setStart]=useState<{x:number;y:number}|null>(null);const [pending,setPending]=useState<Mask|null>(null);const [hash,setHash]=useState(item.privacyHash??"");const [showSaved,setShowSaved]=useState(!!item.privacyHash);const [busy,setBusy]=useState(false);const [error,setError]=useState("");const [confirmed,setConfirmed]=useState(false);
   const image=isTauriRuntime()&&!!item.mime?.startsWith("image/")&&!item.purgedAt&&!item.trashedAt;
@@ -33,6 +47,7 @@ export function ArtifactPrivacyModal({item,onClose}:{item:InputReceipt;onClose:(
   function rect(a:{x:number;y:number},b:{x:number;y:number}):Mask{return{x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),width:Math.abs(a.x-b.x),height:Math.abs(a.y-b.y)};}
   const text=redactSensitiveText(item.note);
   return <Modal title="本地隐私预览与遮挡" onClose={()=>{if(!busy)onClose();}}><div className="privacy-preview artifact-editor"><p className="library-notice">尚未发送云端。遮挡仅生成本地派生图，原件保留；不会自动判断敏感信息是否遮挡完整。</p>
+    {item.artifactId&&!item.trashedAt&&!item.purgedAt&&<ExportArtifactButton item={item}/>}
     {image&&<><div className="button-row"><button className="button secondary small" disabled={busy} onClick={()=>{setShowSaved(false);setMasks([]);setConfirmed(false);}}>重新画遮挡区域</button><button className="button secondary small" disabled={busy||showSaved||!masks.length} onClick={()=>setMasks(v=>v.slice(0,-1))}>撤销最后一块</button>{hash&&<button className="button secondary small" disabled={busy} onClick={()=>setShowSaved(true)}>查看已保存遮挡图</button>}</div><p className="form-hint">拖动框选头像、昵称、二维码、地址和订单号。使用不可逆黑块覆盖，不是可恢复的模糊。最多 40 块。</p>
     {url&&<div className={`mask-canvas ${showSaved?"readonly":""}`} onPointerDown={e=>{if(showSaved||busy||masks.length>=40)return;e.currentTarget.setPointerCapture?.(e.pointerId);setStart(point(e));setPending(null);}} onPointerMove={e=>{if(start)setPending(rect(start,point(e)));}} onPointerUp={e=>{if(!start)return;const area=rect(start,point(e));if(area.width>.002&&area.height>.002)setMasks(v=>[...v,area]);setStart(null);setPending(null);setConfirmed(false);}} onPointerCancel={()=>{setStart(null);setPending(null);}}><img src={url} alt={showSaved?"已保存的隐私遮挡图":"本地原件预览，拖动可添加遮挡"} draggable={false}/>{!showSaved&&[...masks,...pending?[pending]:[]].map((m,i)=><span key={i} style={{left:`${m.x*100}%`,top:`${m.y*100}%`,width:`${m.width*100}%`,height:`${m.height*100}%`}}/>)}</div>}
     {!showSaved&&<button className="button primary" disabled={busy||!masks.length||!!start} onClick={async()=>{setBusy(true);setError("");try{const result=await invoke<string>("save_artifact_privacy",{id:item.artifactId,masks});setHash(result);setShowSaved(true);notifyInputs();}catch(e){setError(String(e));}finally{setBusy(false);}}}>{busy?"正在生成…":`保存 ${masks.length} 块遮挡并生成预览`}</button>}</>}

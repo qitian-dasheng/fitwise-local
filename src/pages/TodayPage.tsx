@@ -1,5 +1,7 @@
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
+import { diaryToday, isDemoPlan, shiftDiaryDate, type DiaryDateProps } from "../domain/diary";
+import { DiaryDateControl } from "../components/DiaryDateControl";
 import { ArrowRight, Check, Dumbbell, Plus, Scale, Sparkles, Utensils, Wheat } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -13,7 +15,7 @@ import { usePeriodSummary } from "../data/domainQueries";
 
 const mealLabels = { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", snack: "加餐" } as const;
 
-export function TodayPage({ goTo }: { goTo: (page: string) => void }) {
+export function TodayPage({ goTo, date = diaryToday(), onDateChange }: { goTo: (page: string) => void } & DiaryDateProps) {
   const [weightOpen, setWeightOpen] = useState(false);
   const [weight, setWeight] = useState("");
   const action = useConfirmedAction();
@@ -26,15 +28,15 @@ export function TodayPage({ goTo }: { goTo: (page: string) => void }) {
   const plans = useAppStore((state) => state.plans);
   const addWeight = useAppStore((state) => state.addWeight);
   const setCheckIn = useAppStore((state) => state.setCheckIn);
-  const toggleDayComplete = useAppStore((state) => state.toggleDayComplete);
-  const today = format(new Date(), "yyyy-MM-dd");
+  const setDayComplete = useAppStore((state) => state.setDayComplete);
+  const today = date;
   const period = usePeriodSummary(today, today);
   const todayMeals = meals.filter((meal) => meal.date === today);
   const summary = period.data?.days[0] ?? summarizeMeals(todayMeals);
   const todayWorkouts = workouts.filter((item) => item.date === today);
   const todayCheck = checkIns.find((item) => item.date === today);
   const selectedPlan = plans.find((item) => item.status === "selected") ?? plans[0];
-  const currentMeasurements = activeMeasurements(measurements);
+  const currentMeasurements = activeMeasurements(measurements).filter(item => item.date <= date);
   const weightData = currentMeasurements.slice(-14).map((item) => ({ date: item.date.slice(5), weight: item.weightKg }));
   const latestWeight = period.data?.latestWeightKg ?? currentMeasurements.at(-1)?.weightKg ?? profile.startWeightKg;
   const expiringCount = useMemo(() => inventory.filter((item) => item.remainingAmount > 0 && item.expiresAt && new Date(item.expiresAt).getTime() - Date.now() < 3 * 864e5).length, [inventory]);
@@ -44,22 +46,24 @@ export function TodayPage({ goTo }: { goTo: (page: string) => void }) {
   return (
     <div className="page">
       <PageHeader
-        eyebrow={format(new Date(), "yyyy年M月d日 EEEE", { locale: zhCN })}
-        title={`早上好，${profile.name}`}
+        eyebrow={format(new Date(`${date}T12:00:00+08:00`), "yyyy年M月d日 EEEE", { locale: zhCN })}
+        title={date === diaryToday() ? `你好，${profile.name}` : "历史日报"}
         description="先记录事实，再让趋势说话。今天的建议不会因为一次波动而改变。"
         action={
-          <button className={todayCheck?.complete ? "button success" : "button primary"} disabled={action.busy} onClick={() => { void action.run(`complete:${today}:${!todayCheck?.complete}`, (id) => toggleDayComplete(id)); }}>
-            <Check size={17} /> {todayCheck?.complete ? "今日已完成" : "完成今日记录"}
+          <button className={todayCheck?.complete ? "button success" : "button primary"} disabled={action.busy || (!todayCheck?.complete && !todayMeals.length)} onClick={() => { void action.run(`complete:${today}:${!todayCheck?.complete}`, (id) => setDayComplete(date, !todayCheck?.complete, id)); }}>
+            <Check size={17} /> {todayCheck?.complete ? "已完成 · 点击重新核对" : "确认该日饮食完整"}
           </button>
         }
       />
+      <DiaryDateControl date={date} onChange={onDateChange}/>
+      <p className="form-hint">确认前请核对所有餐次、饮料及调味料；新增餐食后需重新确认。未知热量日不进入完整日均值。</p>
       {action.message && <div className="settings-notice card" role="alert">{action.message}</div>}
 
       <section className="hero-grid">
         <article className="card nutrition-hero">
           <div className="card-heading">
             <div>
-              <p className="eyebrow">今日摄入</p>
+              <p className="eyebrow">所选日摄入</p>
               <h2>{Math.round(summary.totals.calories)} 千卡</h2>
             </div>
             <span className="status-pill neutral">目标 {profile.dailyCalories.min}–{profile.dailyCalories.max}</span>
@@ -104,7 +108,7 @@ export function TodayPage({ goTo }: { goTo: (page: string) => void }) {
       <section className="content-grid">
         <article className="card meals-card">
           <div className="card-heading compact">
-            <div><p className="eyebrow">饮食日记</p><h2>今天吃了什么</h2></div>
+            <div><p className="eyebrow">饮食日记</p><h2>所选日吃了什么</h2></div>
             <button className="text-button" onClick={() => goTo("food")}>记录饮食 <ArrowRight size={16} /></button>
           </div>
           <div className="meal-list">
@@ -136,32 +140,33 @@ export function TodayPage({ goTo }: { goTo: (page: string) => void }) {
           </article>
 
           <article className="card quick-status">
-            <div className="quick-item"><Dumbbell size={19} /><span>今日运动</span><b>{(period.data?.workoutMinutes ?? todayWorkouts.reduce((sum, item) => sum + item.durationMinutes, 0)) || "未记录"}{period.data?.workoutMinutes || todayWorkouts.length ? " 分钟" : ""}</b></div>
+            <div className="quick-item"><Dumbbell size={19} /><span>所选日运动</span><b>{(period.data?.workoutMinutes ?? todayWorkouts.reduce((sum, item) => sum + item.durationMinutes, 0)) || "未记录"}{period.data?.workoutMinutes || todayWorkouts.length ? " 分钟" : ""}</b></div>
             <div className="quick-item"><Wheat size={19} /><span>临期库存</span><b className={expiringCount ? "warning-text" : ""}>{expiringCount} 项</b></div>
           </article>
         </div>
       </section>
 
-      <section className="card tomorrow-strip">
-        <div className="tomorrow-date"><span>明日</span><strong>{format(new Date(Date.now() + 864e5), "MM.dd")}</strong></div>
+      {selectedPlan && <section className="card tomorrow-strip">
+        <div className="tomorrow-date"><span>明日</span><strong>{shiftDiaryDate(diaryToday(), 1).slice(5).replace("-", ".")}</strong></div>
         <div className="tomorrow-main">
-          <p className="eyebrow">候选菜单 · 库存优先</p>
+          <p className="eyebrow">{isDemoPlan(selectedPlan.id) ? "演示菜单 · 非实时建议" : "候选菜单 · 尚需核对"}</p>
           <h3>{selectedPlan.title}</h3>
-          <p>{selectedPlan.description}</p>
+          <p>{isDemoPlan(selectedPlan.id) ? "当前尚未接入动态菜单；示例不代表你的实际库存或营养建议。" : selectedPlan.description}</p>
         </div>
-        <div className="tomorrow-metrics"><span><b>{selectedPlan.inventoryCoverage}%</b> 库存覆盖</span><span><b>{selectedPlan.cookingMinutes}</b> 分钟</span></div>
-        <button className="button secondary" onClick={() => goTo("plan")}>查看 3 个方案</button>
-      </section>
+
+        <button className="button secondary" onClick={() => goTo("plan")}>查看菜单状态</button>
+      </section>}
 
       <section className="checkin-bar card">
-        <div><p className="eyebrow">主观状态</p><h3>今天感觉怎么样？</h3></div>
-        <Rating label="饥饿感" disabled={action.busy} value={todayCheck?.hunger} onChange={(hunger) => { void action.run(`hunger:${today}:${hunger}`, (id) => setCheckIn({ hunger }, id)); }} />
-        <Rating label="精力" disabled={action.busy} value={todayCheck?.energy} onChange={(energy) => { void action.run(`energy:${today}:${energy}`, (id) => setCheckIn({ energy }, id)); }} />
+        <div><p className="eyebrow">主观状态</p><h3>这一天感觉怎么样？</h3></div>
+        <Rating label="饥饿感" disabled={action.busy} value={todayCheck?.hunger} onChange={(hunger) => { void action.run(`hunger:${today}:${hunger}`, (id) => setCheckIn({ hunger, date }, id)); }} />
+        <Rating label="精力" disabled={action.busy} value={todayCheck?.energy} onChange={(energy) => { void action.run(`energy:${today}:${energy}`, (id) => setCheckIn({ energy, date }, id)); }} />
       </section>
 
       {weightOpen && (
         <Modal title="记录晨起体重" onClose={() => { if (!action.busy) setWeightOpen(false); }}>
           <form className="form" onSubmit={async (event) => { event.preventDefault(); const value = Number(weight); const result = await action.run(`weight:${today}:${value}`, (id) => addWeight(value, today, id)); if (!result.error) { setWeightOpen(false); setWeight(""); if (result.isOutlier) action.setMessage("本次体重与最近记录相差较大，已保留原始值，请复核称量。 "); } }}>
+            <p className="form-hint">晨重日期：{date}。需要补录时，先切换日报日期。</p>
             <label><span>体重（kg）</span><input autoFocus inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} placeholder="例如 82.6" /></label>
             <p className="form-hint">相同日期重复记录会把旧值标为“已修订”并保留审计，不会静默删除；异常波动也不会自动删除。</p>
             {action.message && <p className="form-error" role="alert">{action.message}</p>}

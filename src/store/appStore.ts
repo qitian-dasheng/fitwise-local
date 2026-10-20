@@ -21,8 +21,10 @@ import { enqueueDomainCommand, executeDomainCommand, type DomainCommandKind } fr
 import { appStorage, flushAppStorageWrites, isTauriRuntime, suppressNextAppStorageWrite } from "../data/storage";
 import { foodMealEntries, saveFoodInState } from "../domain/foodLibrary";
 import { applyInventoryOperation } from "../domain/purchases";
+import { diaryToday, ratioPercent } from "../domain/diary";
 
 const uid = () => crypto.randomUUID();
+const reopenedCheckIns = (state: AppState, date: string) => state.checkIns.map(item => item.date === date && item.complete ? { ...item, complete: false, completedAt: undefined } : item);
 export interface ActionResult { error?: string; duplicate?: boolean; isOutlier?: boolean; foodId?: string; foodVersionId?: string; mealIds?: string[] }
 
 interface AppActions {
@@ -36,10 +38,12 @@ interface AppActions {
     calories: number;
     protein: number;
     fiber?: number;
+    date?: string;
   }, commandId?: string) => Promise<ActionResult>;
   addWeight: (weightKg: number, date?: string, commandId?: string) => Promise<ActionResult>;
   addWorkout: (input: Omit<WorkoutSession, "id" | "createdAt">, commandId?: string) => Promise<ActionResult>;
-  setCheckIn: (input: { hunger?: number; energy?: number }, commandId?: string) => Promise<ActionResult>;
+  setCheckIn: (input: { hunger?: number; energy?: number; date?: string }, commandId?: string) => Promise<ActionResult>;
+  setDayComplete: (date: string, complete: boolean, commandId?: string) => Promise<ActionResult>;
   toggleDayComplete: (commandId?: string) => Promise<ActionResult>;
   addPurchase: (draft: Omit<PurchaseDraft, "id">, commandId?: string) => Promise<ActionResult>;
   revisePurchase: (purchaseId:string,draft:Omit<PurchaseDraft,"id">,commandId?:string)=>Promise<ActionResult>;
@@ -56,7 +60,7 @@ interface AppActions {
   setAiSettings: (settings: Partial<AiSettings>, commandId?: string) => Promise<ActionResult>;
   recordAiUsage: (estimatedCostCny: number, commandId?: string) => Promise<ActionResult>;
   prepareRecipe: (recipeVersionId: string, commandId?: string) => Promise<{ shortage: string[]; batchId?: string }>;
-  consumeBatch: (input: { batchId: string; mealType: MealType; ratio: number; ratioIsEstimated: boolean; commandId?: string }) => Promise<{ error?: string }>;
+  consumeBatch: (input: { batchId: string; mealType: MealType; ratio: number; ratioIsEstimated: boolean; commandId?: string; date?: string }) => Promise<{ error?: string }>;
   discardBatchRemainder: (batchId: string, reason?: "discarded" | "spoiled" | "other", commandId?: string) => Promise<{ error?: string }>;
   resetDemo: () => Promise<void>;
 }
@@ -98,7 +102,7 @@ export const useAppStore = create<AppStore>()(
         if (isTauriRuntime()) return submit("record_food_meal", { ...input }, commandId);
         try {
           const entries = foodMealEntries(get(), input, commandId);
-          set((state) => ({ meals: [...state.meals, ...entries], auditEvents: [...state.auditEvents, { id: `${commandId}:audit`, eventType: "record_food_meal", entityType: "food_library", payload: { commandId, mealIds: entries.map((item) => item.id) }, createdAt: new Date().toISOString() }] }));
+          set((state) => ({ checkIns: reopenedCheckIns(state, input.date), meals: [...state.meals, ...entries], auditEvents: [...state.auditEvents, { id: `${commandId}:audit`, eventType: "record_food_meal", entityType: "food_library", payload: { commandId, mealIds: entries.map((item) => item.id) }, createdAt: new Date().toISOString() }] }));
           return { mealIds: entries.map((item) => item.id) };
         } catch (cause) { return { error: String(cause) }; }
       },
@@ -108,7 +112,7 @@ export const useAppStore = create<AppStore>()(
         const now = new Date();
         const meal: MealEntry = {
           id: uid(),
-          date: format(now, "yyyy-MM-dd"),
+          date: input.date ?? diaryToday(),
           type: input.type,
           name: input.name,
           amountLabel: input.amountLabel,
@@ -122,7 +126,7 @@ export const useAppStore = create<AppStore>()(
           confidence: "high",
           createdAt: now.toISOString(),
         };
-        set((state) => ({ meals: [...state.meals, meal] }));
+        set((state) => ({ checkIns: reopenedCheckIns(state, meal.date), meals: [...state.meals, meal] }));
         return {};
       },
       async addWeight(weightKg, date = format(new Date(), "yyyy-MM-dd"), commandId = uid()) {
@@ -165,7 +169,7 @@ export const useAppStore = create<AppStore>()(
       },
       async setCheckIn(input, commandId = uid()) {
         if (isTauriRuntime()) return submit("set_checkin", input, commandId);
-        const date = format(new Date(), "yyyy-MM-dd");
+        const date = input.date ?? diaryToday();
         set((state) => ({
           checkIns: state.checkIns.some((item) => item.date === date)
             ? state.checkIns.map((item) => (item.date === date ? { ...item, ...input } : item))
@@ -174,14 +178,13 @@ export const useAppStore = create<AppStore>()(
         return {};
       },
       async toggleDayComplete(commandId = uid()) {
-        if (isTauriRuntime()) {
-          const date = format(new Date(), "yyyy-MM-dd");
-          return submit("set_day_complete", { date, complete: !get().checkIns.find((item) => item.date === date)?.complete }, commandId);
-        }
-        const date = format(new Date(), "yyyy-MM-dd");
+        const date = diaryToday();
+        return get().setDayComplete(date, !get().checkIns.find(item => item.date === date)?.complete, commandId);
+      },
+      async setDayComplete(date, complete, commandId = uid()) {
+        if (isTauriRuntime()) return submit("set_day_complete", { date, complete }, commandId);
         set((state) => {
           const current = state.checkIns.find((item) => item.date === date);
-          const complete = !current?.complete;
           const next = { date, complete, completedAt: complete ? new Date().toISOString() : undefined };
           return {
             checkIns: current
@@ -313,12 +316,12 @@ export const useAppStore = create<AppStore>()(
         }));
         return { shortage: [], batchId };
       },
-      async consumeBatch({ batchId, mealType, ratio, ratioIsEstimated, commandId = uid() }) {
+      async consumeBatch({ batchId, mealType, ratio, ratioIsEstimated, commandId = uid(), date = diaryToday() }) {
         if (isTauriRuntime()) {
           try {
             await commit<Record<string, never>>(
               "consume_batch",
-              { batchId, mealType, ratio, ratioIsEstimated },
+              { batchId, mealType, ratio, ratioIsEstimated, date },
               commandId,
             );
             return {};
@@ -329,16 +332,18 @@ export const useAppStore = create<AppStore>()(
         const batch = get().batches.find((item) => item.id === batchId);
         if (!batch || batch.status === "closed") return { error: "这个批次已经结束或不存在。" };
         if (!Number.isFinite(ratio) || ratio <= 0) return { error: "进食比例必须大于 0。" };
+        if (Math.abs(ratio * 10000 - Math.round(ratio * 10000)) > 1e-7) return { error: "比例最多支持百分比小数点后两位。" };
+        if (date < batch.date || date > diaryToday()) return { error: "进食日期不能早于制作日或晚于今天。" };
         const remaining = batch.remainingRatio ?? Math.max(0, 1 - batch.consumedRatio - batch.wastedRatio);
-        if (ratio > remaining + 0.0001) return { error: `最多只能记录剩余整锅的 ${Math.round(remaining * 100)}%。` };
+        if (ratio > remaining + 1e-8) return { error: `最多只能记录剩余整锅的 ${ratioPercent(remaining)}%。` };
         const recipe = get().recipes.find((item) => item.id === batch.recipeVersionId);
         if (!recipe) return { error: "找不到这个批次对应的菜谱版本。" };
         const eventId = uid();
         const mealId = uid();
         const now = new Date().toISOString();
-        const date = format(new Date(), "yyyy-MM-dd");
         const nextRemaining = Math.max(0, Number((remaining - ratio).toFixed(4)));
         set((state) => ({
+          checkIns: reopenedCheckIns(state, date),
           batches: state.batches.map((item) => item.id === batchId ? {
             ...item,
             consumedRatio: Number((item.consumedRatio + ratio).toFixed(4)),
@@ -353,7 +358,7 @@ export const useAppStore = create<AppStore>()(
             date,
             type: mealType,
             name: recipe.name,
-            amountLabel: `整锅的 ${Math.round(ratio * 100)}%${ratioIsEstimated ? "（估算）" : ""}`,
+            amountLabel: `整锅的 ${ratioPercent(ratio)}%${ratioIsEstimated ? "（估算）" : ""}`,
             nutrition: recipe.nutrition,
             consumedRatio: ratio,
             source: recipe.source,

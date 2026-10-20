@@ -20,6 +20,7 @@ pub fn run() {
             artifacts::import_local_input,
             artifacts::list_input_receipts,
             artifacts::read_artifact_preview,
+            artifacts::export_artifact_original,
             artifacts::save_artifact_privacy,
             artifacts::set_input_status,
             artifacts::manage_artifact,

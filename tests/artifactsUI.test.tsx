@@ -2,9 +2,11 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach,beforeEach,expect,it,vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { ArtifactPrivacyModal, ArtifactThumbnail, ImportInputModal } from "../src/components/InputArtifacts";
+import { ArtifactPrivacyModal, ArtifactThumbnail, ImportInputModal, ExportArtifactButton } from "../src/components/InputArtifacts";
+import { save } from "@tauri-apps/plugin-dialog";
 import type { InputReceipt } from "../src/data/artifacts";
 vi.mock("@tauri-apps/api/core",()=>({invoke:vi.fn()}));
+vi.mock("@tauri-apps/plugin-dialog",()=>({save:vi.fn()}));
 let host:HTMLDivElement;let root:Root;const close=vi.fn();
 const item:InputReceipt={id:"intake-001",artifactId:"hash",name:"test.png",note:"电话 13800138000",mime:"image/png",createdAt:"2026-10-20T12:00:00Z",source:"desktop",status:"unreviewed",width:64,height:40,trashedAt:null,purgedAt:null,privacyHash:null,bytes:100};
 beforeEach(()=>{(globalThis as Record<string,unknown>).IS_REACT_ACT_ENVIRONMENT=true;(window as unknown as Record<string,unknown>).__TAURI_INTERNALS__={};host=document.createElement("div");document.body.append(host);root=createRoot(host);vi.mocked(invoke).mockReset();close.mockReset();URL.createObjectURL=vi.fn(()=>"blob:local-preview");URL.revokeObjectURL=vi.fn();});
@@ -27,4 +29,18 @@ it("privacy preview requires explicit confirmation and only marks a local draft"
 });
 it("a deleted original is clearly labelled and not loaded as an image",async()=>{
   await act(async()=>root.render(<ArtifactPrivacyModal item={{...item,purgedAt:"2026-10-20T12:00:00Z"}} onClose={close}/>));expect(host.textContent).toContain("原件已删除");expect(invoke).not.toHaveBeenCalled();expect(host.querySelector(".mask-canvas")).toBeNull();
+});
+it("exports only the explicitly selected original and warns that it is unredacted",async()=>{
+  vi.mocked(save).mockResolvedValue("C:\\exports\\new.png");vi.mocked(invoke).mockResolvedValue(undefined);
+  await act(async()=>root.render(<ExportArtifactButton item={item}/>));
+  await act(async()=>host.querySelector<HTMLButtonElement>("button")!.click());
+  expect(invoke).toHaveBeenCalledExactlyOnceWith("export_artifact_original",{id:"hash",outputPath:"C:\\exports\\new.png"});
+  expect(host.textContent).toContain("未遮挡、未加密");expect(close).not.toHaveBeenCalled();
+});
+it("cancelling original export performs no write and trashed originals cannot export",async()=>{
+  vi.mocked(save).mockResolvedValue(null);
+  await act(async()=>root.render(<ExportArtifactButton item={item}/>));
+  await act(async()=>host.querySelector<HTMLButtonElement>("button")!.click());expect(invoke).not.toHaveBeenCalled();
+  await act(async()=>root.render(<ExportArtifactButton item={{...item,trashedAt:"2026-10-20"}}/>));
+  expect(host.querySelector<HTMLButtonElement>("button")!.disabled).toBe(true);
 });

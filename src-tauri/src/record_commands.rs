@@ -11,7 +11,7 @@ fn optional_number(payload: &Value, key: &str) -> Result<Option<f64>, String> {
     }
 }
 
-fn date(payload: &Value) -> Result<String, String> {
+pub(crate) fn date(payload: &Value) -> Result<String, String> {
     let value = payload
         .get("date")
         .and_then(Value::as_str)
