@@ -1,5 +1,5 @@
 import { Archive, Bot, ChartNoAxesCombined, ChevronLeft, ChevronRight, ClipboardList, CookingPot, Dumbbell, Inbox, LayoutDashboard, Settings, Wheat } from "lucide-react";
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Component, lazy, Suspense, useEffect, useLayoutEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import { useAppStore } from "./store/appStore";
 
 const TodayPage = lazy(() => import("./pages/TodayPage").then((module) => ({ default: module.TodayPage })));
@@ -23,17 +23,42 @@ const navItems = [
   { id: "assistant", label: "AI 助手", icon: Bot },
 ] as const;
 
+class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("页面渲染失败", error, info);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+
+    return (
+      <div className="page page-error" role="alert">
+        <Wheat size={30} />
+        <h1>这个页面没有正常显示</h1>
+        <p>你的本地数据没有被删除。请重试；若仍失败，可把下方错误信息发给开发者。</p>
+        <code>{this.state.error.message}</code>
+        <button className="button primary" onClick={() => window.location.reload()}>重新加载应用</button>
+      </div>
+    );
+  }
+}
+
 export default function App() {
   const [page, setPage] = useState("today");
   const [collapsed, setCollapsed] = useState(false);
-  const mainRef = useRef<HTMLElement>(null);
   const inboxCount = useAppStore((state) => state.inbox.filter((item) => item.status === "unreviewed").length);
   const profile = useAppStore((state) => state.profile);
   const hydrated = useAppStore.persist.hasHydrated();
   const [, forceRender] = useState(0);
   useEffect(() => useAppStore.persist.onFinishHydration(() => forceRender((value) => value + 1)), []);
   useLayoutEffect(() => {
-    mainRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [page]);
 
   const content = {
@@ -58,7 +83,7 @@ export default function App() {
         <div className="sidebar-bottom"><button className={page === "settings" ? "active" : ""} onClick={() => setPage("settings")}><Settings size={19}/><span>设置</span></button><div className="profile-mini"><div>{profile.name.slice(0, 1)}</div><span><strong>{profile.name}</strong><small>本地账户</small></span></div></div>
         <button className="collapse-button" onClick={() => setCollapsed((value) => !value)}>{collapsed ? <ChevronRight size={16}/> : <ChevronLeft size={16}/>}</button>
       </aside>
-      <main className="main-content" ref={mainRef}><Suspense fallback={<div className="page page-loading"><Wheat size={28}/><span>正在加载页面…</span></div>}>{content}</Suspense></main>
+      <main className="main-content"><PageErrorBoundary><Suspense fallback={<div className="page page-loading"><Wheat size={28}/><span>正在加载页面…</span></div>}>{content}</Suspense></PageErrorBoundary></main>
     </div>
   );
 }

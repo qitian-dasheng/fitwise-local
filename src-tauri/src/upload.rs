@@ -11,7 +11,7 @@ use rand::{distributions::Alphanumeric, Rng};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
+    net::{IpAddr, SocketAddr},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
@@ -86,7 +86,9 @@ pub async fn start_mobile_upload(
         .await
         .map_err(|error| format!("无法创建收件箱：{error}"))?;
 
-    let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0))
+    // Bind only the selected private adapter. Binding 0.0.0.0 would make an
+    // already-running session reachable through a newly connected public adapter.
+    let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(ipv4), 0))
         .await
         .map_err(|error| format!("无法启动手机上传服务：{error}"))?;
     let port = listener

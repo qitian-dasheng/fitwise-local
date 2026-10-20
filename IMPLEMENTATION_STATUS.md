@@ -11,7 +11,7 @@
 - FEFO 库存扣减、采购/收货分离、临期和成本。
 - 菜单三候选、库存覆盖、缺货和后两日预演。
 - 运动手工录入和来源指纹去重边界。
-- Tauri SQLite 规范化迁移 schema。
+- Tauri SQLite 规范化迁移 schema（表结构已建立，业务读写迁移尚未完成）。
 - Tauri/Axum 十分钟局域网二维码上传服务源码。
 - 页面按需加载，生产 Web 构建通过。
 - npm 安全审计 0 个已知漏洞。
@@ -23,6 +23,9 @@
 - 收件箱文本隐私预览与常见标识遮挡；图片未实际遮挡时不伪装为已处理。
 - 7 项前端测试与 4 项 Rust 测试通过，包括 SQLite 备份恢复和 Windows 凭据临时往返。
 - Windows release、MSI、NSIS 构建，NSIS 安装/启动/卸载以及用户数据库保留验证通过。
+- 0.1.1 修复 WebView2 主内容被侧栏覆盖的问题；安装版原生截图和全部 9 个导航页面验证通过。
+- 安装版从 0.1.0 覆盖升级至 0.1.1，用户数据库哈希保持不变。
+- 默认不再联网加载 Google Fonts；局域网上传仅绑定选中的私有网卡地址。
 
 ## 已建立边界但尚未接通外部服务
 
@@ -31,9 +34,13 @@
 - 图片遮挡/OCR/视觉解析需要选择并配置具体 AI 提供商。
 - 目前加密备份覆盖 SQLite 数据库；原图附件打包、每日增量/每周完整自动轮换仍待实现。
 - 恢复成功后保留一个未加密的本地安全副本，后续需要增加可见的清理入口与保留策略。
+- 当前 Zustand 状态仍作为一整块 JSON 存在 `app_kv`；规范化领域表、逐操作事务、审计事件和历史快照尚未接管正式读写。
+- 菜单候选目前来自预置数据，不是约束求解器动态生成结果；AI 页面也未发起真实模型请求。
+- 图片没有自动像素遮挡，附件哈希去重、缩略图、回收站与 2 GB 提醒尚未形成完整闭环。
+- 自动备份、附件备份、外部 MCP/CLI、代码签名和正式性能基准仍未完成。
 
 ## Windows 构建状态
 
-已安装最小 Visual Studio 2022 C++ Build Tools，不含完整 Visual Studio IDE；VS Code 保持为编辑器。Rust stable-msvc、MSVC、Windows SDK、前端构建、`cargo check`、release、MSI 和 NSIS 均已验证。
+已安装最小 Visual Studio 2022 C++ Build Tools，不含完整 Visual Studio IDE；VS Code 保持为编辑器。Rust stable-msvc、MSVC、Windows SDK、前端构建、`cargo test`、release、MSI 和 NSIS 均已验证。当前安装版本为 0.1.1。
 
 安装包当前没有代码签名证书，因此 Windows 会显示“未知发布者”；发布给其他用户前应补签名。
