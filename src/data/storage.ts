@@ -4,9 +4,18 @@ import { invoke } from "@tauri-apps/api/core";
 const DB_URL = "sqlite:fitwise.db";
 let dbPromise: Promise<import("@tauri-apps/plugin-sql").default> | null = null;
 let writeQueue: Promise<void> = Promise.resolve();
+let suppressedWrites = 0;
 
-function isTauri() {
+export function isTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+export async function flushAppStorageWrites() {
+  await writeQueue.catch(() => undefined);
+}
+
+export function suppressNextAppStorageWrite() {
+  suppressedWrites += 1;
 }
 
 async function getDb() {
@@ -24,14 +33,18 @@ async function getDb() {
 
 export const appStorage: StateStorage = {
   async getItem(name) {
-    if (!isTauri()) return localStorage.getItem(name);
+    if (!isTauriRuntime()) return localStorage.getItem(name);
     await getDb();
     await writeQueue.catch(() => undefined);
     return invoke<string | null>("domain_storage_get", { name });
   },
   async setItem(name, value) {
-    if (!isTauri()) {
+    if (!isTauriRuntime()) {
       localStorage.setItem(name, value);
+      return;
+    }
+    if (suppressedWrites > 0) {
+      suppressedWrites -= 1;
       return;
     }
     await getDb();
@@ -39,7 +52,7 @@ export const appStorage: StateStorage = {
     await writeQueue;
   },
   async removeItem(name) {
-    if (!isTauri()) {
+    if (!isTauriRuntime()) {
       localStorage.removeItem(name);
       return;
     }

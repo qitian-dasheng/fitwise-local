@@ -28,6 +28,7 @@ interface DomainStorageStatus {
   persistVersion?: number | null;
   revision?: number | null;
   entityCount: number;
+  commandCount: number;
   updatedAt?: string | null;
 }
 
@@ -250,7 +251,7 @@ export function SettingsPage() {
         </section>
         <section className="card settings-section">
           <div className="settings-title"><HardDrive/><div><h2>存储与附件</h2><p>结构化状态由 Rust 事务拆分为 SQLite 领域实体；附件体积统计、缩略图和 2 GB 提醒尚待接通。</p></div></div>
-          <div className="storage-bar"><i style={{width:"0%"}}/></div><div className="storage-legend"><span>领域仓库 <b>{storageStatus?.initialized ? `修订 ${storageStatus.revision}` : "等待首次写入"}</b></span><span>实体 / 审计 <b>{storageStatus?.entityCount ?? 0} / {auditEventCount} 条</b></span></div>
+          <div className="storage-bar"><i style={{width:"0%"}}/></div><div className="storage-legend"><span>领域仓库 <b>{storageStatus?.initialized ? `修订 ${storageStatus.revision}` : "等待首次写入"}</b></span><span>实体 / 命令 / 审计 <b>{storageStatus?.entityCount ?? 0} / {storageStatus?.commandCount ?? 0} / {auditEventCount} 条</b></span></div>
         </section>
         <section className="card settings-section">
           <div className="settings-title"><LockKeyhole/><div><h2>数据库加密备份与恢复验证</h2><p>Argon2id + AES-256-GCM；口令不会被保存，忘记后无法恢复。附件打包与自动轮换尚未启用。</p></div></div>
@@ -274,7 +275,7 @@ export function SettingsPage() {
           <div className="settings-title"><Shield/><div><h2>外部助手</h2><p>MCP 默认关闭；首个小版本只开放摘要读取和草稿创建。</p></div></div><span className="status-pill neutral">尚未启用</span>
         </section>
       </div>
-      <section className="danger-zone card"><div><h3>重置本地演示数据</h3><p>清除 SQLite 中的应用状态并恢复标准菜谱和初始库存；附件和 Windows 凭据不会删除。</p></div><button className="button danger" onClick={() => { if (confirm("确定重置演示数据？")) resetDemo(); }}><RotateCcw size={16}/> 重置</button></section>
+      <section className="danger-zone card"><div><h3>重置本地演示数据</h3><p>清除 SQLite 中的应用状态和命令回执，再恢复标准菜谱和初始库存；附件和 Windows 凭据不会删除。</p></div><button className="button danger" onClick={() => { if (confirm("确定重置演示数据？")) void resetDemo(); }}><RotateCcw size={16}/> 重置</button></section>
 
       {backupMode && <Modal title={backupMode === "create" ? "创建加密备份" : "验证或暂存恢复副本"} onClose={() => !busy && setBackupMode(null)}>
         <form className="form" onSubmit={(event) => { event.preventDefault(); void submitBackup(); }}>

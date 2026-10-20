@@ -8,6 +8,9 @@ import type { PurchaseDraft } from "../domain/types";
 
 export function InventoryPage() {
   const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [receivingId, setReceivingId] = useState<string | null>(null);
+  const [receiveCommandIds, setReceiveCommandIds] = useState<Record<string, string>>({});
+  const [message, setMessage] = useState("");
   const inventory = useAppStore((state) => state.inventory);
   const purchases = useAppStore((state) => state.purchases);
   const addPurchase = useAppStore((state) => state.addPurchase);
@@ -18,6 +21,7 @@ export function InventoryPage() {
   return (
     <div className="page">
       <PageHeader eyebrow="原料与成本" title="食材库存" description="库存是可校正的估计，而不是不可修改的绝对真值。" action={<button className="button primary" onClick={() => setPurchaseOpen(true)}><Plus size={17} /> 记录采购</button>} />
+      {message && <div className="settings-notice card" role="status">{message}</div>}
       <div className="metric-row">
         <Metric icon={<Box />} label="在库批次" value={`${inventory.filter((item) => item.remainingAmount > 0).length} 个`} />
         <Metric icon={<RefreshCcw />} label="已开封" value={`${inventory.filter((item) => item.opened && item.remainingAmount > 0).length} 个`} />
@@ -45,7 +49,7 @@ export function InventoryPage() {
         </div>
       </section>
 
-      {purchases.length > 0 && <section className="card"><div className="card-heading compact"><div><p className="eyebrow">采购流水</p><h2>待收货</h2></div></div><div className="purchase-list">{purchases.filter((item) => item.status !== "received").map((item) => <div className="purchase-row" key={item.id}><div><strong>{item.name}</strong><span>{item.platform} · {item.amount}{item.unit} · ¥{item.priceCny}</span></div><span>{item.expectedArrival ?? "未设置到货日"}</span><button className="button secondary small" onClick={() => receivePurchase(item.id)}><Check size={15} /> 确认收货</button></div>)}</div></section>}
+      {purchases.length > 0 && <section className="card"><div className="card-heading compact"><div><p className="eyebrow">采购流水</p><h2>待收货</h2></div></div><div className="purchase-list">{purchases.filter((item) => item.status !== "received").map((item) => <div className="purchase-row" key={item.id}><div><strong>{item.name}</strong><span>{item.platform} · {item.amount}{item.unit} · ¥{item.priceCny}</span></div><span>{item.expectedArrival ?? "未设置到货日"}</span><button className="button secondary small" disabled={receivingId !== null} onClick={async () => { const commandId = receiveCommandIds[item.id] ?? crypto.randomUUID(); setReceiveCommandIds((current) => ({ ...current, [item.id]: commandId })); setReceivingId(item.id); const result = await receivePurchase(item.id, commandId); setReceivingId(null); if (result.error) { setMessage(result.error); } else { setMessage(`${item.name} 已确认收货并建立库存批次。`); setReceiveCommandIds((current) => { const next = { ...current }; delete next[item.id]; return next; }); } }}><Check size={15} /> {receivingId === item.id ? "处理中…" : "确认收货"}</button></div>)}</div></section>}
 
       {purchaseOpen && <PurchaseModal onClose={() => setPurchaseOpen(false)} onSave={(draft) => { addPurchase(draft); setPurchaseOpen(false); }} />}
     </div>

@@ -17,6 +17,10 @@ export function FoodPage() {
   const [consumeType, setConsumeType] = useState<MealType>("lunch");
   const [message, setMessage] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [busyAction, setBusyAction] = useState(false);
+  const [cookCommandId, setCookCommandId] = useState("");
+  const [consumeCommandId, setConsumeCommandId] = useState("");
+  const [discardCommandIds, setDiscardCommandIds] = useState<Record<string, string>>({});
   const meals = useAppStore((state) => state.meals);
   const recipes = useAppStore((state) => state.recipes);
   const batches = useAppStore((state) => state.batches);
@@ -75,13 +79,13 @@ export function FoodPage() {
             <p>制作、实际进食与丢弃分别记账。确认制作只扣原料，不会提前计入饮食。</p>
             <div className="recipe-macros"><span><b>883</b> kcal</span><span><b>119.6</b> g 蛋白质</span><span><b>30</b> 分钟</span></div>
             <ul className="ingredient-list">{recipe.ingredients.map((item) => <li key={item.foodId}><span>{item.name}</span><b>{item.amount} {item.unit}</b></li>)}</ul>
-            <button className="button primary wide" onClick={() => { setMessage(""); setCookOpen(true); }}>确认今日制作</button>
+            <button className="button primary wide" disabled={busyAction} onClick={() => { setMessage(""); setCookCommandId(crypto.randomUUID()); setCookOpen(true); }}>确认今日制作</button>
           </article>
           {activeBatches.map((batch) => <article className="card batch-card" key={batch.id}>
             <div className="card-heading compact"><div><p className="eyebrow">熟食批次 · 待处理</p><h3>{recipe.name}</h3></div><span className="status-pill warning">剩余 {Math.round(batch.remainingRatio * 100)}%</span></div>
             <div className="batch-progress"><i style={{ width: `${batch.remainingRatio * 100}%` }}/></div>
             <p>已吃 {Math.round(batch.consumedRatio * 100)}%，已丢弃 {Math.round(batch.wastedRatio * 100)}%。保留剩余时无需现在处理，可在下一餐继续记录。</p>
-            <div className="button-row"><button className="button primary small" onClick={() => { setConsumeRatio(String(Math.round(Math.min(.5, batch.remainingRatio) * 100))); setBatchOpen(batch.id); setMessage(""); }}>记录实际进食</button><button className="button danger small" onClick={() => { if (confirm(`确认将剩余 ${Math.round(batch.remainingRatio * 100)}% 记为熟食丢弃？`)) { const result = discardBatchRemainder(batch.id); setStatusMessage(result.error ?? "剩余熟食已记入浪费记录。"); } }}><Trash2 size={14}/> 丢弃剩余</button></div>
+            <div className="button-row"><button className="button primary small" disabled={busyAction} onClick={() => { setConsumeRatio(String(Math.round(Math.min(.5, batch.remainingRatio) * 100))); setConsumeCommandId(crypto.randomUUID()); setBatchOpen(batch.id); setMessage(""); }}>记录实际进食</button><button className="button danger small" disabled={busyAction} onClick={async () => { if (!confirm(`确认将剩余 ${Math.round(batch.remainingRatio * 100)}% 记为熟食丢弃？`)) return; const commandId = discardCommandIds[batch.id] ?? crypto.randomUUID(); setDiscardCommandIds((current) => ({ ...current, [batch.id]: commandId })); setBusyAction(true); const result = await discardBatchRemainder(batch.id, "discarded", commandId); setBusyAction(false); if (result.error) { setStatusMessage(result.error); } else { setStatusMessage("剩余熟食已记入浪费记录。"); setDiscardCommandIds((current) => { const next = { ...current }; delete next[batch.id]; return next; }); } }}><Trash2 size={14}/> {busyAction ? "处理中…" : "丢弃剩余"}</button></div>
           </article>)}
           <article className="card validation-card"><ShieldCheck size={22} /><div><strong>营养值不会把空白当成零</strong><p>首次商品会校验千焦/千卡、每份/每百克和净含量。</p></div></article>
         </section>
@@ -95,19 +99,19 @@ export function FoodPage() {
           <div className="form">
             <div className="ratio-summary"><ChefHat size={20} /><div><strong>这一步只确认制作完成</strong><span>四种原料会按 FEFO 扣减一次；午餐、晚餐和剩余熟食稍后分别记录。</span></div></div>
             {message && <div className="alert"><AlertTriangle size={18} />{message}</div>}
-            <button className="button primary wide" onClick={() => { const result = prepareRecipe(recipe.id); if (result.shortage.length) setMessage(result.shortage.join("；")); else { setCookOpen(false); setStatusMessage("制作批次已建立，原料已扣减；尚未计入任何饮食摄入。"); } }}>确认制作并扣减原料</button>
+            <button className="button primary wide" disabled={busyAction} onClick={async () => { setBusyAction(true); const result = await prepareRecipe(recipe.id, cookCommandId || crypto.randomUUID()); setBusyAction(false); if (result.shortage.length) setMessage(result.shortage.join("；")); else { setCookOpen(false); setStatusMessage("制作批次已建立，原料已扣减；尚未计入任何饮食摄入。"); } }}>{busyAction ? "正在提交…" : "确认制作并扣减原料"}</button>
           </div>
         </Modal>
       )}
       {selectedBatch && (
         <Modal title="记录这个批次的实际进食" onClose={() => setBatchOpen(null)}>
-          <form className="form" onSubmit={(event) => { event.preventDefault(); const ratio = Number(consumeRatio) / 100; const result = consumeBatch({ batchId: selectedBatch.id, mealType: consumeType, ratio, ratioIsEstimated: true }); if (result.error) setMessage(result.error); else { setBatchOpen(null); setStatusMessage(`已把整锅的 ${Math.round(ratio * 100)}% 记入${mealLabels[consumeType]}；其余继续保留在熟食批次中。`); } }}>
+          <form className="form" onSubmit={async (event) => { event.preventDefault(); const ratio = Number(consumeRatio) / 100; setBusyAction(true); const result = await consumeBatch({ batchId: selectedBatch.id, mealType: consumeType, ratio, ratioIsEstimated: true, commandId: consumeCommandId || crypto.randomUUID() }); setBusyAction(false); if (result.error) setMessage(result.error); else { setBatchOpen(null); setStatusMessage(`已把整锅的 ${Math.round(ratio * 100)}% 记入${mealLabels[consumeType]}；其余继续保留在熟食批次中。`); } }}>
             <label><span>计入餐次</span><select value={consumeType} onChange={(event) => setConsumeType(event.target.value as MealType)}><option value="lunch">午餐</option><option value="dinner">晚餐</option><option value="breakfast">早餐</option><option value="snack">加餐</option></select></label>
             <label><span>占整锅比例（当前最多 {Math.round(selectedBatch.remainingRatio * 100)}%）</span><input type="number" min="1" max={Math.round(selectedBatch.remainingRatio * 10000) / 100} step="1" required value={consumeRatio} onChange={(event) => setConsumeRatio(event.target.value)}/></label>
             <div className="ratio-options">{[25, 33, 50, Math.round(selectedBatch.remainingRatio * 100)].filter((value, index, values) => value > 0 && value <= selectedBatch.remainingRatio * 100 + .01 && values.indexOf(value) === index).map((value) => <button type="button" key={value} className={Number(consumeRatio) === value ? "active" : ""} onClick={() => setConsumeRatio(String(value))}>{value === Math.round(selectedBatch.remainingRatio * 100) ? `全部剩余 ${value}%` : `${value}%`}</button>)}</div>
             <p className="form-hint">这里记录的是整锅比例，不是假定午晚餐各一半。当前按目测估算，未来可升级为熟重称量。</p>
             {message && <div className="alert"><AlertTriangle size={18}/>{message}</div>}
-            <button className="button primary wide" type="submit">确认写入这一餐</button>
+            <button className="button primary wide" type="submit" disabled={busyAction}>{busyAction ? "正在提交…" : "确认写入这一餐"}</button>
           </form>
         </Modal>
       )}

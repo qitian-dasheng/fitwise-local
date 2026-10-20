@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use std::{fs, path::PathBuf};
 use tauri::{AppHandle, Manager};
 
-const STORAGE_NAME: &str = "fitwise-app-state-v1";
+pub(crate) const STORAGE_NAME: &str = "fitwise-app-state-v1";
 const SINGLETONS: [&str; 2] = ["profile", "aiSettings"];
 const COLLECTIONS: [&str; 14] = [
     "meals",
@@ -32,6 +32,7 @@ pub struct DomainStorageStatus {
     persist_version: Option<i64>,
     revision: Option<i64>,
     entity_count: i64,
+    command_count: i64,
     updated_at: Option<String>,
 }
 
@@ -44,13 +45,22 @@ fn database_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(directory.join("fitwise.db"))
 }
 
-fn open_database(app: &AppHandle) -> Result<Connection, String> {
-    Connection::open(database_path(app)?).map_err(|error| format!("无法打开领域数据库：{error}"))
+pub(crate) fn open_database(app: &AppHandle) -> Result<Connection, String> {
+    let connection = Connection::open(database_path(app)?)
+        .map_err(|error| format!("无法打开领域数据库：{error}"))?;
+    connection
+        .execute_batch("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;")
+        .map_err(|error| format!("无法配置领域数据库：{error}"))?;
+    Ok(connection)
 }
 
-fn ensure_repository_schema(connection: &Connection) -> Result<(), String> {
+pub(crate) fn ensure_repository_schema(connection: &Connection) -> Result<(), String> {
     connection
-        .execute_batch(include_str!("../migrations/0003_domain_entity_store.sql"))
+        .execute_batch(&format!(
+            "{}\n{}",
+            include_str!("../migrations/0003_domain_entity_store.sql"),
+            include_str!("../migrations/0004_domain_commands.sql")
+        ))
         .map_err(|error| format!("无法初始化领域仓库：{error}"))
 }
 
@@ -103,7 +113,7 @@ fn persist_envelope(connection: &mut Connection, name: &str, raw: &str) -> Resul
         .map_err(|error| format!("提交领域事务失败：{error}"))
 }
 
-fn write_transaction(
+pub(crate) fn write_transaction(
     transaction: &Transaction<'_>,
     state: &Map<String, Value>,
     persist_version: i64,
@@ -160,7 +170,7 @@ fn write_transaction(
     Ok(())
 }
 
-fn load_envelope(connection: &Connection) -> Result<Option<String>, String> {
+pub(crate) fn load_envelope(connection: &Connection) -> Result<Option<String>, String> {
     let version: Option<i64> = connection
         .query_row(
             "SELECT persist_version FROM domain_state_meta WHERE id = 1",
@@ -261,6 +271,9 @@ pub fn domain_storage_remove(app: AppHandle, name: String) -> Result<(), String>
         .execute("DELETE FROM domain_state_meta", [])
         .map_err(|error| error.to_string())?;
     transaction
+        .execute("DELETE FROM domain_command_receipts", [])
+        .map_err(|error| error.to_string())?;
+    transaction
         .execute("DELETE FROM app_kv WHERE key = ?1", [&name])
         .map_err(|error| error.to_string())?;
     transaction.commit().map_err(|error| error.to_string())
@@ -281,11 +294,17 @@ pub fn get_domain_storage_status(app: AppHandle) -> Result<DomainStorageStatus, 
     let entity_count = connection
         .query_row("SELECT COUNT(*) FROM domain_entities", [], |row| row.get(0))
         .map_err(|error| error.to_string())?;
+    let command_count = connection
+        .query_row("SELECT COUNT(*) FROM domain_command_receipts", [], |row| {
+            row.get(0)
+        })
+        .map_err(|error| error.to_string())?;
     Ok(DomainStorageStatus {
         initialized: meta.is_some(),
         persist_version: meta.as_ref().map(|value| value.0),
         revision: meta.as_ref().map(|value| value.1),
         entity_count,
+        command_count,
         updated_at: meta.map(|value| value.2),
     })
 }

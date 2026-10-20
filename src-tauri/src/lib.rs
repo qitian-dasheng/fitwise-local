@@ -1,5 +1,6 @@
 mod backup;
 mod credentials;
+mod domain_commands;
 mod domain_store;
 mod upload;
 
@@ -27,6 +28,12 @@ pub fn run() {
             sql: include_str!("../migrations/0003_domain_entity_store.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "domain_commands",
+            sql: include_str!("../migrations/0004_domain_commands.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -50,6 +57,7 @@ pub fn run() {
             domain_store::domain_storage_remove,
             domain_store::domain_storage_set,
             domain_store::get_domain_storage_status,
+            domain_commands::execute_domain_command,
             upload::start_mobile_upload,
             upload::stop_mobile_upload
         ])

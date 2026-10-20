@@ -7,16 +7,16 @@ beforeEach(() => {
 });
 
 describe("prepared batch lifecycle", () => {
-  it("deducts ingredients once and records meals only after consumption", () => {
-    const prepared = useAppStore.getState().prepareRecipe("recipe-pork-tofu-v1");
+  it("deducts ingredients once and records meals only after consumption", async () => {
+    const prepared = await useAppStore.getState().prepareRecipe("recipe-pork-tofu-v1");
     expect(prepared.shortage).toEqual([]);
     expect(prepared.batchId).toBeTruthy();
     expect(useAppStore.getState().meals).toHaveLength(0);
     expect(useAppStore.getState().inventoryMovements.filter((item) => item.type === "cooking")).toHaveLength(4);
 
     const batchId = prepared.batchId!;
-    expect(useAppStore.getState().consumeBatch({ batchId, mealType: "lunch", ratio: 0.35, ratioIsEstimated: true })).toEqual({});
-    expect(useAppStore.getState().consumeBatch({ batchId, mealType: "dinner", ratio: 0.4, ratioIsEstimated: true })).toEqual({});
+    expect(await useAppStore.getState().consumeBatch({ batchId, mealType: "lunch", ratio: 0.35, ratioIsEstimated: true })).toEqual({});
+    expect(await useAppStore.getState().consumeBatch({ batchId, mealType: "dinner", ratio: 0.4, ratioIsEstimated: true })).toEqual({});
 
     const state = useAppStore.getState();
     const batch = state.batches.find((item) => item.id === batchId)!;
@@ -26,12 +26,12 @@ describe("prepared batch lifecycle", () => {
     expect(batch.wastedRatio).toBe(0);
   });
 
-  it("keeps leftovers open until the user explicitly discards them", () => {
-    const batchId = useAppStore.getState().prepareRecipe("recipe-pork-tofu-v1").batchId!;
-    useAppStore.getState().consumeBatch({ batchId, mealType: "lunch", ratio: 0.75, ratioIsEstimated: true });
+  it("keeps leftovers open until the user explicitly discards them", async () => {
+    const batchId = (await useAppStore.getState().prepareRecipe("recipe-pork-tofu-v1")).batchId!;
+    await useAppStore.getState().consumeBatch({ batchId, mealType: "lunch", ratio: 0.75, ratioIsEstimated: true });
     expect(useAppStore.getState().batches.find((item) => item.id === batchId)?.status).toBe("open");
 
-    expect(useAppStore.getState().discardBatchRemainder(batchId)).toEqual({});
+    expect(await useAppStore.getState().discardBatchRemainder(batchId)).toEqual({});
     const state = useAppStore.getState();
     expect(state.batches.find((item) => item.id === batchId)).toMatchObject({ remainingRatio: 0, wastedRatio: 0.25, status: "closed" });
     expect(state.wasteEvents).toHaveLength(1);

@@ -15,7 +15,8 @@ import type {
   PurchaseDraft,
   WorkoutSession,
 } from "../domain/types";
-import { appStorage } from "../data/storage";
+import { executeDomainCommand } from "../data/domainCommands";
+import { appStorage, isTauriRuntime, suppressNextAppStorageWrite } from "../data/storage";
 
 const uid = () => crypto.randomUUID();
 
@@ -33,17 +34,17 @@ interface AppActions {
   setCheckIn: (input: { hunger?: number; energy?: number }) => void;
   toggleDayComplete: () => void;
   addPurchase: (draft: Omit<PurchaseDraft, "id">) => void;
-  receivePurchase: (purchaseId: string) => void;
-  adjustInventory: (lotId: string, remainingAmount: number, reason: string) => void;
+  receivePurchase: (purchaseId: string, commandId?: string) => Promise<{ error?: string }>;
+  adjustInventory: (lotId: string, remainingAmount: number, reason: string, commandId?: string) => Promise<{ error?: string }>;
   selectPlan: (planId: string) => void;
   addInboxItem: (item: Omit<InboxItem, "id" | "receivedAt" | "status">) => void;
   setInboxStatus: (id: string, status: InboxItem["status"]) => void;
   setAiSettings: (settings: Partial<AiSettings>) => void;
   recordAiUsage: (estimatedCostCny: number) => void;
-  prepareRecipe: (recipeVersionId: string) => { shortage: string[]; batchId?: string };
-  consumeBatch: (input: { batchId: string; mealType: MealType; ratio: number; ratioIsEstimated: boolean }) => { error?: string };
-  discardBatchRemainder: (batchId: string, reason?: "discarded" | "spoiled" | "other") => { error?: string };
-  resetDemo: () => void;
+  prepareRecipe: (recipeVersionId: string, commandId?: string) => Promise<{ shortage: string[]; batchId?: string }>;
+  consumeBatch: (input: { batchId: string; mealType: MealType; ratio: number; ratioIsEstimated: boolean; commandId?: string }) => Promise<{ error?: string }>;
+  discardBatchRemainder: (batchId: string, reason?: "discarded" | "spoiled" | "other", commandId?: string) => Promise<{ error?: string }>;
+  resetDemo: () => Promise<void>;
 }
 
 export type AppStore = AppState & AppActions;
@@ -128,9 +129,24 @@ export const useAppStore = create<AppStore>()(
       addPurchase(draft) {
         set((state) => ({ purchases: [...state.purchases, { ...draft, id: uid() }] }));
       },
-      receivePurchase(purchaseId) {
+      async receivePurchase(purchaseId, commandId = uid()) {
+        if (isTauriRuntime()) {
+          try {
+            const response = await executeDomainCommand<{ lotId: string }>(
+              get(),
+              commandId,
+              "receive_purchase",
+              { purchaseId },
+            );
+            suppressNextAppStorageWrite();
+            set(response.state);
+            return {};
+          } catch (cause) {
+            return { error: cause instanceof Error ? cause.message : String(cause) };
+          }
+        }
         const purchase = get().purchases.find((item) => item.id === purchaseId);
-        if (!purchase || purchase.status === "received") return;
+        if (!purchase || purchase.status === "received") return { error: "这笔采购已经收货或不存在。" };
         const lot: InventoryLot = {
           id: uid(),
           foodId: `food-${purchase.name.trim().toLowerCase().replace(/\s+/g, "-")}`,
@@ -153,10 +169,26 @@ export const useAppStore = create<AppStore>()(
             { id: uid(), lotId: lot.id, type: "purchase", amount: lot.purchasedAmount, reason: "确认收货", createdAt: new Date().toISOString() },
           ],
         }));
+        return {};
       },
-      adjustInventory(lotId, remainingAmount, reason) {
+      async adjustInventory(lotId, remainingAmount, reason, commandId = uid()) {
+        if (isTauriRuntime()) {
+          try {
+            const response = await executeDomainCommand<Record<string, never>>(
+              get(),
+              commandId,
+              "adjust_inventory",
+              { lotId, remainingAmount, reason },
+            );
+            suppressNextAppStorageWrite();
+            set(response.state);
+            return {};
+          } catch (cause) {
+            return { error: cause instanceof Error ? cause.message : String(cause) };
+          }
+        }
         const current = get().inventory.find((item) => item.id === lotId);
-        if (!current || remainingAmount < 0) return;
+        if (!current || remainingAmount < 0) return { error: "库存批次不存在或数量无效。" };
         const delta = remainingAmount - current.remainingAmount;
         set((state) => ({
           inventory: state.inventory.map((item) => (item.id === lotId ? { ...item, remainingAmount } : item)),
@@ -165,6 +197,7 @@ export const useAppStore = create<AppStore>()(
             { id: uid(), lotId, type: "adjustment", amount: delta, reason, createdAt: new Date().toISOString() },
           ],
         }));
+        return {};
       },
       selectPlan(planId) {
         set((state) => ({
@@ -199,7 +232,24 @@ export const useAppStore = create<AppStore>()(
           },
         }));
       },
-      prepareRecipe(recipeVersionId) {
+      async prepareRecipe(recipeVersionId, commandId = uid()) {
+        if (isTauriRuntime()) {
+          try {
+            const response = await executeDomainCommand<{ shortage: string[]; batchId?: string }>(
+              get(),
+              commandId,
+              "prepare_recipe",
+              { recipeVersionId },
+            );
+            if (response.applied) {
+              suppressNextAppStorageWrite();
+              set(response.state);
+            }
+            return response.result;
+          } catch (cause) {
+            return { shortage: [cause instanceof Error ? cause.message : String(cause)] };
+          }
+        }
         const recipe = get().recipes.find((item) => item.id === recipeVersionId);
         if (!recipe) return { shortage: ["找不到菜谱"] };
         let inventory = get().inventory;
@@ -246,7 +296,24 @@ export const useAppStore = create<AppStore>()(
         }));
         return { shortage: [], batchId };
       },
-      consumeBatch({ batchId, mealType, ratio, ratioIsEstimated }) {
+      async consumeBatch({ batchId, mealType, ratio, ratioIsEstimated, commandId = uid() }) {
+        if (isTauriRuntime()) {
+          try {
+            const response = await executeDomainCommand<Record<string, never>>(
+              get(),
+              commandId,
+              "consume_batch",
+              { batchId, mealType, ratio, ratioIsEstimated },
+            );
+            if (response.applied) {
+              suppressNextAppStorageWrite();
+              set(response.state);
+            }
+            return {};
+          } catch (cause) {
+            return { error: cause instanceof Error ? cause.message : String(cause) };
+          }
+        }
         const batch = get().batches.find((item) => item.id === batchId);
         if (!batch || batch.status === "closed") return { error: "这个批次已经结束或不存在。" };
         if (!Number.isFinite(ratio) || ratio <= 0) return { error: "进食比例必须大于 0。" };
@@ -287,7 +354,24 @@ export const useAppStore = create<AppStore>()(
         }));
         return {};
       },
-      discardBatchRemainder(batchId, reason = "discarded") {
+      async discardBatchRemainder(batchId, reason = "discarded", commandId = uid()) {
+        if (isTauriRuntime()) {
+          try {
+            const response = await executeDomainCommand<Record<string, never>>(
+              get(),
+              commandId,
+              "discard_batch",
+              { batchId, reason },
+            );
+            if (response.applied) {
+              suppressNextAppStorageWrite();
+              set(response.state);
+            }
+            return {};
+          } catch (cause) {
+            return { error: cause instanceof Error ? cause.message : String(cause) };
+          }
+        }
         const batch = get().batches.find((item) => item.id === batchId);
         if (!batch || batch.status === "closed") return { error: "这个批次已经结束或不存在。" };
         const ratio = batch.remainingRatio ?? Math.max(0, 1 - batch.consumedRatio - batch.wastedRatio);
@@ -302,7 +386,8 @@ export const useAppStore = create<AppStore>()(
         }));
         return {};
       },
-      resetDemo() {
+      async resetDemo() {
+        await appStorage.removeItem("fitwise-app-state-v1");
         set(initialState);
       },
     }),
