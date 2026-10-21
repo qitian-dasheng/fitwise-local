@@ -480,3 +480,163 @@ fn period_summary_folds_same_day_weigh_ins_into_one_point() {
         "7 日均线应按每日代表值计算，实际 {average}"
     );
 }
+
+#[test]
+fn waist_and_body_fat_are_optional_and_never_zero_filled() {
+    let mut connection = connection();
+    let with_numbers = weigh(
+        &mut connection,
+        "weight-waist-01",
+        json!({
+            "weightKg":83.2,"date":"2026-10-19","measuredAt":"2026-10-19T06:30:00+08:00",
+            "waistCm":92.5,"bodyFatPercent":24.3,
+        }),
+        Some(bootstrap()),
+    );
+    let filled = &with_numbers.state["measurements"][0];
+    assert_eq!(filled["waistCm"], 92.5);
+    assert_eq!(filled["bodyFatPercent"], 24.3);
+
+    // 不填就是没有：既不能写 0，也不能写 null 占位。
+    let without = weigh(
+        &mut connection,
+        "weight-waist-02",
+        json!({"weightKg":83.0,"date":"2026-10-20","measuredAt":"2026-10-20T06:30:00+08:00"}),
+        None,
+    );
+    let bare = &without.state["measurements"][1];
+    assert!(
+        bare.get("waistCm").is_none(),
+        "没量腰围时不能落一个 0 或 null"
+    );
+    assert!(bare.get("bodyFatPercent").is_none());
+
+    // 显式传 null 与不传等价，不能变成 0。
+    let nulled = weigh(
+        &mut connection,
+        "weight-waist-03",
+        json!({"weightKg":82.8,"date":"2026-10-21","waistCm":null}),
+        None,
+    );
+    let third = &nulled.state["measurements"][2];
+    assert!(third.get("waistCm").is_none());
+
+    let audit = nulled.state["auditEvents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["eventType"] == "body_measurement_created" && item["entityId"] == "add_weight-weight-waist-01")
+        .expect("必须写创建审计");
+    assert_eq!(audit["payload"]["details"]["waistCm"], 92.5);
+    assert_eq!(audit["payload"]["details"]["bodyFatPercent"], 24.3);
+}
+
+#[test]
+fn invalid_waist_or_body_fat_is_rejected_with_readable_text() {
+    for (payload, expected) in [
+        (
+            json!({"weightKg":83.0,"date":"2026-10-19","waistCm":300}),
+            "腰围需在 40–200 cm 之间。",
+        ),
+        (
+            json!({"weightKg":83.0,"date":"2026-10-19","waistCm":10}),
+            "腰围需在 40–200 cm 之间。",
+        ),
+        (
+            json!({"weightKg":83.0,"date":"2026-10-19","waistCm":88.55}),
+            "腰围最多保留一位小数。",
+        ),
+        (
+            json!({"weightKg":83.0,"date":"2026-10-19","bodyFatPercent":80}),
+            "体脂率需在 3%–70% 之间。",
+        ),
+        (
+            json!({"weightKg":83.0,"date":"2026-10-19","bodyFatPercent":"24.3"}),
+            "体脂率只能是数字。",
+        ),
+    ] {
+        let mut connection = connection();
+        let error = execute_with_connection(
+            &mut connection,
+            request(
+                "weight-invalid-girth",
+                "add_weight",
+                payload.clone(),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap_err();
+        assert!(error.contains(expected), "期望「{expected}」，实际「{error}」");
+    }
+}
+
+#[test]
+fn revising_weight_can_add_or_clear_waist_measurements() {
+    let mut connection = connection();
+    let created = weigh(
+        &mut connection,
+        "weight-girth-revise-01",
+        json!({"weightKg":83.4,"date":"2026-10-19","measuredAt":"2026-10-19T06:30:00+08:00"}),
+        Some(bootstrap()),
+    );
+    let target_id = first_measurement_id(&created.state);
+
+    // 原来没量腰围，补录时可以只补围度而不动其它字段的语义。
+    let filled = execute_with_connection(
+        &mut connection,
+        request(
+            "weight-girth-revise-02",
+            "revise_weight",
+            json!({
+                "measurementId":target_id,
+                "weightKg":83.4,
+                "date":"2026-10-19",
+                "measuredAt":"2026-10-19T06:30:00+08:00",
+                "waistCm":92.0,
+                "reason":"早上忘了量腰围，补上",
+            }),
+            None,
+        ),
+    )
+    .unwrap();
+    let new_id = measurement_by_id(&filled.state, &target_id)["supersededBy"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(measurement_by_id(&filled.state, &new_id)["waistCm"], 92.0);
+    assert!(
+        measurement_by_id(&filled.state, &new_id)
+            .get("bodyFatPercent")
+            .is_none(),
+        "只补腰围时不能凭空生出体脂"
+    );
+
+    // 更正时不再传围度 = 这条新记录没有围度，旧值留在被 superseded 的旧行里。
+    let cleared = execute_with_connection(
+        &mut connection,
+        request(
+            "weight-girth-revise-03",
+            "revise_weight",
+            json!({
+                "measurementId":new_id,
+                "weightKg":83.4,
+                "date":"2026-10-19",
+                "reason":"腰围那次量错了，撤掉",
+            }),
+            None,
+        ),
+    )
+    .unwrap();
+    let latest_id = measurement_by_id(&cleared.state, &new_id)["supersededBy"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(measurement_by_id(&cleared.state, &latest_id)
+        .get("waistCm")
+        .is_none());
+    assert_eq!(
+        measurement_by_id(&cleared.state, &new_id)["waistCm"],
+        92.0,
+        "旧行的围度必须留证"
+    );
+}

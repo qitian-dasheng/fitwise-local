@@ -66,12 +66,15 @@ function meal(date: string, calories: number, protein: number): MealEntry {
 
 const checkIn = (date: string): DailyCheckIn => ({ date, complete: true });
 
-async function renderPage(data: {
-  meals?: MealEntry[];
-  checkIns?: DailyCheckIn[];
-  workouts?: WorkoutSession[];
-  measurements?: BodyMeasurement[];
-} = {}) {
+async function renderPage(
+  data: {
+    meals?: MealEntry[];
+    checkIns?: DailyCheckIn[];
+    workouts?: WorkoutSession[];
+    measurements?: BodyMeasurement[];
+  } = {},
+  props: { onDateChange?: (date: string) => void; goTo?: (page: string) => void } = {},
+) {
   await act(async () => {
     useAppStore.setState({
       meals: data.meals ?? [],
@@ -79,7 +82,7 @@ async function renderPage(data: {
       workouts: data.workouts ?? [],
       measurements: data.measurements ?? [],
     });
-    root.render(<TrendsPage date="2026-10-21" />);
+    root.render(<TrendsPage date="2026-10-21" {...props} />);
   });
 }
 
@@ -87,7 +90,7 @@ it("renders the review sections on an empty database without NaN", async () => {
   await renderPage();
 
   expect(host.querySelector(".trends-page")).toBeTruthy();
-  expect(host.querySelectorAll(".metric-card")).toHaveLength(4);
+  expect(host.querySelectorAll(".metric-card")).toHaveLength(5);
   expect(host.querySelector(".review-gauge")).toBeTruthy();
   expect(host.textContent).toContain("待记录");
   expect(host.querySelectorAll(".calendar-grid .calendar-cell.calendar-none")).toHaveLength(7);
@@ -101,7 +104,7 @@ it("switches the range and keeps the hint, calendar and chart in sync", async ()
   expect(host.querySelectorAll(".calendar-grid .calendar-cell")).toHaveLength(7);
 
   const tabs = [...host.querySelectorAll(".range-tabs button")] as HTMLButtonElement[];
-  expect(tabs.map((item) => item.textContent)).toEqual(["7 天", "14 天", "30 天"]);
+  expect(tabs.map((item) => item.textContent)).toEqual(["7 天", "14 天", "30 天", "自定义"]);
 
   await act(async () => tabs[1].click());
   expect(host.querySelector(".form-hint")?.textContent).toContain("2026-10-08 至 2026-10-21（14 天）");
@@ -211,4 +214,72 @@ it("always states that the verdicts are not a health assessment", async () => {
   expect(host.querySelector(".review-notes")).toBeTruthy();
   expect(host.textContent).toContain("不构成健康评估");
   expect(host.textContent).toContain("不会自动修改你的目标");
+});
+
+it("lets the range be set by hand and keeps the calendar in step", async () => {
+  await renderPage();
+  const customTab = [...host.querySelectorAll(".range-tabs button")].find(
+    (item) => item.textContent === "自定义",
+  ) as HTMLButtonElement;
+  await act(async () => customTab.click());
+
+  const inputs = [...host.querySelectorAll(".range-custom input")] as HTMLInputElement[];
+  expect(inputs).toHaveLength(2);
+  expect(inputs[0].value).toBe("2026-10-15");
+  expect(inputs[1].value).toBe("2026-10-21");
+
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    setter.call(inputs[0], "2026-10-01");
+    inputs[0].dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  expect(host.querySelector(".form-hint")?.textContent).toContain("2026-10-01 至 2026-10-21（21 天）");
+  expect(host.querySelectorAll(".calendar-grid .calendar-cell")).toHaveLength(21);
+
+  // 回到预设要把自定义收起来，并且区间跟着预设走。
+  const back = [...host.querySelectorAll(".range-custom button")].find((item) =>
+    item.textContent?.includes("回到"),
+  ) as HTMLButtonElement;
+  await act(async () => back.click());
+  expect(host.querySelector(".range-custom")).toBeNull();
+  expect(host.querySelector(".form-hint")?.textContent).toContain("（7 天）");
+});
+
+it("jumps to the picked day when a calendar cell is clicked", async () => {
+  const onDateChange = vi.fn();
+  const goTo = vi.fn();
+  await renderPage({ meals: [meal("2026-10-18", 2000, 170)] }, { onDateChange, goTo });
+
+  const cells = [...host.querySelectorAll(".calendar-grid button.calendar-cell")] as HTMLButtonElement[];
+  expect(cells).toHaveLength(7);
+  const target = cells.find((cell) => cell.textContent?.includes("18"))!;
+  await act(async () => target.click());
+
+  expect(onDateChange).toHaveBeenCalledWith("2026-10-18");
+  expect(goTo).toHaveBeenCalledWith("food");
+  expect(host.querySelector(".calendar-hint")?.textContent).toContain("点任意一格");
+});
+
+it("puts the waist change next to the weight change", async () => {
+  await renderPage({
+    measurements: [
+      { id: "w1", date: "2026-10-17", weightKg: 83.6, waistCm: 93.5, createdAt: "2026-10-17T06:00:00+08:00", source: "manual" },
+      { id: "w2", date: "2026-10-20", weightKg: 82.9, waistCm: 92, createdAt: "2026-10-20T06:00:00+08:00", source: "manual" },
+    ],
+  });
+
+  const cards = [...host.querySelectorAll(".metric-card")].map((item) => item.textContent ?? "");
+  const waist = cards.find((text) => text.includes("区间腰围变化"))!;
+  expect(waist).toContain("-1.5 cm");
+  expect(waist).toContain("最新 92.0 cm");
+  expect(cards.find((text) => text.includes("区间体重变化"))).toContain("kg");
+});
+
+it("says so plainly when the range has no waist measurement", async () => {
+  await renderPage();
+  const cards = [...host.querySelectorAll(".metric-card")].map((item) => item.textContent ?? "");
+  const waist = cards.find((text) => text.includes("区间腰围变化"))!;
+  expect(waist).toContain("区间内未量");
+  expect(waist).toContain("在「身体」页记一次腰围");
 });

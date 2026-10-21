@@ -5,9 +5,13 @@ import { useAppStore } from "../store/appStore";
 import {
   MEASUREMENT_CONDITION_OPTIONS,
   MEASUREMENT_NOTE_LIMIT,
+  formatCm,
+  formatPercent,
   formatWeight,
   measurementConditionLabel,
   measurementTime,
+  validateBodyFatInput,
+  validateWaistInput,
   validateWeightInput,
 } from "../domain/body";
 import { diaryToday } from "../domain/diary";
@@ -18,6 +22,8 @@ const fieldFor = (measurement: BodyMeasurement) => ({
   time: measurement.measuredAt ? measurement.measuredAt.slice(11, 16) : "",
   condition: measurement.condition ?? ("" as MeasurementCondition | ""),
   weight: String(measurement.weightKg),
+  waist: measurement.waistCm !== undefined ? measurement.waistCm.toFixed(1) : "",
+  bodyFat: measurement.bodyFatPercent !== undefined ? measurement.bodyFatPercent.toFixed(1) : "",
   note: measurement.note ?? "",
 });
 
@@ -41,9 +47,14 @@ export function WeightCorrectionModal({
   const [time, setTime] = useState(initial.time);
   const [condition, setCondition] = useState<MeasurementCondition | "">(initial.condition);
   const [weight, setWeight] = useState(initial.weight);
+  const [waist, setWaist] = useState(initial.waist);
+  const [bodyFat, setBodyFat] = useState(initial.bodyFat);
   const [note, setNote] = useState(initial.note);
   const parsed = validateWeightInput(weight);
   const parsedError = weight.trim() ? parsed.error : undefined;
+  const parsedWaist = validateWaistInput(waist);
+  const parsedBodyFat = validateBodyFatInput(bodyFat);
+  const girthError = parsedWaist.error ?? parsedBodyFat.error;
 
   const diffRows: { label: string; from: string; to: string }[] = [];
   if (!voided) {
@@ -59,6 +70,16 @@ export function WeightCorrectionModal({
       from: `${formatWeight(measurement.weightKg)} kg`,
       to: `${parsed.value !== undefined ? formatWeight(parsed.value) : weight} kg`,
     });
+    diffRows.push({
+      label: "腰围",
+      from: measurement.waistCm !== undefined ? formatCm(measurement.waistCm) : "未量",
+      to: parsedWaist.value !== undefined ? formatCm(parsedWaist.value) : "未量",
+    });
+    diffRows.push({
+      label: "体脂率",
+      from: measurement.bodyFatPercent !== undefined ? formatPercent(measurement.bodyFatPercent) : "未量",
+      to: parsedBodyFat.value !== undefined ? formatPercent(parsedBodyFat.value) : "未量",
+    });
     diffRows.push({ label: "备注", from: measurement.note || "—", to: note.trim() || "—" });
   }
 
@@ -68,13 +89,13 @@ export function WeightCorrectionModal({
         className="form"
         onSubmit={async (event) => {
           event.preventDefault();
-          if (!voided && parsed.error) return;
+          if (!voided && (parsed.error || girthError)) return;
           const trimmedReason = reason.trim();
           const result = voided
             ? await action.run(JSON.stringify({ voided, id: measurement.id, trimmedReason }), (id) =>
                 voidWeight({ measurementId: measurement.id, reason: trimmedReason }, id),
               )
-            : await action.run(JSON.stringify({ voided, id: measurement.id, trimmedReason, date, time, condition, weight }), (id) =>
+            : await action.run(JSON.stringify({ voided, id: measurement.id, trimmedReason, date, time, condition, weight, waist, bodyFat }), (id) =>
                 reviseWeight(
                   {
                     measurementId: measurement.id,
@@ -82,6 +103,9 @@ export function WeightCorrectionModal({
                     date,
                     ...(time ? { time } : {}),
                     ...(condition ? { condition } : {}),
+                    // 留空＝这次没量，字段不写；不能把空串变成 0。
+                    ...(parsedWaist.value !== undefined ? { waistCm: parsedWaist.value } : {}),
+                    ...(parsedBodyFat.value !== undefined ? { bodyFatPercent: parsedBodyFat.value } : {}),
                     ...(note.trim() ? { note: note.trim() } : {}),
                     reason: trimmedReason,
                   },
@@ -157,6 +181,33 @@ export function WeightCorrectionModal({
                 </label>
               </div>
               {parsedError && <p className="form-error" role="alert">{parsedError}</p>}
+              <div className="form-grid">
+                <label>
+                  <span>腰围（cm，可留空＝未量）</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={40}
+                    max={200}
+                    step="0.1"
+                    value={waist}
+                    onChange={(event) => setWaist(event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>体脂率（%，可留空＝未量）</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={3}
+                    max={70}
+                    step="0.1"
+                    value={bodyFat}
+                    onChange={(event) => setBodyFat(event.target.value)}
+                  />
+                </label>
+              </div>
+              {girthError && <p className="form-error" role="alert">{girthError}</p>}
               <label>
                 <span>备注（可选）</span>
                 <input
@@ -185,7 +236,7 @@ export function WeightCorrectionModal({
           {action.message && <p className="form-error" role="alert">{action.message}</p>}
           <button
             className={`button ${voided ? "danger" : "primary"} wide`}
-            disabled={action.busy || !confirmed || !reason.trim() || (!voided && !!parsed.error)}
+            disabled={action.busy || !confirmed || !reason.trim() || (!voided && (!!parsed.error || !!girthError))}
           >
             {action.busy ? "正在保存…" : voided ? "确认作废并保留原记录" : "确认更正并保留旧版本"}
           </button>

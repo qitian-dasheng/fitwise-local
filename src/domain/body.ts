@@ -21,6 +21,12 @@ export const WEIGHT_MIN_KG = 20;
 export const WEIGHT_MAX_KG = 400;
 export const MEASUREMENT_NOTE_LIMIT = 200;
 
+/** 腰围与体脂都是可选字段：留空就是没量，不能伪装成 0。 */
+export const WAIST_MIN_CM = 40;
+export const WAIST_MAX_CM = 200;
+export const BODY_FAT_MIN_PERCENT = 3;
+export const BODY_FAT_MAX_PERCENT = 70;
+
 /** 'YYYY-MM-DD' + 'HH:mm' → 'YYYY-MM-DDTHH:mm:00+08:00' */
 export function makeMeasuredAt(date: string, time: string) {
   return `${date}T${time.length === 5 ? `${time}:00` : time}+08:00`;
@@ -116,6 +122,141 @@ export function validateWeightInput(raw: string): { value?: number; error?: stri
   const decimals = text.includes(".") ? text.split(".")[1].length : 0;
   if (decimals > 2) return { error: "体重最多保留两位小数。" };
   return { value: Math.round(value * 100) / 100 };
+}
+
+/**
+ * 可留空的围度校验：空串表示「这次没量」，返回空对象而不是报错。
+ * 留空必须真的不写字段，不能落一个 0 到记录里——0 cm 腰围比没有腰围更误导。
+ */
+function validateOptionalDecimal(
+  raw: string,
+  options: { label: string; min: number; max: number; range: string; decimals: number },
+): { value?: number; error?: string } {
+  const { label, min, max, range, decimals } = options;
+  const text = raw.trim();
+  if (!text) return {};
+  if (!/^\d+(\.\d+)?$/.test(text)) return { error: `${label}只能是数字。` };
+  const value = Number(text);
+  if (!Number.isFinite(value)) return { error: `${label}只能是数字。` };
+  if (value < min || value > max) {
+    return { error: `${label}需在 ${range} 之间。` };
+  }
+  const digits = text.includes(".") ? text.split(".")[1].length : 0;
+  if (digits > decimals) {
+    return { error: `${label}最多保留${decimals === 1 ? "一" : "两"}位小数。` };
+  }
+  const factor = 10 ** decimals;
+  return { value: Math.round(value * factor) / factor };
+}
+
+export function validateWaistInput(raw: string) {
+  return validateOptionalDecimal(raw, {
+    label: "腰围",
+    min: WAIST_MIN_CM,
+    max: WAIST_MAX_CM,
+    range: "40–200 cm",
+    decimals: 1,
+  });
+}
+
+export function validateBodyFatInput(raw: string) {
+  return validateOptionalDecimal(raw, {
+    label: "体脂率",
+    min: BODY_FAT_MIN_PERCENT,
+    max: BODY_FAT_MAX_PERCENT,
+    range: "3%–70%",
+    decimals: 1,
+  });
+}
+
+/** 腰围一位小数、带单位。 */
+export function formatCm(value: number) {
+  return `${value.toFixed(1)} cm`;
+}
+
+export function formatPercent(value: number) {
+  return `${value.toFixed(1)}%`;
+}
+
+/** 围度变化文案：涨带 +，降带 −，「持平」不带单位。 */
+export function girthDeltaText(change: number, unit = "") {
+  if (Math.abs(change) < 0.05) return "持平";
+  return `${change > 0 ? "+" : ""}${change.toFixed(1)}${unit}`;
+}
+
+/** 围度的区间读数：最新一次、以及相对基线（区间前最近一次，没有则区间内第一条）的变化。 */
+export interface CircumferenceMetric {
+  latest: number;
+  latestDate: string;
+  change: number | null;
+  baseDate: string | null;
+}
+
+export type CircumferenceKey = "waistCm" | "bodyFatPercent";
+
+export interface CircumferencePoint {
+  date: string;
+  value: number;
+}
+
+/**
+ * 围度序列：同一天多次记录时取最晚的一次，缺失该字段的记录直接跳过。
+ * 围度不像体重那样有「当日代表值」概念，所以不套 dailyRepresentatives。
+ */
+export function circumferenceSeries(
+  measurements: BodyMeasurement[],
+  key: CircumferenceKey,
+): CircumferencePoint[] {
+  const byDate = new Map<string, CircumferencePoint>();
+  for (const item of chronologicalMeasurements(measurements)) {
+    const value = item[key];
+    if (typeof value !== "number" || !Number.isFinite(value)) continue;
+    byDate.set(item.date, { date: item.date, value });
+  }
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * 区间围度读数。区间内一次都没量过就返回 null——不把区间外的数字搬进来充数。
+ * 基线取「区间开始前最近一次」，没有才退回区间内第一条；只有一个点时 change 为 null。
+ */
+export function circumferenceMetric(
+  series: CircumferencePoint[],
+  start: string,
+  end: string,
+): CircumferenceMetric | null {
+  const inside = series.filter((point) => point.date >= start && point.date <= end);
+  if (!inside.length) return null;
+  const latest = inside[inside.length - 1];
+  const before = [...series].reverse().find((point) => point.date < start);
+  const base = before ?? inside[0];
+  if (base.date === latest.date) {
+    return { latest: latest.value, latestDate: latest.date, change: null, baseDate: null };
+  }
+  return {
+    latest: latest.value,
+    latestDate: latest.date,
+    change: Math.round((latest.value - base.value) * 10) / 10,
+    baseDate: base.date,
+  };
+}
+
+/** 截至某日（含）的最新一次围度，身体页用它显示「最新腰围 / 最新体脂」。 */
+export function latestCircumference(
+  measurements: BodyMeasurement[],
+  key: CircumferenceKey,
+  endDate: string,
+): CircumferenceMetric | null {
+  const series = circumferenceSeries(measurements, key).filter((point) => point.date <= endDate);
+  if (!series.length) return null;
+  const latest = series[series.length - 1];
+  const previous = series.length > 1 ? series[series.length - 2] : null;
+  return {
+    latest: latest.value,
+    latestDate: latest.date,
+    change: previous ? Math.round((latest.value - previous.value) * 10) / 10 : null,
+    baseDate: previous?.date ?? null,
+  };
 }
 
 /** 该条记录是其所在日期内第几次有效称重（1 起）；非有效记录返回 null。 */

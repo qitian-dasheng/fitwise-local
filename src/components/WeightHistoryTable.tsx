@@ -1,5 +1,7 @@
 import { Ruler } from "lucide-react";
 import {
+  formatCm,
+  formatPercent,
   formatWeight,
   measurementConditionLabel,
   measurementRows,
@@ -44,6 +46,8 @@ export function WeightHistoryTable({
               <span>时刻</span>
               <span>体重 kg</span>
               <span>变化</span>
+              <span>腰围 cm</span>
+              <span>体脂 %</span>
               <span>条件</span>
               <span>备注</span>
               <span>操作</span>
@@ -70,6 +74,8 @@ export function WeightHistoryTable({
                   <span className={`body-cell-num${delta === "持平" ? " body-delta-flat" : delta.startsWith("-") ? " body-delta-down" : delta.startsWith("+") ? " body-delta-up" : ""}`} title={deltaTitle}>
                     {delta}
                   </span>
+                  <span className="body-cell-num">{measurement.waistCm !== undefined ? formatCm(measurement.waistCm) : "—"}</span>
+                  <span className="body-cell-num">{measurement.bodyFatPercent !== undefined ? formatPercent(measurement.bodyFatPercent) : "—"}</span>
                   <span className="body-cell-muted">{measurementConditionLabel(measurement)}</span>
                   <span className="body-cell-note">{measurement.note || "—"}</span>
                   <div className="body-cell-actions">

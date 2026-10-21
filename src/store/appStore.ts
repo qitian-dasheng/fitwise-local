@@ -23,7 +23,16 @@ import { appStorage, flushAppStorageWrites, isTauriRuntime, reportStorageFailure
 import { foodMealEntries, saveFoodInState } from "../domain/foodLibrary";
 import { applyInventoryOperation } from "../domain/purchases";
 import { diaryToday, ratioPercent } from "../domain/diary";
-import { compareMeasurements, isActiveMeasurement, makeMeasuredAt, shanghaiNowParts } from "../domain/body";
+import {
+  BODY_FAT_MAX_PERCENT,
+  BODY_FAT_MIN_PERCENT,
+  WAIST_MAX_CM,
+  WAIST_MIN_CM,
+  compareMeasurements,
+  isActiveMeasurement,
+  makeMeasuredAt,
+  shanghaiNowParts,
+} from "../domain/body";
 import {
   isActiveWorkout,
   validateWorkoutDraft,
@@ -41,6 +50,8 @@ interface WeightPayload {
   measuredAt?: string;
   condition?: MeasurementCondition;
   note?: string;
+  waistCm?: number;
+  bodyFatPercent?: number;
 }
 
 /** 与 Rust body_commands 保持同一套守卫，浏览器预览不能放松。 */
@@ -57,6 +68,29 @@ function weightPayload(input: WeightRecordInput): { payload?: WeightPayload; err
   if (input.condition) payload.condition = input.condition;
   const note = input.note?.trim();
   if (note) payload.note = note;
+  // 围度与体重不同：没量就不写字段，绝不写 0 占位。
+  if (input.waistCm !== undefined) {
+    if (!Number.isFinite(input.waistCm) || input.waistCm < WAIST_MIN_CM || input.waistCm > WAIST_MAX_CM) {
+      return { error: "腰围需在 40–200 cm 之间。" };
+    }
+    if (Math.abs(input.waistCm * 10 - Math.round(input.waistCm * 10)) > 1e-6) {
+      return { error: "腰围最多保留一位小数。" };
+    }
+    payload.waistCm = Math.round(input.waistCm * 10) / 10;
+  }
+  if (input.bodyFatPercent !== undefined) {
+    if (
+      !Number.isFinite(input.bodyFatPercent) ||
+      input.bodyFatPercent < BODY_FAT_MIN_PERCENT ||
+      input.bodyFatPercent > BODY_FAT_MAX_PERCENT
+    ) {
+      return { error: "体脂率需在 3%–70% 之间。" };
+    }
+    if (Math.abs(input.bodyFatPercent * 10 - Math.round(input.bodyFatPercent * 10)) > 1e-6) {
+      return { error: "体脂率最多保留一位小数。" };
+    }
+    payload.bodyFatPercent = Math.round(input.bodyFatPercent * 10) / 10;
+  }
   return { payload };
 }
 
@@ -73,6 +107,8 @@ function measurementFromPayload(
     ...(payload.measuredAt ? { measuredAt: payload.measuredAt } : {}),
     ...(payload.condition ? { condition: payload.condition } : {}),
     ...(payload.note ? { note: payload.note } : {}),
+    ...(payload.waistCm !== undefined ? { waistCm: payload.waistCm } : {}),
+    ...(payload.bodyFatPercent !== undefined ? { bodyFatPercent: payload.bodyFatPercent } : {}),
     source: "manual",
     status: "active",
     createdAt: now,
@@ -89,6 +125,10 @@ export interface WeightRecordInput {
   time?: string;
   condition?: MeasurementCondition;
   note?: string;
+  /** 腰围 cm，一位小数；不传＝这次没量，不写字段。 */
+  waistCm?: number;
+  /** 体脂率 %，一位小数；不传＝这次没量，不写字段。 */
+  bodyFatPercent?: number;
 }
 
 export interface WeightReviseInput extends WeightRecordInput {

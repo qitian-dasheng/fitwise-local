@@ -6,7 +6,7 @@
  * 换人、换目标、换档位时不需要改代码。
  */
 
-import { dailyRepresentatives } from "./body";
+import { circumferenceMetric, circumferenceSeries, dailyRepresentatives, type CircumferenceMetric } from "./body";
 import { shiftDiaryDate } from "./diary";
 import type { BodyMeasurement, NutrientKey, UserProfile } from "./types";
 
@@ -51,6 +51,9 @@ export interface ReviewMetrics {
   weeklyDelta: number | null;
   safeMinRate: number;
   safeMaxRate: number;
+  /** 区间腰围：只在区间内确有测量时才有值，不拿区间外的数据冒充。 */
+  waist: CircumferenceMetric | null;
+  bodyFat: CircumferenceMetric | null;
 }
 
 export type ReviewLevel = "ok" | "warn" | "info";
@@ -188,6 +191,13 @@ function buildCalendar(days: ReviewDay[], profile: UserProfile): CalendarCell[] 
   });
 }
 
+/** 把日子压成「10-19、10-20 等 3 天」，避免提示变成一长串日期。 */
+function dateList(days: ReviewDay[], limit = 3) {
+  const shown = days.slice(0, limit).map((day) => day.date.slice(5));
+  const text = shown.join("、");
+  return days.length > limit ? `${text} 等 ${days.length} 天` : text;
+}
+
 function verdictsFor(
   metrics: ReviewMetrics,
   days: ReviewDay[],
@@ -263,23 +273,39 @@ function verdictsFor(
   if (metrics.averageCalories !== null) {
     const { min, max } = profile.dailyCalories;
     const average = Math.round(metrics.averageCalories);
+    // 提示必须说清「超在哪几天」，只说日均超了，用户还得自己去翻日历。
+    const knownDays = days.filter(
+      (day) => day.mealCount > 0 && (day.coverage?.calories ?? 0) >= 100,
+    );
+    const overDays = knownDays.filter((day) => (day.totals.calories ?? 0) > max);
+    const underDays = knownDays.filter((day) => (day.totals.calories ?? 0) < min);
     if (metrics.averageCalories > max + CALORIE_TOLERANCE) {
       verdicts.push({
         level: "warn",
         title: "日均热量超出目标",
-        detail: `完整记录日的日均 ${average} kcal，高于目标上限 ${max} kcal。看看是否有一两餐份量偏大，或零食没有记进来。`,
+        detail: `完整记录日的日均 ${average} kcal，高于目标上限 ${max} kcal。超出上限的有 ${dateList(
+          overDays,
+        )}。看看是否有一两餐份量偏大，或零食没有记进来。`,
       });
     } else if (metrics.averageCalories < min - CALORIE_TOLERANCE) {
       verdicts.push({
         level: "warn",
         title: "日均热量低于目标",
-        detail: `完整记录日的日均 ${average} kcal，低于目标下限 ${min} kcal。缺口过大容易连带掉肌肉，也可能让后续更难坚持。`,
+        detail: `完整记录日的日均 ${average} kcal，低于目标下限 ${min} kcal。低于下限的有 ${dateList(
+          underDays,
+        )}。缺口过大容易连带掉肌肉，也可能让后续更难坚持。`,
       });
     } else {
       verdicts.push({
         level: "ok",
         title: "日均热量在目标区间",
-        detail: `完整记录日的日均 ${average} kcal，落在 ${min}–${max} kcal 之间。`,
+        detail: `完整记录日的日均 ${average} kcal，落在 ${min}–${max} kcal 之间${
+          overDays.length + underDays.length > 0
+            ? `；${overDays.length + underDays.length} 天在区间外（${dateList(
+                [...overDays, ...underDays].sort((a, b) => a.date.localeCompare(b.date)),
+              )}），但被日均抵消了`
+            : ""
+        }。`,
       });
     }
   }
@@ -287,6 +313,10 @@ function verdictsFor(
   if (metrics.averageProtein !== null) {
     const target = profile.proteinTargetG;
     const average = Math.round(metrics.averageProtein);
+    const knownDays = days.filter(
+      (day) => day.mealCount > 0 && (day.coverage?.protein ?? 0) >= 100,
+    );
+    const shortDays = knownDays.filter((day) => (day.totals.protein ?? 0) < target);
     if (metrics.averageProtein < target * PROTEIN_FLOOR_RATIO) {
       verdicts.push({
         level: "warn",
@@ -294,7 +324,9 @@ function verdictsFor(
         detail: `完整记录日的日均 ${average} g，比目标 ${target} g 少 ${Math.max(
           0,
           Math.round(target - metrics.averageProtein),
-        )} g。优先从早餐蛋数或主餐肉量补，不要靠加工食品凑数。`,
+        )} g。没达到目标的有 ${dateList(
+          shortDays,
+        )}。优先从早餐蛋数或主餐肉量补，不要靠加工食品凑数。`,
       });
     } else if (metrics.averageProtein < target) {
       verdicts.push({
@@ -302,13 +334,52 @@ function verdictsFor(
         title: "蛋白接近目标",
         detail: `完整记录日的日均 ${average} g，距离目标 ${target} g 还差 ${Math.round(
           target - metrics.averageProtein,
-        )} g。再加一个蛋或几口肉就能补上。`,
+        )} g。没达标的只有 ${dateList(shortDays)}，再加一个蛋或几口肉就能补上。`,
       });
     } else {
       verdicts.push({
         level: "ok",
         title: "蛋白达标",
-        detail: `完整记录日的日均 ${average} g，达到目标 ${target} g。减脂期维持这个水平有助于保住肌肉。`,
+        detail: `完整记录日的日均 ${average} g，达到目标 ${target} g${
+          shortDays.length > 0 ? `；只有 ${dateList(shortDays)} 略低于目标` : ""
+        }。减脂期维持这个水平有助于保住肌肉。`,
+      });
+    }
+  }
+
+  if (metrics.waist) {
+    const { latest, change, baseDate } = metrics.waist;
+    if (change === null) {
+      verdicts.push({
+        level: "info",
+        title: "腰围只有一次记录",
+        detail: `区间内只量到 ${latest.toFixed(1)} cm（${
+          metrics.waist.latestDate
+        }）。腰围要两条以上才能看变化，下次量的时候保持同一位置、同一时间、同一松紧。`,
+      });
+    } else if (change < 0) {
+      verdicts.push({
+        level: "ok",
+        title: "腰围在下降",
+        detail: `从 ${baseDate} 的基线到 ${metrics.waist.latestDate} 的 ${latest.toFixed(
+          1,
+        )} cm，减少了 ${Math.abs(change).toFixed(
+          1,
+        )} cm。腰围反映腹部脂肪，比体重更不容易被水分干扰，体重不动时它会先动。`,
+      });
+    } else if (change > 0) {
+      verdicts.push({
+        level: "info",
+        title: "腰围没有下降",
+        detail: `最新 ${latest.toFixed(1)} cm，比基线（${baseDate}）多 ${change.toFixed(
+          1,
+        )} cm。单次测量受位置与松紧影响很大，先确认量法一致；连续两次同向再当趋势看。`,
+      });
+    } else {
+      verdicts.push({
+        level: "info",
+        title: "腰围持平",
+        detail: `最新 ${latest.toFixed(1)} cm，与基线（${baseDate}）相同。体重下降时腰围持平通常是测量误差或水分，继续观察即可。`,
       });
     }
   }
@@ -400,6 +471,8 @@ export function buildReview(input: {
     weeklyDelta: rollingDelta(measurements, end),
     safeMinRate: minRate,
     safeMaxRate: maxRate,
+    waist: circumferenceMetric(circumferenceSeries(measurements, "waistCm"), start, end),
+    bodyFat: circumferenceMetric(circumferenceSeries(measurements, "bodyFatPercent"), start, end),
   };
 
   return {

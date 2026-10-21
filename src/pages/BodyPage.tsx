@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Activity, CalendarCheck, Scale, Target } from "lucide-react";
+import { Activity, CalendarCheck, Percent, Ruler, Scale } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DiaryDateControl } from "../components/DiaryDateControl";
 import { PageHeader } from "../components/PageHeader";
@@ -10,8 +10,14 @@ import {
   MEASUREMENT_CONDITION_OPTIONS,
   MEASUREMENT_NOTE_LIMIT,
   dailyRepresentatives,
+  formatCm,
+  formatPercent,
   formatWeight,
+  girthDeltaText,
+  latestCircumference,
   shanghaiNowParts,
+  validateBodyFatInput,
+  validateWaistInput,
   validateWeightInput,
   weightDelta,
 } from "../domain/body";
@@ -37,10 +43,16 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
     time: now.time,
     condition: "morning" as MeasurementCondition,
     weight: "",
+    waist: "",
+    bodyFat: "",
     note: "",
   });
   const parsed = validateWeightInput(form.weight);
   const weightError = form.weight.trim() ? parsed.error : undefined;
+  // 围度与体脂可留空：留空就真的不写字段，不能落一个 0。
+  const parsedWaist = validateWaistInput(form.waist);
+  const parsedBodyFat = validateBodyFatInput(form.bodyFat);
+  const girthError = parsedWaist.error ?? parsedBodyFat.error;
 
   const start = shiftDiaryDate(date, -6);
   const period = usePeriodSummary(start, date);
@@ -68,6 +80,8 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   // 「持平」和「—」都是文案，不能拼上 kg 单位。
   const sevenDayChangeText = /^[+-]/.test(sevenDayChange) ? `${sevenDayChange} kg` : sevenDayChange;
   const toTarget = latest !== null ? latest - profile.targetWeightKg : null;
+  const waist = latestCircumference(measurements, "waistCm", date);
+  const bodyFat = latestCircumference(measurements, "bodyFatPercent", date);
 
   if (period.loading || period.error) {
     return (
@@ -104,21 +118,27 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
           className="body-entry-form"
           onSubmit={async (event) => {
             event.preventDefault();
-            if (parsed.error) return;
+            if (parsed.error || girthError) return;
             const input = {
               weightKg: parsed.value!,
               date: form.date,
               ...(form.time ? { time: form.time } : {}),
               condition: form.condition,
+              ...(parsedWaist.value !== undefined ? { waistCm: parsedWaist.value } : {}),
+              ...(parsedBodyFat.value !== undefined ? { bodyFatPercent: parsedBodyFat.value } : {}),
               ...(form.note.trim() ? { note: form.note.trim() } : {}),
             };
             const result = await action.run(JSON.stringify(input), (id) => recordWeight(input, id));
             if (!result.error) {
-              setForm((current) => ({ ...current, weight: "", note: "" }));
+              setForm((current) => ({ ...current, weight: "", waist: "", bodyFat: "", note: "" }));
+              const extras = [
+                parsedWaist.value !== undefined ? `腰围 ${formatCm(parsedWaist.value)}` : null,
+                parsedBodyFat.value !== undefined ? `体脂 ${formatPercent(parsedBodyFat.value)}` : null,
+              ].filter(Boolean);
               action.setMessage(
                 result.isOutlier
                   ? `已记录 ${formatWeight(input.weightKg)} kg；与最近记录相差较大，已保留原始值，请复核称量。`
-                  : `已记录 ${formatWeight(input.weightKg)} kg。`,
+                  : `已记录 ${formatWeight(input.weightKg)} kg${extras.length ? `，${extras.join("、")}` : ""}。`,
               );
             }
           }}
@@ -167,6 +187,32 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
                 onChange={(event) => setForm({ ...form, weight: event.target.value })}
               />
             </label>
+            <label>
+              <span>腰围（cm，可留空）</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min={40}
+                max={200}
+                step="0.1"
+                placeholder="例如 92.5"
+                value={form.waist}
+                onChange={(event) => setForm({ ...form, waist: event.target.value })}
+              />
+            </label>
+            <label>
+              <span>体脂率（%，可留空）</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min={3}
+                max={70}
+                step="0.1"
+                placeholder="例如 24.3"
+                value={form.bodyFat}
+                onChange={(event) => setForm({ ...form, bodyFat: event.target.value })}
+              />
+            </label>
             <label className="body-entry-note">
               <span>备注（可选）</span>
               <input
@@ -176,20 +222,49 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
                 onChange={(event) => setForm({ ...form, note: event.target.value })}
               />
             </label>
-            <button className="button primary" type="submit" disabled={action.busy || !!parsed.error}>
+            <button className="button primary" type="submit" disabled={action.busy || !!parsed.error || !!girthError}>
               {action.busy ? "正在保存…" : "记录这次称重"}
             </button>
           </fieldset>
           {weightError && <p className="form-error" role="alert">{weightError}</p>}
+          {girthError && <p className="form-error" role="alert">{girthError}</p>}
           {action.message && <p className="form-success" role="status">{action.message}</p>}
         </form>
       </section>
 
-      <div className="metric-row">
-        <Metric icon={<Scale />} label="最新体重" value={latest === null ? "—" : `${formatWeight(latest)} kg`} note="取所选日之前最近一次" />
+      <div className="metric-row five">
+        <Metric
+          icon={<Scale />}
+          label="最新体重"
+          value={latest === null ? "—" : `${formatWeight(latest)} kg`}
+          note={toTarget === null ? "取所选日之前最近一次" : `距目标 ${profile.targetWeightKg} kg 还差 ${formatWeight(Math.abs(toTarget))} kg`}
+        />
         <Metric icon={<Activity />} label="七日平均" value={sevenDayAverage === null ? "—" : `${formatWeight(sevenDayAverage)} kg`} note="每天只算一个代表值" />
         <Metric icon={<CalendarCheck />} label="七日变化" value={sevenDayChangeText} note="与区间起点比较" />
-        <Metric icon={<Target />} label="距阶段目标" value={toTarget === null ? "—" : `${formatWeight(toTarget)} kg`} note={`目标 ${profile.targetWeightKg} kg`} />
+        <Metric
+          icon={<Ruler />}
+          label="最新腰围"
+          value={waist === null ? "—" : formatCm(waist.latest)}
+          note={
+            waist === null
+              ? "还没有腰围记录"
+              : waist.change === null
+                ? `记录于 ${waist.latestDate.slice(5)}`
+                : `较上次 ${girthDeltaText(waist.change, " cm")}`
+          }
+        />
+        <Metric
+          icon={<Percent />}
+          label="最新体脂"
+          value={bodyFat === null ? "—" : formatPercent(bodyFat.latest)}
+          note={
+            bodyFat === null
+              ? "还没有体脂记录"
+              : bodyFat.change === null
+                ? `记录于 ${bodyFat.latestDate.slice(5)}`
+                : `较上次 ${girthDeltaText(bodyFat.change, "%")}`
+          }
+        />
       </div>
 
       <section className="card chart-card">

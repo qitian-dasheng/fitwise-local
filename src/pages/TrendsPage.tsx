@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { diaryToday, shiftDiaryDate, type DiaryDateProps } from "../domain/diary";
+import { daySpan, diaryToday, shiftDiaryDate, type DiaryDateProps } from "../domain/diary";
 import { DiaryDateControl } from "../components/DiaryDateControl";
 import {
   Activity,
@@ -9,6 +9,7 @@ import {
   Dumbbell,
   Flame,
   Info,
+  Ruler,
   Scale,
   Utensils,
 } from "lucide-react";
@@ -31,7 +32,20 @@ import { buildReview, RANGE_PRESETS, type RangePreset, type ReviewDay } from "..
 import { ReviewCalendar } from "../components/ReviewCalendar";
 import { WeeklyDeltaGauge } from "../components/WeeklyDeltaGauge";
 import { isActiveWorkout } from "../domain/workouts";
-import { formatWeight } from "../domain/body";
+import { formatCm, formatPercent, formatWeight, girthDeltaText } from "../domain/body";
+
+/** 自定义区间上限：再长就不是「阶段复盘」了；也顺带挡住误输入的天文数字。 */
+const MAX_CUSTOM_DAYS = 92;
+
+/** 输入即收窄：结束不晚于今天，开始不晚于结束、不早于「结束 − 91 天」，保证 span 永远 ≤ 上限。 */
+function clampRange(start: string, end: string) {
+  const today = diaryToday();
+  const safeEnd = end > today ? today : end;
+  let safeStart = start > safeEnd ? safeEnd : start;
+  const floor = shiftDiaryDate(safeEnd, -(MAX_CUSTOM_DAYS - 1));
+  if (safeStart < floor) safeStart = floor;
+  return { start: safeStart, end: safeEnd };
+}
 
 export function TrendsPage({
   date = diaryToday(),
@@ -39,8 +53,11 @@ export function TrendsPage({
   goTo,
 }: DiaryDateProps & { goTo?: (page: string) => void } = {}) {
   const [rangeDays, setRangeDays] = useState<RangePreset>(7);
-  const start = shiftDiaryDate(date, -(rangeDays - 1));
-  const end = date;
+  // null = 用预设档位；有值 = 用户自己指定的起止日（与日记日解耦）。
+  const [custom, setCustom] = useState<{ start: string; end: string } | null>(null);
+  const start = custom ? custom.start : shiftDiaryDate(date, -(rangeDays - 1));
+  const end = custom ? custom.end : date;
+  const spanDays = Math.max(1, daySpan(start, end));
 
   const period = usePeriodSummary(start, end);
   const meals = useAppStore((state) => state.meals);
@@ -59,7 +76,7 @@ export function TrendsPage({
       }));
     }
     const rebuilt: ReviewDay[] = [];
-    for (let offset = 0; offset < rangeDays; offset += 1) {
+    for (let offset = 0; offset < spanDays; offset += 1) {
       const current = shiftDiaryDate(start, offset);
       const entries = activeMeals(meals).filter((item) => item.date === current);
       const summary = summarizeMeals(entries);
@@ -75,7 +92,7 @@ export function TrendsPage({
       });
     }
     return rebuilt;
-  }, [period.data, meals, checkIns, workouts, start, rangeDays]);
+  }, [period.data, meals, checkIns, workouts, start, spanDays]);
 
   const review = useMemo(
     () => buildReview({ days, measurements, profile, start, end }),
@@ -118,21 +135,60 @@ export function TrendsPage({
             <button
               key={preset}
               type="button"
-              className={preset === rangeDays ? "active" : ""}
-              aria-pressed={preset === rangeDays}
-              onClick={() => setRangeDays(preset)}
+              className={!custom && preset === rangeDays ? "active" : ""}
+              aria-pressed={!custom && preset === rangeDays}
+              onClick={() => {
+                setCustom(null);
+                setRangeDays(preset);
+              }}
             >
               {preset} 天
             </button>
           ))}
+          <button
+            type="button"
+            className={custom ? "active" : ""}
+            aria-pressed={!!custom}
+            onClick={() => setCustom({ start, end })}
+          >
+            自定义
+          </button>
         </div>
       </div>
 
+      {custom && (
+        <div className="range-custom">
+          <label>
+            <span>开始</span>
+            <input
+              type="date"
+              value={custom.start}
+              max={custom.end}
+              onChange={(event) => setCustom(clampRange(event.target.value, custom.end))}
+            />
+          </label>
+          <label>
+            <span>结束</span>
+            <input
+              type="date"
+              value={custom.end}
+              min={custom.start}
+              max={diaryToday()}
+              onChange={(event) => setCustom(clampRange(custom.start, event.target.value))}
+            />
+          </label>
+          <span className="calendar-hint">最长 {MAX_CUSTOM_DAYS} 天，超出会自动收窄。</span>
+          <button className="text-button" type="button" onClick={() => setCustom(null)}>
+            回到 {rangeDays} 天预设
+          </button>
+        </div>
+      )}
+
       <p className="form-hint">
-        统计区间 {start} 至 {end}（{rangeDays} 天）。日均只使用「已确认 + 有餐次 + 热量全部已知」的完整日，缺失的日子不会按 0 摊薄。
+        统计区间 {start} 至 {end}（{spanDays} 天）。日均只使用「已确认 + 有餐次 + 热量全部已知」的完整日，缺失的日子不会按 0 摊薄。
       </p>
 
-      <div className="metric-row">
+      <div className="metric-row five">
         <Metric
           icon={<Flame />}
           label="日均热量"
@@ -165,6 +221,33 @@ export function TrendsPage({
           note={metrics.latestWeightKg === null ? "区间内没有称重" : `最新 ${formatWeight(metrics.latestWeightKg)} kg`}
         />
         <Metric
+          icon={<Ruler />}
+          label="区间腰围变化"
+          value={
+            metrics.waist === null
+              ? "区间内未量"
+              : metrics.waist.change === null
+                ? formatCm(metrics.waist.latest)
+                : girthDeltaText(metrics.waist.change, " cm")
+          }
+          tone={
+            metrics.waist?.change == null || metrics.waist.change === 0
+              ? undefined
+              : metrics.waist.change < 0
+                ? "down"
+                : "up"
+          }
+          note={
+            metrics.waist === null
+              ? "在「身体」页记一次腰围"
+              : metrics.waist.change === null
+                ? `${metrics.waist.latestDate.slice(5)} 只有一次`
+                : `最新 ${formatCm(metrics.waist.latest)}${
+                    metrics.bodyFat ? ` · 体脂 ${formatPercent(metrics.bodyFat.latest)}` : ""
+                  }`
+          }
+        />
+        <Metric
           icon={<Dumbbell />}
           label="区间运动"
           value={`${metrics.workoutCount} 次`}
@@ -174,19 +257,26 @@ export function TrendsPage({
 
       <WeeklyDeltaGauge delta={metrics.weeklyDelta} minRate={metrics.safeMinRate} maxRate={metrics.safeMaxRate} />
 
-      <ReviewCalendar cells={review.calendar} />
+      <ReviewCalendar
+        cells={review.calendar}
+        onSelect={(day) => {
+          // 点某天＝把日记日切到那天并跳到饮食页，省掉「记住日期再自己翻」。
+          onDateChange?.(day);
+          goTo?.("food");
+        }}
+      />
 
       <section className="card chart-card">
         <div className="card-heading compact">
           <div>
             <p className="eyebrow">图示摄入 · 完整日计均值</p>
-            <h2>{rangeDays} 天热量</h2>
+            <h2>{spanDays} 天热量</h2>
           </div>
         </div>
         <div className="chart-large">
           {chartData.some((item) => item.calories !== null) ? (
             <ResponsiveContainer width="100%" height="100%">
-              {rangeDays <= 14 ? (
+              {spanDays <= 14 ? (
               <BarChart data={chartData}>
                 <CartesianGrid vertical={false} stroke="#e8ebe5" />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} />

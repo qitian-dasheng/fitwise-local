@@ -474,7 +474,7 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 
 .body-history { display: grid; gap: 16px; padding: 24px; }
 .body-table-scroll { overflow-x: auto; }
-.body-table { --body-cols: minmax(150px, 1.2fr) 76px 92px 88px 84px minmax(130px, 1.3fr) 152px; min-width: 860px; }
+.body-table { --body-cols: minmax(150px, 1.2fr) 74px 86px 78px 84px 74px 76px minmax(120px, 1.2fr) 152px; min-width: 1040px; }
 .body-row { display: grid; grid-template-columns: var(--body-cols); gap: 12px; align-items: center; min-height: 58px; padding: 11px 8px; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
 .body-row:last-child { border-bottom: 0; }
 .body-head { min-height: 36px; color: var(--muted); font-size: 11px; font-weight: 600; }
@@ -529,6 +529,26 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 .workout-inactive-note { color: var(--muted); font-size: 11px; line-height: 1.5; text-align: right; overflow-wrap: anywhere; }
 .workout-row-inactive { background: var(--surface-soft); }
 .workout-row-inactive strong, .workout-row-inactive b { color: var(--muted); }
+
+/* ===== 0.4.10 进度证据：五列指标行、自定义区间、可点日历 ===== */
+/* 复盘页与身体页都要把围度挤进同一行：默认四列，用 .five 扩到五列。 */
+.metric-row.five { grid-template-columns: repeat(5, 1fr); }
+@media (max-width: 1180px) { .metric-row.five { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 1080px) { .metric-row.five { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 720px) { .metric-row.five { grid-template-columns: 1fr; } }
+
+.range-custom { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.range-custom label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.range-custom input { padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; color: inherit; font: inherit; font-size: 12.5px; }
+.range-custom .text-button { margin-left: auto; }
+
+/* 日历格可点：只在传入 onSelect 时才渲染成按钮，键盘也能走。
+   这里只补按钮默认样式（内边距/字体/光标），不碰颜色与背景，
+   否则会盖掉 .calendar-hit / .calendar-miss 这些状态色。 */
+button.calendar-cell { padding: 0; font: inherit; cursor: pointer; }
+button.calendar-cell:hover { box-shadow: 0 0 0 2px var(--green); }
+button.calendar-cell:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.calendar-hint { margin: 0; color: var(--muted); font-size: 11.5px; }
 
 /* ===== 0.4.9 阶段复盘：区间控制、周降幅刻度、达标日历、复盘提示 ===== */
 .trends-page { display: grid; gap: 22px; }

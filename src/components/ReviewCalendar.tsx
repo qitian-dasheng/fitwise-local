@@ -20,8 +20,15 @@ function cellTitle(cell: CalendarCell) {
  * 区间达标日历：一格一天。
  * 「达标」用严格口径（热量在目标区间内且蛋白达到目标），
  * 热量未知的那天单独标出来，不混进达标或未达标。
+ * 传入 onSelect 时每格变成按钮，点了就跳到那一天。
  */
-export function ReviewCalendar({ cells }: { cells: CalendarCell[] }) {
+export function ReviewCalendar({
+  cells,
+  onSelect,
+}: {
+  cells: CalendarCell[];
+  onSelect?: (date: string) => void;
+}) {
   return (
     <section className="card review-calendar">
       <div className="card-heading compact">
@@ -32,17 +39,30 @@ export function ReviewCalendar({ cells }: { cells: CalendarCell[] }) {
         <span className="calendar-total">{cells.filter((cell) => cell.status === "hit").length} 天达标</span>
       </div>
       <div className="calendar-grid">
-        {cells.map((cell) => (
-          <div
-            key={cell.date}
-            className={`calendar-cell calendar-${cell.status}${cell.complete ? " calendar-complete" : ""}`}
-            title={cellTitle(cell)}
-          >
-            <span>{Number(cell.date.slice(8, 10))}</span>
-            {cell.workoutCount > 0 && <i className="calendar-dot" aria-hidden="true" />}
-          </div>
-        ))}
+        {cells.map((cell) => {
+          const className = `calendar-cell calendar-${cell.status}${cell.complete ? " calendar-complete" : ""}`;
+          const label = cellTitle(cell);
+          return onSelect ? (
+            <button
+              key={cell.date}
+              type="button"
+              className={className}
+              title={`${label} · 点击查看这一天`}
+              aria-label={`${label}，点击查看这一天`}
+              onClick={() => onSelect(cell.date)}
+            >
+              <span>{Number(cell.date.slice(8, 10))}</span>
+              {cell.workoutCount > 0 && <i className="calendar-dot" aria-hidden="true" />}
+            </button>
+          ) : (
+            <div key={cell.date} className={className} title={label}>
+              <span>{Number(cell.date.slice(8, 10))}</span>
+              {cell.workoutCount > 0 && <i className="calendar-dot" aria-hidden="true" />}
+            </div>
+          );
+        })}
       </div>
+      {onSelect && <p className="calendar-hint">点任意一格跳到那一天，查看当天的饮食记录。</p>}
       <ul className="calendar-legend">
         <li><i className="calendar-cell calendar-hit" /> 达标</li>
         <li><i className="calendar-cell calendar-miss" /> 未达标</li>

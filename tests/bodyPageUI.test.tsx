@@ -96,7 +96,7 @@ it("rejects a third decimal before writing anything", async () => {
   expect(useAppStore.getState().measurements).toHaveLength(0);
 });
 
-it("renders the seven history columns and same-day badges", async () => {
+it("renders the nine history columns and same-day badges", async () => {
   await renderPage([
     measurement({ id: "a", weightKg: 83.4, measuredAt: "2026-10-19T06:30:00+08:00", condition: "morning" }),
     measurement({ id: "b", weightKg: 82.9, measuredAt: "2026-10-19T21:10:00+08:00", condition: "other" }),
@@ -104,7 +104,7 @@ it("renders the seven history columns and same-day badges", async () => {
   ]);
 
   const heads = [...host.querySelectorAll(".body-head > span")].map((item) => item.textContent);
-  expect(heads).toEqual(["日期", "时刻", "体重 kg", "变化", "条件", "备注", "操作"]);
+  expect(heads).toEqual(["日期", "时刻", "体重 kg", "变化", "腰围 cm", "体脂 %", "条件", "备注", "操作"]);
 
   const second = rowFor("82.90");
   expect(second.textContent).toContain("当日第 2 次");
@@ -168,4 +168,96 @@ it("opens the correction dialog with a before/after diff and requires a reason",
     item.textContent?.includes("确认更正"),
   ) as HTMLButtonElement;
   expect(enabled.disabled).toBe(false);
+});
+
+function fieldInput(prefix: string) {
+  const field = [...host.querySelectorAll(".body-entry-form label")].find((label) =>
+    label.querySelector("span")?.textContent?.startsWith(prefix),
+  );
+  expect(field, `找不到「${prefix}」输入项`).toBeTruthy();
+  return field!.querySelector("input") as HTMLInputElement;
+}
+
+function setValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+  setter.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function metricCard(label: string) {
+  const card = [...host.querySelectorAll(".metric-card")].find((item) =>
+    item.textContent?.includes(label),
+  );
+  expect(card, `找不到「${label}」指标卡`).toBeTruthy();
+  return card as HTMLElement;
+}
+
+it("records waist and body fat when filled", async () => {
+  await renderPage([]);
+  const form = host.querySelector(".body-entry-form") as HTMLFormElement;
+  await act(async () => {
+    setValue(fieldInput("体重"), "82.64");
+    setValue(fieldInput("腰围"), "92.5");
+    setValue(fieldInput("体脂率"), "24.3");
+  });
+  await act(async () => {
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+
+  const stored = useAppStore.getState().measurements;
+  expect(stored).toHaveLength(1);
+  expect(stored[0]).toMatchObject({ weightKg: 82.64, waistCm: 92.5, bodyFatPercent: 24.3 });
+});
+
+it("leaves girth fields out entirely when they are blank", async () => {
+  await renderPage([]);
+  const form = host.querySelector(".body-entry-form") as HTMLFormElement;
+  await act(async () => {
+    setValue(fieldInput("体重"), "82.64");
+  });
+  await act(async () => {
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+
+  const stored = useAppStore.getState().measurements;
+  expect(stored).toHaveLength(1);
+  // 关键：留空不能落一个 0，也不能是 null 占位。
+  expect("waistCm" in stored[0]).toBe(false);
+  expect("bodyFatPercent" in stored[0]).toBe(false);
+});
+
+it("rejects an out-of-range waist and writes nothing", async () => {
+  await renderPage([]);
+  const form = host.querySelector(".body-entry-form") as HTMLFormElement;
+  await act(async () => {
+    setValue(fieldInput("体重"), "82.64");
+    setValue(fieldInput("腰围"), "300");
+  });
+  expect(host.querySelector(".form-error")?.textContent).toContain("腰围需在 40–200 cm 之间。");
+
+  await act(async () => {
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  expect(useAppStore.getState().measurements).toHaveLength(0);
+});
+
+it("shows the latest girth on the metric row with its delta", async () => {
+  await renderPage([
+    measurement({ id: "a", date: "2026-10-17", weightKg: 83.6, waistCm: 93.5, bodyFatPercent: 25 }),
+    measurement({ id: "b", date: "2026-10-19", weightKg: 82.9, waistCm: 92, bodyFatPercent: 24.4 }),
+  ]);
+
+  const waist = metricCard("最新腰围");
+  expect(waist.textContent).toContain("92.0 cm");
+  expect(waist.textContent).toContain("较上次 -1.5 cm");
+
+  const bodyFat = metricCard("最新体脂");
+  expect(bodyFat.textContent).toContain("24.4%");
+  expect(bodyFat.textContent).toContain("较上次 -0.6%");
+});
+
+it("falls back to a dash when only weight was ever recorded", async () => {
+  await renderPage([measurement({ id: "a", date: "2026-10-19", weightKg: 82.9 })]);
+  expect(metricCard("最新腰围").textContent).toContain("还没有腰围记录");
+  expect(metricCard("最新体脂").textContent).toContain("还没有体脂记录");
 });

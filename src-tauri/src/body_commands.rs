@@ -14,6 +14,12 @@ const WEIGHT_MIN_KG: f64 = 20.0;
 const WEIGHT_MAX_KG: f64 = 400.0;
 const TEXT_LIMIT: usize = 200;
 
+/// 腰围与体脂都是可选字段：缺失就写不进去，绝不用 0 顶替。
+const WAIST_MIN_CM: f64 = 40.0;
+const WAIST_MAX_CM: f64 = 200.0;
+const BODY_FAT_MIN_PERCENT: f64 = 3.0;
+const BODY_FAT_MAX_PERCENT: f64 = 70.0;
+
 /// 有效记录白名单：缺失 status 或显式 active。禁止写成「不等于 superseded」。
 fn is_active(item: &Value) -> bool {
     matches!(item["status"].as_str(), None | Some("active"))
@@ -85,6 +91,55 @@ fn parse_measured_at(payload: &Value, date: &str) -> Result<Option<String>, Stri
         return Err("称重时刻不能晚于当前时间。".into());
     }
     Ok(Some(raw.to_string()))
+}
+
+/// 可选的十进制字段：缺失/null/空串都表示「这次没量」，返回 None。
+/// 一旦给了值就必须落在区间内且小数位不超过一位——留空不能变成 0。
+fn parse_optional_decimal(
+    payload: &Value,
+    key: &str,
+    label: &str,
+    min: f64,
+    max: f64,
+    range: &str,
+) -> Result<Option<f64>, String> {
+    let value = match payload.get(key) {
+        None | Some(Value::Null) => return Ok(None),
+        Some(Value::Number(number)) => number
+            .as_f64()
+            .ok_or_else(|| format!("{label}只能是数字。"))?,
+        Some(_) => return Err(format!("{label}只能是数字。")),
+    };
+    if !value.is_finite() || value < min || value > max {
+        return Err(format!("{label}需在 {range} 之间。"));
+    }
+    let scaled = value * 10.0;
+    if (scaled - scaled.round()).abs() > 1e-6 {
+        return Err(format!("{label}最多保留一位小数。"));
+    }
+    Ok(Some(scaled.round() / 10.0))
+}
+
+fn parse_waist(payload: &Value) -> Result<Option<f64>, String> {
+    parse_optional_decimal(
+        payload,
+        "waistCm",
+        "腰围",
+        WAIST_MIN_CM,
+        WAIST_MAX_CM,
+        "40–200 cm",
+    )
+}
+
+fn parse_body_fat(payload: &Value) -> Result<Option<f64>, String> {
+    parse_optional_decimal(
+        payload,
+        "bodyFatPercent",
+        "体脂率",
+        BODY_FAT_MIN_PERCENT,
+        BODY_FAT_MAX_PERCENT,
+        "3%–70%",
+    )
 }
 
 fn parse_condition(payload: &Value) -> Result<Option<String>, String> {
@@ -190,6 +245,8 @@ struct Draft<'a> {
     measured_at: Option<&'a String>,
     condition: Option<&'a String>,
     note: Option<&'a String>,
+    waist: Option<f64>,
+    body_fat: Option<f64>,
     outlier: bool,
 }
 
@@ -200,6 +257,8 @@ fn build_measurement(id: &str, draft: &Draft, now: &str) -> Value {
         measured_at,
         condition,
         note,
+        waist,
+        body_fat,
         outlier,
     } = *draft;
     let mut measurement = json!({
@@ -215,6 +274,12 @@ fn build_measurement(id: &str, draft: &Draft, now: &str) -> Value {
     if let Some(note) = note {
         measurement["note"] = json!(note);
     }
+    if let Some(waist) = waist {
+        measurement["waistCm"] = json!(waist);
+    }
+    if let Some(body_fat) = body_fat {
+        measurement["bodyFatPercent"] = json!(body_fat);
+    }
     measurement
 }
 
@@ -225,11 +290,14 @@ fn measurement_details(draft: &Draft) -> Value {
         measured_at,
         condition,
         note,
+        waist,
+        body_fat,
         outlier,
     } = *draft;
     let mut details = json!({
         "date":date, "weightKg":weight, "measuredAt":measured_at,
-        "condition":condition, "note":note, "isOutlier":outlier,
+        "condition":condition, "note":note,
+        "waistCm":waist, "bodyFatPercent":body_fat, "isOutlier":outlier,
     });
     if let Some(object) = details.as_object_mut() {
         object.retain(|_, value| !value.is_null());
@@ -256,6 +324,8 @@ pub(crate) fn apply(
             let measured_at = parse_measured_at(payload, &date)?;
             let condition = parse_condition(payload)?;
             let note = parse_note(payload)?;
+            let waist = parse_waist(payload)?;
+            let body_fat = parse_body_fat(payload)?;
             let outlier = is_outlier(state, &date, weight, &[]);
             let draft = Draft {
                 date: &date,
@@ -263,6 +333,8 @@ pub(crate) fn apply(
                 measured_at: measured_at.as_ref(),
                 condition: condition.as_ref(),
                 note: note.as_ref(),
+                waist,
+                body_fat,
                 outlier,
             };
             let measurement = build_measurement(&id, &draft, &now);
@@ -287,6 +359,8 @@ pub(crate) fn apply(
             let measured_at = parse_measured_at(payload, &date)?;
             let condition = parse_condition(payload)?;
             let note = parse_note(payload)?;
+            let waist = parse_waist(payload)?;
+            let body_fat = parse_body_fat(payload)?;
 
             let existing = require_active_measurement(state, &target_id)?;
             let was_representative = existing["dayRepresentative"] == json!(true);
@@ -309,6 +383,8 @@ pub(crate) fn apply(
                 measured_at: measured_at.as_ref(),
                 condition: condition.as_ref(),
                 note: note.as_ref(),
+                waist,
+                body_fat,
                 outlier,
             };
             let mut measurement = build_measurement(&id, &draft, &now);
