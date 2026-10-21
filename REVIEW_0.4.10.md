@@ -46,6 +46,14 @@
 - `tsc -b`、生产构建、`cargo fmt --check`、`cargo clippy --all-targets -D warnings` 全部通过。
 - 视觉核对用只读预览页（临时目录 `build-logs/preview` + 无头 Chrome，核对后已删除、未入库）：1360 与 1920 两档确认——身体页录入卡是「4 + 2 + 备注/按钮」三行、5 张指标卡同一行且不挤、9 列历史表在 1360 下不横向溢出；复盘页 5 张卡同一行、日历格与图例对齐、提示里的日期文案正常换行。截图不作为安装版证据。
 
+### 安装包
+
+| 产物 | 字节 | SHA-256 |
+| --- | ---: | --- |
+| `src-tauri/target/release/bundle/msi/轻衡_0.4.10_x64_zh-CN.msi` | 4,866,048 | `856159E09B4770B1E6AA4BBA6515C1AFB6932F3F2F02313196AAFD5BB76AAD0E` |
+
+ProductVersion / FileVersion 均为 **0.4.10**；release 编译 2 分 06 秒。日志 `build-logs/tauri-build-0.4.10.log`。
+
 ## 仍然不完整的地方
 
 - **安装版未验收**：本轮只做自动测试与开发预览，原生窗口点验待用户覆盖安装后执行（清单见文末）。
