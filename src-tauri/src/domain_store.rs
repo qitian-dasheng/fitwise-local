@@ -380,6 +380,13 @@ pub fn domain_storage_remove(app: AppHandle, name: String) -> Result<(), String>
 pub fn get_domain_storage_status(app: AppHandle) -> Result<DomainStorageStatus, String> {
     let connection = open_database(&app)?;
     ensure_repository_schema(&connection)?;
+    let tx = connection
+        .unchecked_transaction()
+        .map_err(|e| e.to_string())?;
+    read_storage_status(&tx)
+}
+
+pub(crate) fn read_storage_status(connection: &Connection) -> Result<DomainStorageStatus, String> {
     let meta: Option<(i64, i64, String)> = connection
         .query_row(
             "SELECT persist_version, revision, updated_at FROM domain_state_meta WHERE id = 1",

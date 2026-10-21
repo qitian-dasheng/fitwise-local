@@ -1,9 +1,10 @@
 import { Archive, Bot, ChartNoAxesCombined, ChevronLeft, ChevronRight, ClipboardList, CookingPot, Dumbbell, Inbox, LayoutDashboard, Settings, Wheat } from "lucide-react";
-import { Component, lazy, Suspense, useEffect, useLayoutEffect, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, lazy, Suspense, useEffect, useLayoutEffect, useState, useSyncExternalStore, type ErrorInfo, type ReactNode } from "react";
 import { useAppStore } from "./store/appStore";
 import { listen } from "@tauri-apps/api/event";
 import { notifyInputs, useInputReceipts } from "./data/artifacts";
 import { diaryToday } from "./domain/diary";
+import { getStorageFailure, subscribeStorageFailure } from "./data/storage";
 
 const TodayPage = lazy(() => import("./pages/TodayPage").then((module) => ({ default: module.TodayPage })));
 const FoodPage = lazy(() => import("./pages/FoodPage").then((module) => ({ default: module.FoodPage })));
@@ -44,7 +45,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
       <div className="page page-error" role="alert">
         <Wheat size={30} />
         <h1>这个页面没有正常显示</h1>
-        <p>你的本地数据没有被删除。请重试；若仍失败，可把下方错误信息发给开发者。</p>
+        <p>页面显示失败不代表记录已删除。请保留当前窗口，先核对并保全记录；有未保存输入时不要重新加载。</p>
         <code>{this.state.error.message}</code>
         <button className="button primary" onClick={() => window.location.reload()}>重新加载应用</button>
       </div>
@@ -74,6 +75,7 @@ export default function App() {
   const inboxCount = useAppStore((state) => state.inbox.filter((item) => item.status === "unreviewed").length)+intake.data.unreviewedCount;
   const profile = useAppStore((state) => state.profile);
   const hydrated = useAppStore.persist.hasHydrated();
+  const storageFailure = useSyncExternalStore(subscribeStorageFailure, getStorageFailure);
   const [, forceRender] = useState(0);
   useEffect(() => useAppStore.persist.onFinishHydration(() => forceRender((value) => value + 1)), []);
   useEffect(()=>{
@@ -98,7 +100,7 @@ export default function App() {
     settings: <SettingsPage />,
   }[page] ?? <TodayPage goTo={setPage} />;
 
-  if (!hydrated) return <div className="loading-screen"><Wheat size={34}/><strong>正在打开轻衡…</strong></div>;
+  if (!hydrated) return <div className="loading-screen"><Wheat size={34}/><strong>{storageFailure ? "本地记录未能安全打开" : "正在打开轻衡…"}</strong>{storageFailure && <><p role="alert">{storageFailure}</p><p>未改用演示数据。请保留当前窗口，不要重置或清理应用数据。</p></>}</div>;
 
   return (
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
@@ -108,7 +110,7 @@ export default function App() {
         <div className="sidebar-bottom"><button className={page === "settings" ? "active" : ""} onClick={() => setPage("settings")}><Settings size={19}/><span>设置</span></button><div className="profile-mini"><div>{profile.name.slice(0, 1)}</div><span><strong>{profile.name}</strong><small>本地账户</small></span></div></div>
         <button className="collapse-button" onClick={() => setCollapsed((value) => !value)}>{collapsed ? <ChevronRight size={16}/> : <ChevronLeft size={16}/>}</button>
       </aside>
-      <main className="main-content"><PageErrorBoundary><Suspense fallback={<div className="page page-loading"><Wheat size={28}/><span>正在加载页面…</span></div>}><PageScrollReset key={page}/>{content}</Suspense></PageErrorBoundary></main>
+      <main className="main-content">{storageFailure && <div className="settings-notice card" role="alert">保存状态异常：{storageFailure}。请保留输入，不要重置数据。</div>}<PageErrorBoundary><Suspense fallback={<div className="page page-loading"><Wheat size={28}/><span>正在加载页面…</span></div>}><PageScrollReset key={page}/>{content}</Suspense></PageErrorBoundary></main>
     </div>
   );
 }

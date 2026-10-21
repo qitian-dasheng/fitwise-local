@@ -19,7 +19,7 @@ import type {
   MealCorrectionInput, RecipeInput,
 } from "../domain/types";
 import { enqueueDomainCommand, executeDomainCommand, type DomainCommandKind } from "../data/domainCommands";
-import { appStorage, flushAppStorageWrites, isTauriRuntime, suppressNextAppStorageWrite } from "../data/storage";
+import { appStorage, flushAppStorageWrites, isTauriRuntime, reportStorageFailure, suppressNextAppStorageWrite } from "../data/storage";
 import { foodMealEntries, saveFoodInState } from "../domain/foodLibrary";
 import { applyInventoryOperation } from "../domain/purchases";
 import { diaryToday, ratioPercent } from "../domain/diary";
@@ -433,6 +433,7 @@ export const useAppStore = create<AppStore>()(
       name: "fitwise-app-state-v1",
       storage: createJSONStorage(() => appStorage),
       version: 4,
+      onRehydrateStorage: () => (_state, error) => { if (error) reportStorageFailure(error); },
       migrate(persistedState, version) {
         const persisted = persistedState as Partial<AppState>;
         type LegacyBatch = Omit<PreparedBatch, "remainingRatio" | "status"> & Partial<Pick<PreparedBatch, "remainingRatio" | "status">>;

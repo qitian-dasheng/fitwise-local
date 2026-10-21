@@ -1,9 +1,9 @@
 use crate::domain_store::{import_legacy_state, load_envelope, open_database, STORAGE_NAME};
 use chrono::{Days, NaiveDate, Utc};
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 const NUTRIENTS: [&str; 7] = [
     "calories",
@@ -243,12 +243,27 @@ pub(crate) fn inventory_summary(connection: &Connection) -> Result<Value, String
 
 #[tauri::command]
 pub fn export_domain_json(app: AppHandle) -> Result<Value, String> {
-    let mut connection = open_database(&app)?;
-    let raw = match load_envelope(&connection)? {
-        Some(raw) => raw,
-        None => import_legacy_state(&mut connection, STORAGE_NAME)?
-            .unwrap_or_else(|| json!({"state":{},"version":4}).to_string()),
-    };
+    // Export must never initialize, migrate or import records as a side effect.
+    let path = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("fitwise.db");
+    export_domain_at_path(&path)
+}
+
+fn export_domain_at_path(path: &std::path::Path) -> Result<Value, String> {
+    let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|error| format!("只读导出无法打开数据库：{error}"))?;
+    connection
+        .busy_timeout(std::time::Duration::from_secs(5))
+        .map_err(|error| error.to_string())?;
+    // Capture state, label drafts and attachment manifests under the same read revision.
+    let transaction = connection
+        .unchecked_transaction()
+        .map_err(|error| error.to_string())?;
+    let raw = load_envelope(&transaction)?
+        .ok_or("数据库没有已初始化记录。请先另存当前窗口快照，不要重置或关闭窗口。")?;
     let envelope: Value = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
     let mut data = envelope["state"]
         .as_object()
@@ -257,11 +272,11 @@ pub fn export_domain_json(app: AppHandle) -> Result<Value, String> {
     data.insert("schemaVersion".into(), json!(10));
     data.insert(
         "labelDrafts".into(),
-        crate::label_drafts::manifest(&connection)?,
+        crate::label_drafts::manifest(&transaction)?,
     );
     data.insert(
         "inputArtifacts".into(),
-        crate::artifacts::manifest(&connection)?,
+        crate::artifacts::manifest(&transaction)?,
     );
     data.insert("persistVersion".into(), envelope["version"].clone());
     data.insert("exportedAt".into(), json!(Utc::now().to_rfc3339()));
@@ -281,4 +296,36 @@ pub fn get_domain_upgrade_report(app: AppHandle) -> Result<Value, String> {
         )
         .map_err(|error| error.to_string())?;
     serde_json::from_str(&raw).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod export_tests {
+    use super::*;
+    #[test]
+    fn export_is_read_only_never_imports_legacy_and_preserves_all_manifests() {
+        let path = std::env::temp_dir().join(format!(
+            "fitwise-readonly-export-{}.db",
+            rand::random::<u64>()
+        ));
+        assert!(export_domain_at_path(&path).is_err());
+        assert!(!path.exists());
+        let connection = Connection::open(&path).unwrap();
+        crate::domain_store::ensure_repository_schema(&connection).unwrap();
+        connection.execute("INSERT INTO app_kv(key,value,updated_at) VALUES('fitwise-app-state-v1','{}','test')", []).unwrap();
+        drop(connection);
+        let before = std::fs::read(&path).unwrap();
+        assert!(export_domain_at_path(&path).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        let connection = Connection::open(&path).unwrap();
+        connection.execute_batch("INSERT INTO domain_singletons(key,payload_json,updated_at) VALUES('profile','{}','test'),('aiSettings','{}','test'); INSERT INTO domain_state_meta(id,persist_version,revision,content_sha256,updated_at) VALUES(1,4,7,'test','test'); INSERT INTO domain_entities(collection,entity_id,payload_json,sort_index,updated_at) VALUES('meals','synthetic-meal','{\"id\":\"synthetic-meal\"}',0,'test');").unwrap();
+        drop(connection);
+        let before = std::fs::read(&path).unwrap();
+        let exported = export_domain_at_path(&path).unwrap();
+        assert_eq!(exported["source"], "sqlite_domain_repository");
+        assert_eq!(exported["meals"][0]["id"], "synthetic-meal");
+        assert_eq!(exported["labelDrafts"], json!([]));
+        assert_eq!(exported["inputArtifacts"]["binaryIncluded"], false);
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        std::fs::remove_file(path).unwrap();
+    }
 }

@@ -1,12 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
-import { Database, Download, HardDrive, KeyRound, LockKeyhole, RotateCcw, Shield, Trash2 } from "lucide-react";
+import { Database, HardDrive, KeyRound, LockKeyhole, RotateCcw, Shield, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { aiBudgetState, aiProviders, providerDescriptor, validateProviderSettings } from "../ai/providers";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import type { AiProviderId } from "../domain/types";
 import { useAppStore } from "../store/appStore";
-import { exportDomainJson } from "../data/domainQueries";
+import { DataExportPanel } from "../components/DataExportPanel";
+import { RuntimeDiagnostics } from "../components/RuntimeDiagnostics";
+import { isTauriRuntime } from "../data/storage";
 import { useConfirmedAction } from "../components/useConfirmedAction";
 import { ArtifactStoragePanel } from "../components/InputArtifacts";
 
@@ -35,7 +37,7 @@ interface DomainStorageStatus {
   updatedAt?: string | null;
 }
 
-const isTauri = () => "__TAURI_INTERNALS__" in window;
+const isTauri = isTauriRuntime;
 const formatBytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 
 export function SettingsPage() {
@@ -94,42 +96,6 @@ export function SettingsPage() {
       .then(setStorageStatus)
       .catch(() => setStorageStatus(null));
   }, [auditEventCount]);
-
-  async function exportJson() {
-    try {
-    const state = useAppStore.getState();
-    const data = {
-      schemaVersion: 9,
-      exportedAt: new Date().toISOString(),
-      app: "Fitwise Local",
-      profile: state.profile,
-      foodDefinitions: state.foodDefinitions,
-      foodDefinitionVersions: state.foodDefinitionVersions,
-      meals: state.meals,
-      checkIns: state.checkIns,
-      measurements: state.measurements,
-      workouts: state.workouts,
-      recipes: state.recipes,
-      batches: state.batches,
-      consumptionEvents: state.consumptionEvents,
-      wasteEvents: state.wasteEvents,
-      auditEvents: state.auditEvents,
-      inventory: state.inventory,
-      inventoryMovements: state.inventoryMovements,
-      purchases: state.purchases,
-      inbox: state.inbox,
-      plans: state.plans,
-      aiSettings: state.aiSettings,
-    };
-    const exported = isTauri() ? await exportDomainJson() : data;
-    const url = URL.createObjectURL(new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `fitwise-export-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    } catch (cause) { setMessage(String(cause)); }
-  }
 
   function openBackup(mode: "create" | "verify") {
     setPassphrase("");
@@ -272,6 +238,7 @@ export function SettingsPage() {
       <PageHeader eyebrow="本地优先" title="设置与数据" description="密钥、备份和外部助手权限都应可见、可撤销、可审计。" />
       {message && !backupMode && <div className="settings-notice card" role="status">{message}</div>}
       <div className="settings-grid">
+        <RuntimeDiagnostics/>
         <section className="card settings-section">
           <div className="settings-title"><Database/><div><h2>个人目标</h2><p>修改目标时创建新版本，不回写历史。</p></div></div>
           <div className="settings-list"><div><span>阶段体重</span><b>{profile.startWeightKg} → {profile.targetWeightKg} kg</b></div><div><span>每日热量</span><b>{profile.dailyCalories.min}–{profile.dailyCalories.max} kcal</b></div><div><span>蛋白质 / 纤维</span><b>{profile.proteinTargetG} g / {profile.fiberTargetG} g</b></div><div><span>设备</span><b>{profile.equipment.join("、")}</b></div></div>
@@ -285,7 +252,7 @@ export function SettingsPage() {
         <section className="card settings-section">
           <div className="settings-title"><LockKeyhole/><div><h2>数据库与附件加密备份</h2><p>Argon2id + AES-256-GCM；包含已入库原件与派生图，恢复时逐一核对哈希。忘记口令无法恢复；自动日周轮换尚未启用。</p></div></div>
           <div className="button-row"><button className="button primary" onClick={() => openBackup("create")}><LockKeyhole size={16}/> 创建加密备份</button><button className="button secondary" onClick={() => openBackup("verify")}><Shield size={16}/> 验证 / 暂存恢复</button></div>
-          <button className="text-button export-link" onClick={exportJson}><Download size={15}/> 导出 JSON（未加密）</button>
+          <DataExportPanel/>
         </section>
         <section className="card settings-section ai-config-section">
           <div className="settings-title"><KeyRound/><div><h2>AI 提供商与费用上限</h2><p>密钥仅存 Windows 凭据管理器；达到软上限后回退手工模式。</p></div></div>

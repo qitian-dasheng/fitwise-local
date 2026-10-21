@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { AppState } from "../domain/types";
-import { flushAppStorageWrites } from "./storage";
+import { assertDesktopBridge, flushAppStorageWrites } from "./storage";
 
 export type DomainCommandKind =
   | "save_label_draft"
@@ -86,6 +86,7 @@ export async function executeDomainCommand<TResult>(
   kind: DomainCommandKind,
   payload: Record<string, unknown>,
 ) {
+  assertDesktopBridge();
   await flushAppStorageWrites();
   return invoke<DomainCommandResponse<TResult>>("execute_domain_command", {
     request: {

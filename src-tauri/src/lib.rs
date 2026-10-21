@@ -2,6 +2,7 @@ mod artifacts;
 mod backup;
 mod batch_corrections;
 mod credentials;
+mod data_diagnostics;
 mod domain_commands;
 mod domain_queries;
 mod domain_store;
@@ -21,6 +22,8 @@ pub fn run() {
         .manage(upload::UploadServerControl::default())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            data_diagnostics::get_runtime_diagnostics,
+            data_diagnostics::write_json_export,
             label_drafts::list_label_drafts,
             label_drafts::get_label_draft,
             artifacts::import_local_input,
