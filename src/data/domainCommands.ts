@@ -35,7 +35,8 @@ export type DomainCommandKind =
   | "consume_batch"
   | "discard_batch"
   | "receive_purchase"
-  | "adjust_inventory";
+  | "adjust_inventory"
+  | "correct_receipt_weight";
 
 export interface DomainCommandResponse<TResult = Record<string, never>> {
   applied: boolean;

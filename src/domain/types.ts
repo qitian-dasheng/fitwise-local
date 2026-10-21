@@ -259,18 +259,22 @@ export interface InventoryLot {
   purchaseId?: string;
   receiptId?: string;
   specification?: string;
+  nominalAmount?: number;
+  receiptBasis?: "nominal" | "weighed";
+  weighedAt?: string;
   lastCountedAt?: string;
   openedAt?: string;
   returnedAmount?: number;
   wastedAmount?: number;
 }
 
-export type InventoryMovementType = "purchase" | "cooking" | "waste" | "adjustment" | "return";
+export type InventoryMovementType = "purchase" | "cooking" | "waste" | "adjustment" | "return" | "receipt_correction";
 export interface InventoryMovement {
   id: string;
   lotId: string;
   batchId?: string;
   reversesMovementId?: string;
+  correctsReceiptId?: string;
   type: InventoryMovementType;
   amount: number;
   reason: string;
@@ -283,13 +287,15 @@ export interface PurchasePackaging { count: number; container: "bag" | "box" | "
 export interface PurchaseReceipt {
   id: string; lotId: string; quantity: number; actualAmount: number; unit: InventoryLot["unit"]; costCny: number;
   name: string; foodId: string; receivedAt: string; expiresAt?: string; reason: string; replacement: boolean;
+  basis?: "nominal" | "weighed";
 }
 export interface ReceivePurchaseInput {
-  purchaseId: string; quantity: number; actualAmount: number; costCny: number; receivedAt: string; expiresAt?: string;
+  purchaseId: string; quantity: number; actualAmount?: number; costCny: number; receivedAt: string; expiresAt?: string;
   final: boolean; reason: string; replacement?: { name: string; foodId?: string };
 }
 export interface InventoryCountInput { lotId: string; remainingAmount: number; opened: boolean; expiresAt: string | null; reason: string }
 export interface InventoryDisposalInput { lotId: string; amount: number; kind: "return" | "waste"; reason: string; refundCny?: number }
+export interface InventoryReceiptCorrectionInput { lotId: string; actualAmount: number; reason: string }
 
 export interface PurchaseDraft {
   id: string;

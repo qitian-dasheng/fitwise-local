@@ -15,7 +15,7 @@ import type {
   WorkoutSession,
   FoodDefinitionInput,
   FoodMealInput,
-  ReceivePurchaseInput, InventoryCountInput, InventoryDisposalInput,
+  ReceivePurchaseInput, InventoryCountInput, InventoryDisposalInput, InventoryReceiptCorrectionInput,
   MealCorrectionInput, RecipeInput,
 } from "../domain/types";
 import { enqueueDomainCommand, executeDomainCommand, type DomainCommandKind } from "../data/domainCommands";
@@ -57,6 +57,7 @@ interface AppActions {
   recordPurchasePayment: (purchaseId:string,paidCny:number,refundedCny:number,reason:string,commandId?:string)=>Promise<ActionResult>;
   countInventory: (input:InventoryCountInput,commandId?:string)=>Promise<ActionResult>;
   disposeInventory: (input:InventoryDisposalInput,commandId?:string)=>Promise<ActionResult>;
+  correctReceiptWeight: (input:InventoryReceiptCorrectionInput,commandId?:string)=>Promise<ActionResult>;
   receivePurchase: (purchaseId: string, commandId?: string) => Promise<{ error?: string }>;
   adjustInventory: (lotId: string, remainingAmount: number, reason: string, commandId?: string) => Promise<{ error?: string }>;
   selectPlan: (planId: string, commandId?: string) => Promise<ActionResult>;
@@ -224,6 +225,7 @@ export const useAppStore = create<AppStore>()(
       async recordPurchasePayment(purchaseId,paidCny,refundedCny,reason,commandId=uid()){return inventoryCommand("update_purchase_payment",{purchaseId,paidCny,refundedCny,reason},commandId);},
       async countInventory(input,commandId=uid()){return inventoryCommand("adjust_inventory",{...input},commandId);},
       async disposeInventory(input,commandId=uid()){return inventoryCommand("dispose_inventory",{...input},commandId);},
+      async correctReceiptWeight(input,commandId=uid()){return inventoryCommand("correct_receipt_weight",{...input},commandId);},
       async receivePurchase(purchaseId, commandId = uid()) {
         return inventoryCommand("receive_purchase",{purchaseId},commandId);
       },

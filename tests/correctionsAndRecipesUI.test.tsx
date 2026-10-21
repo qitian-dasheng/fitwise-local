@@ -134,3 +134,28 @@ it("save-as creates independent recipe identity while pinning historical food ve
   await act(async()=>input("已核对该项").click());await submit();
   expect(save).toHaveBeenCalledOnce();const payload=save.mock.calls[0][0];expect(payload.recipeId).toBeUndefined();expect(payload.expectedVersionId).toBeUndefined();expect(payload.copiedFromVersionId).toBe(recipe.id);expect(payload.ingredients[0].foodVersionId).toBe(food.foodVersionId);expect(payload.ingredients[0].quantity).toBe(50);
 });
+it("splits edit and void row entries and previews before/after values",async()=>{
+  await act(async()=>{useAppStore.setState({meals:[meal]});root.render(<FoodPage/>);});
+  const entry=host.querySelector(".food-entry")!;
+  expect([...entry.querySelectorAll("button")].map(b=>b.textContent?.trim())).toEqual(["编辑","作废"]);
+  await act(async()=>button("编辑").click());
+  expect(host.textContent).toContain("更正餐食记录");
+  const diff=()=>host.querySelector(".correction-diff")!;
+  expect(diff().textContent).toContain("午餐");
+  expect(diff().textContent).toContain(meal.date);
+  expect(diff().textContent).toContain("原外食 · 一份");
+  await act(async()=>select([...host.querySelectorAll("label")].find(l=>l.textContent?.includes("餐次"))!.querySelector("select")!,"dinner"));
+  expect(diff().textContent).toContain("晚餐");
+  expect(host.querySelector(".correction-diff .changed")).not.toBeNull();
+  await act(async()=>fill([...host.querySelectorAll("input")].find(i=>i.type==="text"&&i.value==="原外食")!,"便利店饭团"));
+  expect(diff().textContent).toContain("便利店饭团");
+});
+it("opens void mode directly from the row with semantics explained",async()=>{
+  await act(async()=>{useAppStore.setState({meals:[meal]});root.render(<FoodPage/>);});
+  await act(async()=>button("作废").click());
+  expect(host.textContent).toContain("作废餐食记录");
+  expect(input("作废此条").checked).toBe(true);
+  expect(host.textContent).toContain("不删除食材库、不返还生鲜");
+  expect(host.querySelector(".correction-diff")).toBeNull();
+  expect(host.querySelector("form input[type=date]")).toBeNull();
+});

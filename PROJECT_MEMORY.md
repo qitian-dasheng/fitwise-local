@@ -32,8 +32,9 @@
 
 - 仓库：`C:\Users\21904\Documents\Obsidian\A\ai-fitness-platform`
 - 当前分支：`main`。
-- 本交接包生成前最新检查点：`d2c71dc docs: verify Explorer restart persistence and separate launcher contexts`。
-- 版本号：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 均为 `0.4.5`。
+- 本交接包生成前最新检查点：`1cc0072 docs: consolidate project memory and final product plan`（0.4.6-A 源码改动见该提交之后的工作区，收尾时另提交检查点）。
+- 版本号：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 均为 `0.4.6`。
+- 数据库 schema **v10**（`migrations/0010_label_drafts.sql`，`domain_upgrade.rs` 硬编码 `version = 10`）；领域 envelope 持久化格式仍为 **4**。0.4.6-A 只在 envelope 内新增可选字段，**不涉及 DDL 或迁移**。
 - Node：`C:\Program Files\nodejs\npm.cmd`
 - Rust/Cargo：`C:\Users\21904\.cargo\bin\cargo.exe`，stable x86_64-pc-windows-msvc。
 - 已安装：VS Code、Visual Studio 2022 Build Tools 的 VCTools 工作负载、Windows SDK、WebView2。不要安装完整 Visual Studio IDE。
@@ -61,7 +62,7 @@ npm run tauri build
 - `src/data/`：桌面/浏览器持久化适配及查询。
 - `src-tauri/src/domain_commands.rs`：正式领域命令与事务入口。
 - `src-tauri/src/domain_store.rs`、`domain_queries.rs`、`domain_upgrade.rs`：SQLite 仓库、投影、导出与升级。
-- `src-tauri/src/food_library.rs`、`inventory_ops.rs`、`meal_corrections.rs`、`recipes.rs`：关键业务服务。
+- `src-tauri/src/food_library.rs`、`inventory_ops.rs`、`meal_corrections.rs`、`recipes.rs`：关键业务服务。`inventory_ops.rs` 内含 `receive_purchase` 与 0.4.6 新增的 `correct_receipt_weight`；对应测试在模块内 `include!("inventory_correction_tests.rs")`。
 - `src-tauri/src/artifacts.rs`、`upload.rs`、`label_drafts.rs`：附件、局域网上传与离线标签草稿。
 - `tests/` 与 Rust 模块测试：隔离数据回归，不得写入真实用户库。
 
@@ -74,17 +75,19 @@ npm run tauri build
 - 历史餐食固定当时版本、数量、换算和营养快照；修改食材资料不回写历史。
 - 标准/自定义菜谱、历史版本复用、整锅制作、原料只扣一次、分餐、剩余与浪费。
 - 采购与库存：多平台、下单/到货/收货、包装层级、付款/退款、分批收货、替换、取消余单、盘点、开封、到期、退货、腐坏、FEFO。
+- 库存三量结构（0.4.6-A）：标称量 `nominalAmount` / 实收 `purchasedAmount` / 余量 `remainingAmount`，`receiptBasis` 区分 `nominal`（标称估算）与 `weighed`（已称重）。收货时数量未改动即记为标称；后续可「补录实重」纠正为实称，成本与订单支出不变，只改单位成本与余量，并追加 `receipt_correction` 流水留痕。仅有唯一采购流水、且未发生退货/损耗/制作的批次才允许补录。
+- 饮食单项纠错（0.4.6-A）：每行记录拆为「编辑」「作废」两个入口，编辑弹窗给出前→后差异表，作废态单独语义说明（不删食材库、不返还生鲜、不可一键恢复）。
 - 体重、运动、七日趋势、完整日均值；运动消耗不自动增加饮食额度。
 - 收件箱：本地文件/文字与可信局域网上传、内容哈希、缩略图、手工隐私遮挡、回收站、分页。
 - 离线营养标签草稿：手工抄录、保存/重开、核对后建档；没有 OCR 或真实 AI 请求。
 - SQLite 事务、领域命令回执/请求指纹、升级前快照与对账、JSON 导出、现有加密备份/暂存恢复、Windows 凭据存储边界。
 - 源码中的 P0 保护：原生 JSON 另存/回读校验、只读运行诊断、桌面桥接失败不回退浏览器存储、hydration 错误显式呈现。
 
-截至 P0 源码检查点：前端 108 项、Rust 72 项，共 180 项通过；生产构建、fmt、Clippy 全目标 `-D warnings` 通过。证据见 `BUILD_REPORT.md` 与 `build-logs/*0.4.6-p0*.log`。这些测试不等于尚未安装的补丁已完成原生验收。
+截至 0.4.6-A 源码检查点：前端 **18 文件 113 项**、Rust **78 项**（72 旧 + 6 新），共 **191 项** 通过；生产构建、fmt、Clippy 全目标 `-D warnings` 通过。证据见 `BUILD_REPORT.md`、`REVIEW_0.4.6.md` 与 `build-logs/*0.4.6-a*.log`。这些测试不等于尚未安装的补丁已完成原生验收。
 
 ## 6. 当前安装与数据事实（非常重要）
 
-- 当前已安装版本仍为 0.4.5；P0 保护性源码补丁尚未打包/安装。
+- 当前已安装版本仍为 0.4.5；0.4.6-A（P0 保护补丁 + 库存实重/补录 + 饮食单项纠错）已完成源码、自动测试与生产构建，安装包需用户单独批准后覆盖安装。
 - 用户真实数据已通过原生窗口导出和 Explorer 复制的数据库副本保全；副本完整性与导出逐项一致。
 - 用户从 Windows Explorer 正常打开 `C:\Program Files\轻衡\fitwise-local.exe` 后，重启前后的数据库来源导出除 `exportedAt` 外完全相同，既有记录持久化验收通过。
 - 电脑控制工具或命令行直接启动同一 exe/读取同名字面 AppData 路径时，会看到另一套较小数据库。这是运行上下文/文件视图差异，底层原因未完全确定。
@@ -103,10 +106,15 @@ npm run tauri build
 - 旧导出按钮虽然实际下载文件，但反馈不明显；新源码已改为显式另存/回读验证，待发布。
 - 不要无理由重启 Handle/Process Monitor 排查；此前 Process Monitor 从未开始捕获，已退出。
 
-### 下一阶段阻断日常使用的问题
+### 已在 0.4.6-A 源码中解决、待安装验收
 
-- 库存入库后缺少清晰的“标称量 / 实收称重 / 当前余量”结构和补录实重流程。
-- 餐食虽然已有纠错领域逻辑，但现有 UI 不够直观，用户无法轻松更正/作废单项。
+- 库存入库后的“标称量 / 实收称重 / 当前余量”结构与补录实重流程已实现（含盘点前的成本影响预览），但尚未在安装版上跑过真实点击。
+- 餐食单项的更正/作废入口已改为每行独立按钮并带前→后差异表，同样待安装版验收。
+- 以上两项在浏览器预览里的行为是 `src/domain/purchases.ts` 的镜像实现，只能证明逻辑一致，不能替代 Rust 事务在安装版上的验证。
+
+### 仍未解决
+
+- 0.4.6-A 只允许“唯一采购流水、未发生退货/损耗/制作”的批次补录实重；已发生后续操作的旧批次不能补录，也没有撤销上一次补录的界面入口。
 - 饮食页没有 FatSecret 式的餐次小计与逐项营养表格结构。
 - 体重入口和历史不明显；完整两位小数、同日多次、趋势代表值与修订历史需分开呈现。
 - 一些已录营养疑似混用 kJ/kcal。未经用户核对标签，不能自动改。仅修订食材库也不能静默更改历史餐食快照。
@@ -119,7 +127,7 @@ npm run tauri build
 
 ## 8. 已批准的下一实施顺序
 
-1. `0.4.6-A`：库存实重/盘点纠错 + 饮食单项更正/作废 + P0 保护补丁一起收口。
+1. `0.4.6-A`：库存实重/盘点纠错 + 饮食单项更正/作废 + P0 保护补丁一起收口。**源码与自动测试已完成（191 项通过），安装版验收待用户批准覆盖安装。**
 2. `0.4.6-B`：FatSecret 信息结构、轻衡视觉的饮食明细 + 体重记录中心。
 3. `0.4.7`：跨 Agent 的文件/Git 接续固化；本交接包已经完成第一步。
 4. 动态菜单：用确定性本地约束替换演示候选。

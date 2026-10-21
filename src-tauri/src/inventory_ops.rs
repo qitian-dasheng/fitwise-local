@@ -309,6 +309,11 @@ pub(crate) fn apply(
             if actual < 0.0001 || actual > 1_000_000_000.0 {
                 return Err("实际入库数量超出有效范围。".into());
             }
+            let basis = if payload.get("actualAmount").is_some() {
+                "weighed"
+            } else {
+                "nominal"
+            };
             let cost = if payload.get("costCny").is_some() {
                 money(payload, "costCny")?
             } else {
@@ -372,7 +377,7 @@ pub(crate) fn apply(
             };
             let lot_id = format!("lot-{command_id}");
             let receipt_id = format!("receipt-{command_id}");
-            let receipt = json!({"id":receipt_id,"lotId":lot_id,"quantity":quantity,"actualAmount":actual,"unit":unit,"costCny":cost,"name":name,"foodId":food_id,"receivedAt":received,"expiresAt":expires,"reason":reason,"replacement":replacement.is_some()});
+            let receipt = json!({"id":receipt_id,"lotId":lot_id,"quantity":quantity,"actualAmount":actual,"unit":unit,"costCny":cost,"name":name,"foodId":food_id,"receivedAt":received,"expiresAt":expires,"reason":reason,"replacement":replacement.is_some(),"basis":basis});
             let final_delivery = payload
                 .get("final")
                 .and_then(Value::as_bool)
@@ -394,7 +399,12 @@ pub(crate) fn apply(
                 order["closedQuantity"] = json!(remaining);
                 order["closedReason"] = json!(reason);
             }
-            array_mut(state,"inventory")?.push(json!({"id":lot_id,"purchaseId":entity_id,"receiptId":receipt_id,"foodId":food_id,"name":name,"purchasedAmount":actual,"remainingAmount":actual,"unit":unit,"purchasePriceCny":cost,"purchasedAt":before["orderedAt"].as_str().map(|v|DateTime::parse_from_rfc3339(v).unwrap().with_timezone(&FixedOffset::east_opt(28800).unwrap()).date_naive().to_string()).unwrap_or_else(||received.into()),"receivedAt":received,"expiresAt":expires,"opened":false,"confidence":before["confidence"],"source":before["platform"],"specification":specification(&before)}));
+            array_mut(state,"inventory")?.push(json!({"id":lot_id,"purchaseId":entity_id,"receiptId":receipt_id,"foodId":food_id,"name":name,"purchasedAmount":actual,"remainingAmount":actual,"unit":unit,"purchasePriceCny":cost,"purchasedAt":before["orderedAt"].as_str().map(|v|DateTime::parse_from_rfc3339(v).unwrap().with_timezone(&FixedOffset::east_opt(28800).unwrap()).date_naive().to_string()).unwrap_or_else(||received.into()),"receivedAt":received,"expiresAt":expires,"opened":false,"confidence":before["confidence"],"source":before["platform"],"specification":specification(&before),"nominalAmount":planned,"receiptBasis":basis}));
+            if basis == "weighed" {
+                array_mut(state, "inventory")?
+                    .last_mut()
+                    .ok_or("库存记录格式无效。")?["weighedAt"] = json!(now);
+            }
             array_mut(state,"inventoryMovements")?.push(json!({"id":format!("{command_id}:movement"),"lotId":lot_id,"type":"purchase","amount":actual,"costCny":cost,"reason":reason,"createdAt":now}));
             result = json!({"lotId":lot_id});
         }
@@ -435,6 +445,88 @@ pub(crate) fn apply(
             let order = &mut array_mut(state, "purchases")?[index];
             order["paidCny"] = json!(paid);
             order["refundedCny"] = json!(refunded);
+        }
+        "correct_receipt_weight" => {
+            let lot_id = payload_str(payload, "lotId")?;
+            let actual = number(payload, "actualAmount", true)?;
+            if actual < 0.0001 || actual > 1_000_000_000.0 {
+                return Err("补录实重数量超出有效范围。".into());
+            }
+            let reason = payload_str(payload, "reason")?;
+            let index = array(state, "inventory")?
+                .iter()
+                .position(|v| v["id"] == lot_id)
+                .ok_or("找不到库存批次。".to_string())?;
+            before = state["inventory"][index].clone();
+            entity_id = lot_id.to_owned();
+            let guidance = "请使用盘点调整当前余量。";
+            let purchase_id = before["purchaseId"]
+                .as_str()
+                .ok_or_else(|| format!("此批次未关联采购，不能补录实重；{guidance}"))?;
+            let receipt_id = before["receiptId"]
+                .as_str()
+                .ok_or_else(|| format!("此批次未关联收货记录，不能补录实重；{guidance}"))?;
+            let order_index = array(state, "purchases")?
+                .iter()
+                .position(|v| v["id"] == purchase_id)
+                .ok_or_else(|| format!("找不到关联采购记录，不能补录实重；{guidance}"))?;
+            let receipt_exists = array(state, "purchases")?[order_index]["receipts"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|r| r["id"] == receipt_id);
+            if !receipt_exists {
+                return Err(format!("找不到关联收货记录，不能补录实重；{guidance}"));
+            }
+            for movement in array(state, "inventoryMovements")? {
+                if movement["lotId"] != lot_id {
+                    continue;
+                }
+                if !["purchase", "receipt_correction"]
+                    .contains(&movement["type"].as_str().unwrap_or(""))
+                {
+                    return Err(format!(
+                        "此批次已有制作、退货、损耗或盘点记录，不能补录实重；{guidance}"
+                    ));
+                }
+            }
+            if array(state, "inventoryMovements")?
+                .iter()
+                .filter(|m| m["lotId"] == lot_id && m["type"] == "purchase")
+                .count()
+                != 1
+            {
+                return Err(format!("此批次的入库流水不完整，不能补录实重；{guidance}"));
+            }
+            if before["returnedAmount"].as_f64().unwrap_or(0.0) > 0.0
+                || before["wastedAmount"].as_f64().unwrap_or(0.0) > 0.0
+            {
+                return Err(format!(
+                    "此批次已有退货或损耗记录，不能补录实重；{guidance}"
+                ));
+            }
+            let purchased = number(&before, "purchasedAmount", true)?;
+            let remaining = number(&before, "remainingAmount", false)?;
+            if (remaining - purchased).abs() > 0.000_001 {
+                return Err(format!("此批次余量与实收不一致，不能补录实重；{guidance}"));
+            }
+            let corrected = (actual * 10000.0).round() / 10000.0;
+            for receipt in array_mut(state, "purchases")?[order_index]["receipts"]
+                .as_array_mut()
+                .ok_or("收货记录格式无效。".to_string())?
+            {
+                if receipt["id"] == receipt_id {
+                    receipt["actualAmount"] = json!(corrected);
+                    receipt["basis"] = json!("weighed");
+                }
+            }
+            let lot = &mut array_mut(state, "inventory")?[index];
+            lot["purchasedAmount"] = json!(corrected);
+            lot["remainingAmount"] = json!(corrected);
+            lot["receiptBasis"] = json!("weighed");
+            lot["weighedAt"] = json!(now);
+            array_mut(state,"inventoryMovements")?.push(json!({"id":format!("{command_id}:movement"),"lotId":lot_id,"type":"receipt_correction","amount":corrected-purchased,"correctsReceiptId":receipt_id,"reason":reason,"createdAt":now}));
+            result = json!({"lotId":lot_id});
         }
         "adjust_inventory" | "dispose_inventory" => {
             entity_id = payload_str(payload, "lotId")?.into();

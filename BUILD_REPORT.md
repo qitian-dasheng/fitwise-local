@@ -1,6 +1,44 @@
 # Windows 0.4.5 构建与验证报告
 
-## 最新增补：0.4.6 P0 开发补丁（未发布）
+## 最新：0.4.6-A 构建证据（MSI 已产出，安装待用户批准）
+
+日期：2026-10-21（Asia/Shanghai）。范围：P0 保护补丁 + 库存补录实重/盘点纠错 + 饮食单项更正/作废，合并收口为 `0.4.6`。无新依赖、无 OCR/云端、无备份扩展。
+
+### 自动化与静态检查
+
+- 前端 **18 文件 113 项**、Rust **78 项**（72 旧 + 6 新），共 **191 项** 通过。日志 `build-logs/tests-0.4.6-a-frontend.log`、`build-logs/tests-0.4.6-a-rust.log`。
+- `tsc -b` + 生产构建通过（`build-logs/build-0.4.6-a-frontend.log`）；`cargo fmt --check`、`cargo clippy --all-targets -D warnings` 通过。
+- 挑刺与未完成项见 [REVIEW_0.4.6.md](REVIEW_0.4.6.md)；安装版验收清单在同文件末尾。
+
+### 安装包
+
+release 编译 2 分 03 秒；MSI 打包 `candle`/`light` 正常。产物：
+
+| 产物 | 字节 | SHA-256 |
+| --- | ---: | --- |
+| `src-tauri/target/release/bundle/msi/轻衡_0.4.6_x64_zh-CN.msi` | 4,755,456 | `63FC58065A39F90BFEC373D71B56BB9A679DDDEED4A69E7769490753C947CF1E` |
+| `src-tauri/target/release/fitwise-local.exe`（MSI 内含同一二进制） | 8,300,544 | `1C2DE576D55B45FCA9BA086FE1CCA8C049E09FE3B0BAFFD36FDFB52359363AE3` |
+
+已读到 ProductVersion / FileVersion 均为 **0.4.6**，ProductName 轻衡。
+
+### NSIS 未产出（环境原因，非代码问题）
+
+Tauri 打包 NSIS 需要联网下载 `nsis-3.13.zip` 与它自带的 NSIS 插件包。本机出网代理对 `github.com` 返回 502（npm/jsdelivr 正常），两次尝试均在下载阶段 `timeout: global` 失败。手工把官方 NSIS 3.13 解压进 `%LOCALAPPDATA%\tauri\NSIS` 后重试，Tauri 报 `NSIS directory is missing some files. Recreating it.` 并再次联网获取，仍失败——缺的是插件包，不是 NSIS 本体。
+
+网络恢复后重试：`npm run tauri build -- --bundles nsis`（会重新编译一次，约 3–4 分钟）。
+
+### 环境准备记录（不是项目依赖）
+
+MSI 需要 WiX 3.14 工具链。因同一网络限制，改用可用镜像把 `wix314-binaries.zip` 下载后解压到 `%LOCALAPPDATA%\tauri\WixTools314`（含 `candle.exe`/`light.exe`），Tauri 随即跳过下载并成功出包。这属于本机构建环境补齐，未写入仓库、未新增 npm/cargo 依赖。
+
+### 未做与边界
+
+- **未安装、未覆盖升级、未启动生产实例、未触碰用户真实库**；安装与实机点验由用户执行，覆盖安装前须先保存并关闭轻衡。
+- 未跑长时/大库/跨机器与真实手机网络矩阵；安装包仍无代码签名。
+- 打包时 `beforeBuildCommand` 会执行 `npm run build`，vite 会清空 `dist/assets`（git 忽略、可再生）；该步骤在后台无交互环境会被删除确认拦截，必须前台运行。
+
+## 以下为 0.4.6 P0 开发补丁（未发布）的历史记录
+
 
 **13:19 重启复验结果**：用户授权后正常关闭原窗口，无未保存提示。通过 Windows Explorer 双击同一安装版重开，PID48940/父53564 explorer.exe，设置仍修订18/52实体/18命令/18审计；新数据库来源导出与保全前除 exportedAt 外24个顶层字段逐项相同，当前既有记录重启对账通过。sky.launch_app 直接启动的实例读到另一套修订2/8实体，父进程为控制工具，已正常关闭；不能将其作为用户原生数据丢失的证据。未升级、恢复、导入或更正业务记录；旧晨重未找回，日期已明确，不自动补写。保护性代码补丁仍未发布/安装，下文等待重启及监测过滤为历史状态。
 

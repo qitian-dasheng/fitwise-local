@@ -18,7 +18,7 @@ import { BatchHistory } from "../components/BatchHistory";
 const mealLabels: Record<MealType, string> = { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", snack: "加餐" };
 
 export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps = {}) {
-  const [correction,setCorrection]=useState<MealEntry|null>(null);
+  const [correction,setCorrection]=useState<{meal:MealEntry;mode:"edit"|"void"}|null>(null);
   const [recipeEditor,setRecipeEditor]=useState<RecipeVersion|"new"|null>(null);
   const [selectedRecipeId,setSelectedRecipeId]=useState("");
   const [showHistory,setShowHistory]=useState(false);
@@ -80,7 +80,7 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
                       <div className="meal-icon"><Utensils size={16} /></div>
                       <div><strong>{item.name}</strong><span>{item.amountLabel} · {item.confidence === "high" ? "已确认" : "估算"}</span></div>
                       <b>{item.nutrition.calories.state === "unknown" ? "未知" : Math.round((item.nutrition.calories.value ?? 0) * item.consumedRatio)}</b>
-                      <button className="text-button" onClick={()=>setCorrection(item)}>更正／作废</button>
+                      <button className="text-button" onClick={()=>setCorrection({meal:item,mode:"edit"})}>编辑</button><button className="text-button warning-text" onClick={()=>setCorrection({meal:item,mode:"void"})}>作废</button>
                     </div>
                   )) : <button className="empty-entry" onClick={() => openMeal(type)}><Plus size={15} /> 添加{mealLabels[type]}</button>}
                 </div>
@@ -115,7 +115,7 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
 
       <BatchHistory date={date} />
 
-      {correction&&<MealCorrectionModal meal={correction} onClose={()=>setCorrection(null)} onSaved={onDateChange}/>}
+      {correction&&<MealCorrectionModal meal={correction.meal} mode={correction.mode} onClose={()=>setCorrection(null)} onSaved={onDateChange}/>}
       {recipeEditor&&<RecipeEditor copyMode={copyRecipe} recipe={recipeEditor==="new"?undefined:recipeEditor} onClose={()=>setRecipeEditor(null)} onSaved={setSelectedRecipeId}/>}
       {meals.some(m=>m.date===date&&m.status&&m.status!=="active")&&<details className="card meal-correction-history"><summary>查看所选日修订／作废的原始记录</summary>{meals.filter(m=>m.date===date&&m.status&&m.status!=="active").map(m=><article key={m.id}><strong>{m.name} · {m.status==="void"?"已作废":"已修订"}</strong><p>{m.date} · {m.amountLabel} · 原始营养 {m.nutrition.calories.state==="unknown"?"未知":m.nutrition.calories.value} kcal（参考规格，非重新入账）</p><p>原因：{m.correctionReason}；原记录 ID：{m.id}</p></article>)}</details>}
       {mealOpen && <><div hidden={manualMeal}><FoodLibraryModal initialType={initialMealType} initialDate={date} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onManual={() => setManualMeal(true)} /></div>{manualMeal && <MealModal initialType={initialMealType} initialDate={date} onBack={() => setManualMeal(false)} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onSave={addMeal}/>}</>}

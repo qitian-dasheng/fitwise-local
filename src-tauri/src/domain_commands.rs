@@ -589,6 +589,7 @@ fn execute_with_connection(
             | "discard_batch"
             | "receive_purchase"
             | "adjust_inventory"
+            | "correct_receipt_weight"
     ) {
         return Err("未知的领域命令。".into());
     }
@@ -676,6 +677,12 @@ fn execute_with_connection(
         "discard_batch" => discard_batch(&mut state, &request.payload, &request.command_id)?,
         "receive_purchase" => receive_purchase(&mut state, &request.payload, &request.command_id)?,
         "adjust_inventory" => adjust_inventory(&mut state, &request.payload, &request.command_id)?,
+        "correct_receipt_weight" => crate::inventory_ops::apply(
+            &mut state,
+            &request.kind,
+            &request.payload,
+            &request.command_id,
+        )?,
         "add_purchase"
         | "revise_purchase"
         | "close_purchase"
@@ -775,6 +782,7 @@ mod tests {
     use super::*;
     use crate::domain_store::ensure_repository_schema;
     include!("label_draft_tests.rs");
+    include!("inventory_correction_tests.rs");
 
     fn connection() -> Connection {
         let connection = Connection::open_in_memory().unwrap();

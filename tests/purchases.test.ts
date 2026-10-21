@@ -1,7 +1,7 @@
 import { beforeEach, expect, it } from "vitest";
 import { createPersonalState } from "../src/domain/seed";
 import type { PurchaseDraft, PurchaseUnit } from "../src/domain/types";
-import { displayOrderedAt, normalizePurchase, purchaseSpecification, shanghaiDate, suggestedReceiptCost } from "../src/domain/purchases";
+import { displayOrderedAt, lotNominalAmount, lotUnitCost, normalizePurchase, purchaseSpecification, receiptBasisLabel, receiptCorrectionBlockReason, shanghaiDate, suggestedReceiptCost } from "../src/domain/purchases";
 import { useAppStore } from "../src/store/appStore";
 const yogurt:Omit<PurchaseDraft,"id">={name:"测试酸奶",platform:"pinduoduo",amount:1,unit:"pack",packaging:{count:2,container:"bag",contentAmount:1,contentUnit:"kg"},packagingConfirmed:true,priceCny:18.78,paidCny:0,orderedAt:"2026-10-19T10:17:31Z",status:"ordered",confidence:"high"};
 beforeEach(()=>{delete (window as unknown as Record<string,unknown>).__TAURI_INTERNALS__;useAppStore.setState(structuredClone(createPersonalState()));});
@@ -30,4 +30,49 @@ it("keeps a rejected refund atomic and distinguishes refunds pending from zero",
 it("allocates the final cent remainder and rejects changed retries",async()=>{
  const p:PurchaseDraft={...yogurt,id:"rounding",amount:3,priceCny:1,receipts:[{id:"r",lotId:"l",quantity:2,actualAmount:4000,unit:"g",costCny:.66,name:"测试",foodId:"f",receivedAt:shanghaiDate(),reason:"测试",replacement:false}]};expect(suggestedReceiptCost(p,1)).toBe(.34);
  await useAppStore.getState().addPurchase(yogurt,"same-command-01");const result=await useAppStore.getState().addPurchase({...yogurt,amount:2},"same-command-01");expect(result.error).toContain("命令内容");expect(useAppStore.getState().purchases[0].amount).toBe(1);
+});
+it("records nominal basis on receipt and corrects weighed amount without touching cost",async()=>{
+ const s=()=>useAppStore.getState();
+ await s().addPurchase(yogurt,"rw-order-01");const p=s().purchases[0];
+ await s().receivePurchase(p.id,"rw-receive-01");
+ const lot=s().inventory[0];
+ expect(lot).toMatchObject({purchasedAmount:2000,remainingAmount:2000,nominalAmount:2000,receiptBasis:"nominal"});
+ expect(lot.weighedAt).toBeUndefined();
+ expect(s().purchases[0].receipts?.[0].basis).toBe("nominal");
+ const result=await s().correctReceiptWeight({lotId:lot.id,actualAmount:1950,reason:"电子秤实称"},"rw-correct-01");
+ expect(result).toEqual({});
+ const corrected=s().inventory[0];
+ expect(corrected).toMatchObject({purchasedAmount:1950,remainingAmount:1950,nominalAmount:2000,receiptBasis:"weighed"});
+ expect(corrected.weighedAt).toBeTruthy();
+ expect(s().purchases[0].receipts?.[0]).toMatchObject({actualAmount:1950,basis:"weighed"});
+ expect(corrected.purchasePriceCny).toBe(lot.purchasePriceCny);
+ expect(s().purchases[0].paidCny).toBe(0);
+ expect(s().inventoryMovements.at(-1)).toMatchObject({lotId:lot.id,type:"receipt_correction",amount:-50,correctsReceiptId:lot.receiptId});
+ expect(await s().correctReceiptWeight({lotId:lot.id,actualAmount:1950,reason:"电子秤实称"},"rw-correct-01")).toEqual({});
+ expect(s().inventoryMovements.filter(m=>m.type==="receipt_correction")).toHaveLength(1);
+ expect((await s().correctReceiptWeight({lotId:lot.id,actualAmount:1900,reason:"改内容"},"rw-correct-01")).error).toContain("命令内容");
+ expect(lotNominalAmount(corrected)).toBe(2000);
+ expect(lotUnitCost(corrected)).toBeCloseTo(18.78/1950,8);
+ expect(receiptBasisLabel(corrected)).toBe("已称重");
+});
+it("blocks receipt weight correction after downstream operations like the Rust command",async()=>{
+ const s=()=>useAppStore.getState();
+ await s().addPurchase(yogurt,"gb-order-01");const p=s().purchases[0];
+ await s().receivePurchaseActual({purchaseId:p.id,quantity:1,actualAmount:1900,costCny:18.78,receivedAt:shanghaiDate(),final:true,reason:"实称"},"gb-receive-01");
+ const lot=s().inventory[0];
+ expect(lot).toMatchObject({purchasedAmount:1900,receiptBasis:"weighed"});
+ useAppStore.setState({inventory:[{...lot,id:"legacy-lot",purchaseId:undefined,receiptId:undefined}]});
+ expect((await s().correctReceiptWeight({lotId:"legacy-lot",actualAmount:1800,reason:"x"})).error).toContain("未关联采购");
+ expect(receiptCorrectionBlockReason(s().inventory[0],s().inventoryMovements)).toContain("旧批次");
+ useAppStore.setState({inventory:[lot]});
+ for (const [id,kind,payload] of [["gb-return","dispose_inventory",{amount:100,kind:"return" as const}],["gb-waste","dispose_inventory",{amount:100,kind:"waste" as const}],["gb-count","adjust_inventory",{remainingAmount:1800}]] as const){
+  await s().addPurchase(yogurt,`${id}-order`);const order=s().purchases.at(-1)!;
+  await s().receivePurchaseActual({purchaseId:order.id,quantity:1,actualAmount:2000,costCny:18.78,receivedAt:shanghaiDate(),final:true,reason:"实称"},`${id}-receive`);
+  const target=s().inventory.at(-1)!;
+  await (kind==="dispose_inventory"?s().disposeInventory({lotId:target.id,...payload,reason:"后续操作"},id):s().countInventory({lotId:target.id,...payload,opened:false,expiresAt:null,reason:"盘点"},id));
+  expect((await s().correctReceiptWeight({lotId:target.id,actualAmount:1950,reason:"补录"},`${id}-correct`)).error).toContain("盘点");
+  expect(receiptCorrectionBlockReason(s().inventory.at(-1)!,s().inventoryMovements)).toContain("盘点");
+ }
+ expect((await s().correctReceiptWeight({lotId:"lot-missing",actualAmount:1950,reason:"x"},"gb-missing")).error).toContain("找不到库存批次");
+ expect((await s().correctReceiptWeight({lotId:lot.id,actualAmount:0,reason:"x"},"gb-zero")).error).toContain("大于 0");
 });

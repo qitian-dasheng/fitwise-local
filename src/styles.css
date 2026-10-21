@@ -39,6 +39,11 @@
 .library-empty { line-height: 1.8; }
 .library-portion .form-grid { margin: 14px 0; }
 .library-notice { padding: 10px 12px; border-radius: 10px; background: var(--green-pale); color: var(--green); font-size: 13px; line-height: 1.7; }
+.correction-diff { display: grid; gap: 6px; margin: 14px 0; padding: 12px 14px; border-radius: 12px; background: var(--green-pale); color: var(--green); font-size: 13px; }
+.correction-diff > div { display: flex; gap: 12px; align-items: baseline; justify-content: space-between; }
+.correction-diff dt { color: var(--muted); font-size: 12px; }
+.correction-diff s { opacity: .55; }
+.correction-diff > div.changed dd { font-weight: 700; }
 .food-nutrition-preview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
 .food-nutrition-preview div { display: grid; gap: 5px; }
 .food-nutrition-preview span { font-size: 12px; color: var(--muted); }
