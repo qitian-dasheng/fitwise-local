@@ -1,5 +1,7 @@
 # 实现状态
 
+> 历史累计清单，保留阶段证据，不再作为当前接手入口。当前事实与下一步请先读 `START_HERE.md`、`PROJECT_MEMORY.md` 和 `FINAL_PRODUCT_PLAN.md`；本文中的早期 schema、测试数量和“尚未完成”描述可能已被后续阶段覆盖。
+
 ## 已实现并验证
 
 - React/Vite 响应式桌面与窄屏界面。
