@@ -563,6 +563,9 @@ fn execute_with_connection(
             | "revise_waste"
             | "void_waste"
             | "save_recipe_version"
+            | "save_label_draft"
+            | "confirm_label_draft"
+            | "discard_label_draft"
             | "revise_food_definition"
             | "set_food_favorite"
             | "record_food_meal"
@@ -635,6 +638,15 @@ fn execute_with_connection(
     let (version, mut state) =
         load_command_state(&transaction, request.bootstrap_state.as_deref())?;
     let mutation = match request.kind.as_str() {
+        "save_label_draft" | "confirm_label_draft" | "discard_label_draft" => {
+            crate::label_drafts::apply(
+                &mut state,
+                &transaction,
+                &request.kind,
+                &request.payload,
+                &request.command_id,
+            )?
+        }
         "void_prepared_batch" | "revise_waste" | "void_waste" => crate::batch_corrections::apply(
             &mut state,
             &request.kind,
@@ -762,6 +774,7 @@ pub fn execute_domain_command(
 mod tests {
     use super::*;
     use crate::domain_store::ensure_repository_schema;
+    include!("label_draft_tests.rs");
 
     fn connection() -> Connection {
         let connection = Connection::open_in_memory().unwrap();
@@ -1544,7 +1557,7 @@ mod tests {
         assert_eq!(load_envelope(&c).unwrap(), before);
         assert!(c
             .query_row(
-                "SELECT EXISTS(SELECT 1 FROM domain_upgrade_reports WHERE version=9)",
+                "SELECT EXISTS(SELECT 1 FROM domain_upgrade_reports WHERE version=10)",
                 [],
                 |r| r.get::<_, bool>(0)
             )

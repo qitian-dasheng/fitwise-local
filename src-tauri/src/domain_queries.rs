@@ -254,7 +254,11 @@ pub fn export_domain_json(app: AppHandle) -> Result<Value, String> {
         .as_object()
         .ok_or("领域仓库格式无效。")?
         .clone();
-    data.insert("schemaVersion".into(), json!(9));
+    data.insert("schemaVersion".into(), json!(10));
+    data.insert(
+        "labelDrafts".into(),
+        crate::label_drafts::manifest(&connection)?,
+    );
     data.insert(
         "inputArtifacts".into(),
         crate::artifacts::manifest(&connection)?,

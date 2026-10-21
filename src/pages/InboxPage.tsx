@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { Check, Copy, EyeOff, Image, Link2, MessageSquareText, QrCode, ShieldCheck, Smartphone, Trash2 } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useRef, useState } from "react";
+import { LabelDraftModal, LabelDraftsPanel } from "../components/LabelDrafts";
+import type { LabelDraftRecord } from "../domain/labelDrafts";
 import { PageHeader } from "../components/PageHeader";
 import { Modal } from "../components/Modal";
 import { useAppStore } from "../store/appStore";
@@ -14,6 +16,7 @@ import { ArtifactPrivacyModal, ArtifactThumbnail, ImportInputModal } from "../co
 interface UploadSession { url: string; token: string; expiresAt: string }
 
 export function InboxPage() {
+  const [labelEditor, setLabelEditor] = useState<{ draft?: LabelDraftRecord; source?: InputReceipt } | null>(null);
   const [open, setOpen] = useState(false);
   const [session, setSession] = useState<UploadSession | null>(null);
   const [qr, setQr] = useState("");
@@ -50,13 +53,15 @@ export function InboxPage() {
 
   return (
     <div className="page">
-      <PageHeader eyebrow="先收集，后确认" title="统一收件箱" description="接收记录与附件同时落盘；只有人工确认的业务记录才进入饮食、运动或库存。" action={<div className="button-row"><button className="button secondary" onClick={()=>setImportOpen(true)}>导入文件 / 文字</button><button className="button primary" disabled={starting} onClick={startSession}><Smartphone size={17}/> 手机上传</button></div>} />
+      <PageHeader eyebrow="先收集，后确认" title="统一收件箱" description="接收记录与附件同时落盘；只有人工确认的业务记录才进入饮食、运动或库存。" action={<div className="button-row"><button className="button secondary" onClick={() => setLabelEditor({})}>手工整理营养标签</button><button className="button secondary" onClick={()=>setImportOpen(true)}>导入文件 / 文字</button><button className="button primary" disabled={starting} onClick={startSession}><Smartphone size={17}/> 手机上传</button></div>} />
       {(action.message || error || intake.error) && <div className="settings-notice card" role="alert">{action.message || error || intake.error}</div>}
       <div className="inbox-security card"><ShieldCheck size={22}/><div><strong>本地优先 · AI 尚未接入</strong><span>可以保存素材、检查隐私并生成真实像素遮挡图。当前没有云端识别或发送操作。</span></div></div>
       <div className="purchase-filters" role="group" aria-label="收件箱视图"><button className={!trashed?"active":""} onClick={()=>{setTrashed(false);setOffset(0);}}>已接收素材</button><button className={trashed?"active":""} onClick={()=>{setTrashed(true);setOffset(0);}}>原件回收站</button><button onClick={notifyInputs}>刷新</button><button disabled={managing} onClick={async()=>{setManaging(true);try{const r=await invoke<{recovered:number;failed:number}>("recover_legacy_inputs");setError(`旧上传检查完成：${r.recovered} 份已恢复/已存在，${r.failed} 份需手动导入；旧文件未删除。`);notifyInputs();}catch(e){setError(String(e));}finally{setManaging(false);}}}>恢复旧手机上传</button></div>
-      <section className="artifact-grid" aria-label="持久化收件箱">{intake.data.items.map(item=><article className="card artifact-card" key={item.id}><ArtifactThumbnail item={item}/><div className="artifact-card-body"><div className="inbox-meta"><span className="status-pill neutral">{item.trashedAt?"回收站":item.status==="drafted"?"本地待识别":item.status==="discarded"?"已忽略":"待处理"}</span><time>{new Date(item.createdAt).toLocaleString("zh-CN",{timeZone:"Asia/Shanghai"})}</time></div><h3>{item.name??"文字 / 商品链接"}</h3><p>{item.note||"未添加备注"}</p><small>{item.source==="mobile"?"手机上传":"本地导入"}{item.bytes?` · ${bytesLabel(item.bytes)}`:""} {item.purgedAt?"· 来源原件已删除":""}</small><div className="button-row">{!item.trashedAt&&<button className="button secondary small" onClick={()=>setArtifactItem(item)}>查看 / 隐私遮挡</button>}{item.artifactId&&!item.purgedAt&&<button className="text-button" onClick={()=>{setError("");setManagement({item,action:trashed?"restore":"trash"});}}>{trashed?"恢复原件":"原件移入回收站"}</button>}{item.trashedAt&&Date.now()-Date.parse(item.trashedAt)>=30*864e5&&<button className="text-button warning-text" onClick={()=>setManagement({item,action:"purge_expired"})}>清除到期原件</button>}</div></div></article>)}</section>
+      <section className="artifact-grid" aria-label="持久化收件箱">{intake.data.items.map(item=><article className="card artifact-card" key={item.id}><ArtifactThumbnail item={item}/><div className="artifact-card-body"><div className="inbox-meta"><span className="status-pill neutral">{item.trashedAt?"回收站":item.status==="drafted"?"已整理草稿":item.status==="discarded"?"已忽略":"待处理"}</span><time>{new Date(item.createdAt).toLocaleString("zh-CN",{timeZone:"Asia/Shanghai"})}</time></div><h3>{item.name??"文字 / 商品链接"}</h3><p>{item.note||"未添加备注"}</p><small>{item.source==="mobile"?"手机上传":"本地导入"}{item.bytes?` · ${bytesLabel(item.bytes)}`:""} {item.purgedAt?"· 来源原件已删除":""}</small><div className="button-row">{!item.trashedAt&&<button className="button secondary small" onClick={() => setLabelEditor({ source: item })}>整理为营养草稿</button>}{!item.trashedAt&&<button className="button secondary small" onClick={()=>setArtifactItem(item)}>查看 / 隐私遮挡</button>}{item.artifactId&&!item.purgedAt&&<button className="text-button" onClick={()=>{setError("");setManagement({item,action:trashed?"restore":"trash"});}}>{trashed?"恢复原件":"原件移入回收站"}</button>}{item.trashedAt&&Date.now()-Date.parse(item.trashedAt)>=30*864e5&&<button className="text-button warning-text" onClick={()=>setManagement({item,action:"purge_expired"})}>清除到期原件</button>}</div></div></article>)}</section>
       {intake.loading&&<p>正在读取接收记录…</p>}{!intake.loading&&!intake.data.items.length&&<div className="card inventory-empty"><strong>{trashed?"回收站为空":"还没有新接收素材"}</strong><p>导入文件或在手机上传后，此处保存的内容重启仍可继续处理。</p></div>}
       <div className="button-row"><button className="button secondary small" disabled={offset===0||intake.loading} onClick={()=>setOffset(v=>Math.max(0,v-50))}>上一页</button><span>第 {offset/50+1} 页 · 每页最多 50 条</span><button className="button secondary small" disabled={!intake.data.hasMore||intake.loading} onClick={()=>setOffset(v=>v+50)}>下一页</button></div>
+      {!trashed && <LabelDraftsPanel onOpen={draft => setLabelEditor({ draft })}/>}
+      {labelEditor && <LabelDraftModal draft={labelEditor.draft} source={labelEditor.source} onClose={() => setLabelEditor(null)}/>}
       {!trashed&&inbox.length>0&&<h2>旧版草稿（保留原记录）</h2>}
       <section className="inbox-grid">
         {!trashed&&inbox.map((item) => <article className="card inbox-item" key={item.id}>

@@ -1,6 +1,6 @@
 [package]
 name = "fitwise-local"
-version = "0.4.4"
+version = "0.4.5"
 description = "轻衡：本地优先的 AI 减脂管理平台"
 authors = ["Fitwise"]
 edition = "2021"

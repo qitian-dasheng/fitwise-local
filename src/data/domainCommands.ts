@@ -3,6 +3,9 @@ import type { AppState } from "../domain/types";
 import { flushAppStorageWrites } from "./storage";
 
 export type DomainCommandKind =
+  | "save_label_draft"
+  | "confirm_label_draft"
+  | "discard_label_draft"
   | "revise_meal"
   | "void_meal"
   | "void_prepared_batch"

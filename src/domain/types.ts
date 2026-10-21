@@ -50,6 +50,7 @@ export interface FoodDefinition {
   createdAt: string;
 }
 export interface FoodDefinitionVersion {
+  origin?: { method: "manual_label"; labelDraftId: string; sourceReceiptId: string | null; artifactId: string | null; confirmedAt: string };
   id: string;
   foodId: string;
   version: number;

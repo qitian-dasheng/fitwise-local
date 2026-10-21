@@ -93,6 +93,8 @@ struct Version {
     source: String,
     confirmed_by: String,
     confirmed_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    origin: Option<Value>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -225,6 +227,31 @@ fn selected(state: &Map<String, Value>, version_id: &str) -> Result<(Definition,
     Ok((definition, version))
 }
 
+pub(crate) fn preview_input(payload: &Value) -> Result<Value, String> {
+    let (input, nutrition, original) = parse_input(payload)?;
+    let version = Version {
+        id: "draft-preview".into(),
+        food_id: "draft".into(),
+        version: 1,
+        basis: input.basis,
+        energy_unit: input.energy_unit,
+        label_nutrients: original,
+        conversions: input.conversions,
+        nutrition,
+        source: input.source,
+        confirmed_by: "".into(),
+        confirmed_at: "".into(),
+        origin: None,
+    };
+    let mut result = json!({"nutrition":version.nutrition});
+    for (key, unit) in [("per100g", FoodUnit::G), ("per100ml", FoodUnit::Ml)] {
+        if unit == version.basis.unit || version.conversions.iter().any(|c| c.unit == unit) {
+            result[key] = portion(&version, 100.0, unit)?["nutrition"].clone();
+        }
+    }
+    Ok(result)
+}
+
 pub(crate) fn historical_portion(
     state: &Map<String, Value>,
     version_id: &str,
@@ -294,6 +321,7 @@ pub(crate) fn apply(
                     .unwrap_or("本地用户")
                     .into(),
                 confirmed_at: now.clone(),
+                origin: None,
             };
             // Reject unusable derived references before committing a version: otherwise
             // an extreme conversion could make the entire library search fail later.

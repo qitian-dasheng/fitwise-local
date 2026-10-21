@@ -26,9 +26,10 @@ import { diaryToday, ratioPercent } from "../domain/diary";
 
 const uid = () => crypto.randomUUID();
 const reopenedCheckIns = (state: AppState, date: string) => state.checkIns.map(item => item.date === date && item.complete ? { ...item, complete: false, completedAt: undefined } : item);
-export interface ActionResult { error?: string; duplicate?: boolean; isOutlier?: boolean; foodId?: string; foodVersionId?: string; mealIds?: string[]; recipeVersionId?: string; date?: string }
+export interface ActionResult { error?: string; duplicate?: boolean; isOutlier?: boolean; foodId?: string; foodVersionId?: string; mealIds?: string[]; recipeVersionId?: string; date?: string; draftId?: string; draftRevision?: number }
 
 interface AppActions {
+  labelDraftCommand: (kind: "save_label_draft" | "confirm_label_draft" | "discard_label_draft", payload: Record<string, unknown>, commandId: string) => Promise<ActionResult>;
   correctBatch: (kind: "void_prepared_batch" | "revise_waste" | "void_waste", input: { batchId?: string; wasteId?: string; reason: string; ratio?: number }, commandId?: string) => Promise<ActionResult>;
   correctMeal: (input: MealCorrectionInput, voided: boolean, commandId?: string) => Promise<ActionResult>;
   saveRecipe: (input: RecipeInput, commandId?: string) => Promise<ActionResult>;
@@ -91,6 +92,10 @@ export const useAppStore = create<AppStore>()(
       };
       return ({
       ...(isTauriRuntime() ? createPersonalState() : initialState),
+      async labelDraftCommand(kind, payload, commandId) {
+        if (!isTauriRuntime()) return { error: "离线草稿的持久化与确认需要桌面版；浏览器只提供填写预览，不模拟成功。" };
+        return submit(kind, payload, commandId);
+      },
       async correctBatch(kind, input, commandId = uid()) {
         if (!isTauriRuntime()) return { error: "批次纠错需要桌面版，由 Rust 在同一事务中核对并冲正；浏览器不模拟正式写入。" };
         return submit(kind, input, commandId);

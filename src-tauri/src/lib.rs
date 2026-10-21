@@ -8,6 +8,7 @@ mod domain_store;
 mod domain_upgrade;
 mod food_library;
 mod inventory_ops;
+mod label_drafts;
 mod meal_corrections;
 mod recipes;
 mod record_commands;
@@ -20,6 +21,8 @@ pub fn run() {
         .manage(upload::UploadServerControl::default())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            label_drafts::list_label_drafts,
+            label_drafts::get_label_draft,
             artifacts::import_local_input,
             artifacts::list_input_receipts,
             artifacts::read_artifact_preview,
