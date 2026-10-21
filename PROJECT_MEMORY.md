@@ -32,7 +32,7 @@
 
 - 仓库：`C:\Users\21904\Documents\Obsidian\A\ai-fitness-platform`
 - 当前分支：`main`。
-- 最新检查点提交：`fe09234 feat: add the body page and restructure the food page`（0.4.8）；上一个检查点 `6012403 feat: show the food diary as daily summary, meal subtotals and item rows`（0.4.7）。
+- 最新检查点提交：`3c788fc feat: add the body page and restructure the food page`（0.4.8）；上一个检查点 `6012403 feat: show the food diary as daily summary, meal subtotals and item rows`（0.4.7）。
 - 版本号：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 均为 `0.4.8`。
 - 数据库 schema **v11**（`migrations/0011_measurement_conditions.sql`，`domain_upgrade.rs` 硬编码 `version = 11`）；领域 envelope 持久化格式仍为 **4**。0011 只 `DROP VIEW IF EXISTS` + 重建 `domain_measurement_projection`（暴露 `measured_at` / `condition` / `day_representative`，过滤改 `COALESCE(status,'active')='active'`），**不回填任何 payload**，否则升级对账会因 `before != after` 失败。
 - Node：`C:\Program Files\nodejs\npm.cmd`
