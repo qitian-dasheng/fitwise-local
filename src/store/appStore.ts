@@ -43,6 +43,10 @@ interface AppActions {
     calories: number;
     protein: number;
     fiber?: number;
+    carbohydrates?: number;
+    fat?: number;
+    sugar?: number;
+    sodium?: number;
     date?: string;
   }, commandId?: string) => Promise<ActionResult>;
   addWeight: (weightKg: number, date?: string, commandId?: string) => Promise<ActionResult>;
@@ -130,7 +134,9 @@ export const useAppStore = create<AppStore>()(
       },
       async addMeal(input, commandId = uid()) {
         if (isTauriRuntime()) return submit("add_meal", input, commandId);
-        if (!input.name.trim() || !input.amountLabel.trim() || !Number.isFinite(input.calories) || input.calories < 0 || !Number.isFinite(input.protein) || input.protein < 0 || (input.fiber !== undefined && (!Number.isFinite(input.fiber) || input.fiber < 0))) return { error: "请检查名称、份量和营养值。" };
+        const invalid = (value: number | undefined) => value !== undefined && (!Number.isFinite(value) || value < 0);
+        const optionalNutrients = [input.fiber, input.carbohydrates, input.fat, input.sugar, input.sodium];
+        if (!input.name.trim() || !input.amountLabel.trim() || !Number.isFinite(input.calories) || input.calories < 0 || !Number.isFinite(input.protein) || input.protein < 0 || optionalNutrients.some(invalid)) return { error: "请检查名称、份量和营养值。" };
         const now = new Date();
         const meal: MealEntry = {
           id: uid(),
@@ -142,6 +148,10 @@ export const useAppStore = create<AppStore>()(
             calories: input.calories,
             protein: input.protein,
             fiber: input.fiber,
+            carbohydrates: input.carbohydrates,
+            fat: input.fat,
+            sugar: input.sugar,
+            sodium: input.sodium,
           }),
           consumedRatio: 1,
           source: "manual",

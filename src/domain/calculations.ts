@@ -3,11 +3,13 @@ import type {
   BodyMeasurement,
   InventoryLot,
   MealEntry,
+  MealType,
   NutritionFacts,
   NutrientKey,
   NutrientValue,
 } from "./types";
 import { nutrientKeys } from "./types";
+import { mealTypes } from "./meals";
 
 export const known = (
   value: number,
@@ -37,13 +39,40 @@ export interface NutritionSummary {
 }
 export const activeMeals = (entries: MealEntry[]) => entries.filter(item => !item.status || item.status === "active");
 
+/** 进食比例统一口径：缺失或非数按 100% 处理，避免旧记录渲染出 NaN。 */
+export function entryRatio(entry: Pick<MealEntry, "consumedRatio">): number {
+  const ratio = Number(entry.consumedRatio);
+  return Number.isFinite(ratio) ? Math.max(0, Math.min(1, ratio)) : 1;
+}
+
+export interface MealGroup {
+  type: MealType;
+  entries: MealEntry[];
+  summary: NutritionSummary;
+}
+
+/** 固定返回四个餐次且顺序稳定，空餐次也返回（entries 为空数组）。 */
+export function groupMealsByType(entries: MealEntry[]): MealGroup[] {
+  const active = activeMeals(entries);
+  return mealTypes.map((type) => {
+    const items = active.filter((entry) => entry.type === type);
+    return { type, entries: items, summary: summarizeMeals(items) };
+  });
+}
+
+/** 逐条精确判定缺失：只要有一条有效记录（份额大于 0）没提供该营养，就算不完整。 */
+export function missingNutrientKeys(entries: MealEntry[]): NutrientKey[] {
+  const effective = activeMeals(entries).filter((entry) => entryRatio(entry) > 0);
+  return nutrientKeys.filter((key) => effective.some((entry) => entry.nutrition[key].state === "unknown"));
+}
+
 export function summarizeMeals(entries: MealEntry[]): NutritionSummary {
   const totals = Object.fromEntries(nutrientKeys.map((key) => [key, 0])) as Record<NutrientKey, number>;
   const knownWeights = Object.fromEntries(nutrientKeys.map((key) => [key, 0])) as Record<NutrientKey, number>;
   const allWeights = Object.fromEntries(nutrientKeys.map((key) => [key, 0])) as Record<NutrientKey, number>;
 
   for (const entry of activeMeals(entries)) {
-    const ratio = Math.max(0, Math.min(1, entry.consumedRatio));
+    const ratio = entryRatio(entry);
     for (const key of nutrientKeys) {
       allWeights[key] += ratio;
       const metric = entry.nutrition[key];

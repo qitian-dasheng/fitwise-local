@@ -1,8 +1,41 @@
-# Windows 0.4.5 构建与验证报告
+# 轻衡 Windows 构建与验证报告
 
-## 最新：0.4.6-A 构建证据（MSI 已产出，安装待用户批准）
+## 最新：0.4.7（0.4.6-B1）构建证据（MSI 已产出，安装待用户批准）
 
-日期：2026-10-21（Asia/Shanghai）。范围：P0 保护补丁 + 库存补录实重/盘点纠错 + 饮食单项更正/作废，合并收口为 `0.4.6`。无新依赖、无 OCR/云端、无备份扩展。
+日期：2026-10-21（Asia/Shanghai）。范围：饮食明细表（日汇总 → 餐次小计 → 单项，7 列 + 钠可开关）+ 手工记餐补齐碳水/脂肪/糖/钠。无新依赖、无 OCR/云端、**无数据库迁移**（schema 仍 v10）。
+
+### 自动化与静态检查
+
+- 前端 **20 文件 139 项**（新增 `tests/nutritionDisplay.test.ts` 16 项、`tests/mealDiaryTableUI.test.tsx` 10 项），Rust **79 项**（新增 `manual_meal_accepts_optional_macros_and_keeps_missing_ones_unknown`），合计 **218 项** 通过。
+- `tsc -b` + 生产构建通过；`cargo fmt --check`、`cargo clippy --all-targets -D warnings` 通过。
+- 挑刺与安装版清单见 [REVIEW_0.4.7.md](REVIEW_0.4.7.md)。
+
+### 安装包
+
+release 编译 3 分 46 秒；MSI 打包正常。产物：
+
+| 产物 | 字节 | SHA-256 |
+| --- | ---: | --- |
+| `src-tauri/target/release/bundle/msi/轻衡_0.4.7_x64_zh-CN.msi` | 4,763,648 | `13D8BFD2555C1B73C173187D62C01F30FF0A8AE5E05B55CA58694FD8A9AEF637` |
+| `src-tauri/target/release/fitwise-local.exe`（MSI 内含同一二进制） | 8,308,736 | `FAC914B3FF99ADCAB2F499AB1D385C87F70330DB2BC207EE4D15C1C967AC87C0` |
+
+ProductVersion / FileVersion 均为 **0.4.7**。日志 `build-logs/tauri-0.4.7-msi.log`。
+
+### 视觉核对（开发预览，不是安装版证据）
+
+用 `build-logs/preview/` 下的一次性只读预览页（git 忽略，核对后已删除）渲染真实组件：
+- 1692px：三层数字列对齐、熟食按 50% 折算、未知列显示「未知」、日合计给「≥」下限、空餐次显示「—」。
+- 492px：只保留食物/热量/操作三列，无横向滚动，日汇总条自动换行。
+
+### 未做与边界
+
+- **未安装、未覆盖升级、未启动生产实例、未触碰真实用户库**。
+- NSIS 仍未产出：Tauri 需要联网取 NSIS 插件包，本机对 GitHub 返回 502（WiX 缓存已就绪，MSI 不受影响）。网络恢复后 `npm run tauri build -- --bundles nsis` 即可补。
+- 未做长时/大库/跨机器与真实手机网络矩阵；安装包无代码签名。
+
+## 上一版：0.4.6-A 构建证据（已安装验收通过）
+
+日期：2026-10-21。范围：P0 保护补丁 + 库存补录实重/盘点纠错 + 饮食单项更正/作废，合并收口为 `0.4.6`。无新依赖、无 OCR/云端、无备份扩展。
 
 ### 自动化与静态检查
 

@@ -1,8 +1,7 @@
 import { diaryToday, ratioPercent, type DiaryDateProps } from "../domain/diary";
 import { DiaryDateControl } from "../components/DiaryDateControl";
-import { AlertTriangle, ChefHat, Plus, ShieldCheck, Trash2, Utensils } from "lucide-react";
+import { AlertTriangle, ChefHat, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { activeMeals, summarizeMeals } from "../domain/calculations";
 import type { MealEntry, RecipeVersion, MealType } from "../domain/types";
 import { useAppStore } from "../store/appStore";
 import { Modal } from "../components/Modal";
@@ -14,8 +13,9 @@ import { MealCorrectionModal } from "../components/MealCorrectionModal";
 import { RecipeEditor } from "../components/RecipeEditor";
 import { latestRecipes } from "../domain/recipes";
 import { BatchHistory } from "../components/BatchHistory";
-
-const mealLabels: Record<MealType, string> = { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", snack: "加餐" };
+import { MealDiaryTable } from "../components/MealDiaryTable";
+import { mealLabels } from "../domain/meals";
+import { readDiaryShowSodium, writeDiaryShowSodium } from "../domain/preferences";
 
 export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps = {}) {
   const [correction,setCorrection]=useState<{meal:MealEntry;mode:"edit"|"void"}|null>(null);
@@ -23,10 +23,12 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   const [selectedRecipeId,setSelectedRecipeId]=useState("");
   const [showHistory,setShowHistory]=useState(false);
   const [copyRecipe,setCopyRecipe]=useState(false);
+  const [showSodium,setShowSodium]=useState(readDiaryShowSodium);
   const [mealOpen, setMealOpen] = useState(false);
   const [manualMeal, setManualMeal] = useState(false);
   const [initialMealType, setInitialMealType] = useState<MealType>("breakfast");
   function openMeal(type: MealType = "breakfast") { setManualMeal(false); setInitialMealType(type); setMealOpen(true); }
+  function toggleSodium(visible: boolean) { setShowSodium(visible); writeDiaryShowSodium(visible); }
   const [cookOpen, setCookOpen] = useState(false);
   const [batchOpen, setBatchOpen] = useState<string | null>(null);
   const [consumeRatio, setConsumeRatio] = useState("50");
@@ -45,8 +47,6 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   const consumeBatch = useAppStore((state) => state.consumeBatch);
   const discardBatchRemainder = useAppStore((state) => state.discardBatchRemainder);
   const today = date;
-  const todayMeals = activeMeals(meals).filter((item) => item.date === today);
-  const total = summarizeMeals(todayMeals);
   const latest=latestRecipes(recipes);
   const recipeOptions=showHistory?recipes:latest;
   const recipe = recipeOptions.find(r=>r.id===selectedRecipeId)??recipeOptions[0];
@@ -59,36 +59,19 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
       <DiaryDateControl date={date} onChange={onDateChange}/>
       <p className="form-hint">补录或新增餐食会把该日重新标为待核对，请在日报再次确认完成。</p>
       {statusMessage && <div className="settings-notice card" role="status">{statusMessage}</div>}
-      <div className="metric-row">
-        <Metric label="所选日热量" value={`${Math.round(total.totals.calories)} kcal`} note={`覆盖率 ${total.coverage.calories}%`} />
-        <Metric label="蛋白质" value={`${Math.round(total.totals.protein)} g`} note="目标约 100 g" />
-        <Metric label="膳食纤维" value={`${Math.round(total.totals.fiber)} g`} note="提醒线 25 g" />
-        <Metric label="已确认批次" value={`${batches.filter((item) => item.date === today && item.status !== "void").length} 个`} note="原料与进食分开" />
-      </div>
+      <MealDiaryTable
+        date={today}
+        entries={meals}
+        showSodium={showSodium}
+        onSodiumChange={toggleSodium}
+        batchCount={batches.filter((item) => item.date === today && item.status !== "void").length}
+        notes={{ protein: "目标约 100 g", fiber: "提醒线 25 g" }}
+        onAdd={openMeal}
+        onEdit={(meal) => setCorrection({ meal, mode: "edit" })}
+        onVoid={(meal) => setCorrection({ meal, mode: "void" })}
+      />
 
-      <div className="two-column">
-        <section className="card">
-          <div className="card-heading compact"><div><p className="eyebrow">{date} 明细</p><h2>按餐次记录</h2></div><span className="status-pill neutral">{todayMeals.length} 条</span></div>
-          <div className="timeline">
-            {(["breakfast", "lunch", "dinner", "snack"] as MealType[]).map((type) => {
-              const items = todayMeals.filter((item) => item.type === type);
-              return (
-                <div className="timeline-group" key={type}>
-                  <div className="timeline-label"><span>{mealLabels[type]}</span><b>{Math.round(summarizeMeals(items).totals.calories)} kcal</b></div>
-                  {items.length ? items.map((item) => (
-                    <div className="food-entry" key={item.id}>
-                      <div className="meal-icon"><Utensils size={16} /></div>
-                      <div><strong>{item.name}</strong><span>{item.amountLabel} · {item.confidence === "high" ? "已确认" : "估算"}</span></div>
-                      <b>{item.nutrition.calories.state === "unknown" ? "未知" : Math.round((item.nutrition.calories.value ?? 0) * item.consumedRatio)}</b>
-                      <button className="text-button" onClick={()=>setCorrection({meal:item,mode:"edit"})}>编辑</button><button className="text-button warning-text" onClick={()=>setCorrection({meal:item,mode:"void"})}>作废</button>
-                    </div>
-                  )) : <button className="empty-entry" onClick={() => openMeal(type)}><Plus size={15} /> 添加{mealLabels[type]}</button>}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
+      <div className="two-column equal">
         <section className="stack">
           <div className="button-row"><button className="button secondary" onClick={()=>{setCopyRecipe(false);setRecipeEditor("new");}}>新建菜谱</button>{recipe&&<><button className="button secondary" disabled={!latest.some(r=>r.id===recipe.id)} onClick={()=>{setCopyRecipe(false);setRecipeEditor(recipe);}}>修订当前菜谱</button><button className="button secondary" onClick={()=>{setCopyRecipe(true);setRecipeEditor(recipe);}}>另存为新菜谱</button></>}</div>
           <label className="checkbox-label"><input type="checkbox" checked={showHistory} onChange={e=>{setShowHistory(e.target.checked);setSelectedRecipeId("");}}/><span>菜谱管理：显示历史版本（可按原配方制作或另存）</span></label>
@@ -103,6 +86,9 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
             <ul className="ingredient-list">{recipe.ingredients.map((item) => <li key={item.foodId}><span>{item.name}</span><b>{item.amount} {item.unit}</b></li>)}</ul>
             <button className="button primary wide" disabled={busyAction || date !== diaryToday()} onClick={() => { setMessage(""); setCookCommandId(crypto.randomUUID()); setCookOpen(true); }}>{date === diaryToday() ? "确认今日制作" : "回到今天后确认实际制作"}</button>
           </article> : <article className="card"><h3>暂无标准菜谱</h3><p>仍可通过食材库或仅记录本次入口记餐。</p></article>}
+        </section>
+
+        <section className="stack">
           {activeBatches.map((batch) => <article className="card batch-card" key={batch.id}>
             <div className="card-heading compact"><div><p className="eyebrow">制作于 {batch.date} · 待处理</p><h3>{recipes.find(item => item.id === batch.recipeVersionId)?.name ?? "菜谱版本缺失"}</h3></div><span className="status-pill warning">剩余 {ratioPercent(batch.remainingRatio)}%</span></div>
             <div className="batch-progress"><i style={{ width: `${batch.remainingRatio * 100}%` }}/></div>
@@ -147,16 +133,12 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   );
 }
 
-function Metric({ label, value, note }: { label: string; value: string; note: string }) {
-  return <article className="metric-card"><span>{label}</span><strong>{value}</strong><small>{note}</small></article>;
-}
-
-function MealModal({ onClose, onSave, initialType, initialDate, onBack, onRecorded }: { onClose: () => void; initialType: MealType; initialDate: string; onBack: () => void; onRecorded?: (date: string) => void; onSave: (input: { name: string; date: string; type: MealType; amountLabel: string; calories: number; protein: number; fiber?: number }, commandId?: string) => Promise<ActionResult> }) {
-  const [form, setForm] = useState({ name: "", date: initialDate, type: initialType, amountLabel: "", calories: "", protein: "", fiber: "" });
+function MealModal({ onClose, onSave, initialType, initialDate, onBack, onRecorded }: { onClose: () => void; initialType: MealType; initialDate: string; onBack: () => void; onRecorded?: (date: string) => void; onSave: (input: { name: string; date: string; type: MealType; amountLabel: string; calories: number; protein: number; fiber?: number; carbohydrates?: number; fat?: number; sugar?: number; sodium?: number }, commandId?: string) => Promise<ActionResult> }) {
+  const [form, setForm] = useState({ name: "", date: initialDate, type: initialType, amountLabel: "", calories: "", protein: "", fiber: "", carbs: "", fat: "", sugar: "", sodium: "" });
   const action = useConfirmedAction();
   return (
     <Modal title="仅记录本次餐食" onClose={() => { if (!action.busy) onClose(); }}>
-      <form className="form" onSubmit={async (event) => { event.preventDefault(); const input = { ...form, calories: Number(form.calories), protein: Number(form.protein), fiber: form.fiber ? Number(form.fiber) : undefined }; const result = await action.run(JSON.stringify(input), (id) => onSave(input, id)); if (!result.error) { onRecorded?.(form.date); onClose(); } }}>
+      <form className="form" onSubmit={async (event) => { event.preventDefault(); const input = { name: form.name, date: form.date, type: form.type, amountLabel: form.amountLabel, calories: Number(form.calories), protein: Number(form.protein), fiber: form.fiber ? Number(form.fiber) : undefined, carbohydrates: form.carbs ? Number(form.carbs) : undefined, fat: form.fat ? Number(form.fat) : undefined, sugar: form.sugar ? Number(form.sugar) : undefined, sodium: form.sodium ? Number(form.sodium) : undefined }; const result = await action.run(JSON.stringify(input), (id) => onSave(input, id)); if (!result.error) { onRecorded?.(form.date); onClose(); } }}>
         <fieldset className="library-fields" disabled={action.busy}>
         <button type="button" className="text-button" onClick={onBack}>返回食材库（保留待确认食物）</button>
         <label><span>进食日期</span><input type="date" required max={diaryToday()} value={form.date} onChange={event => setForm({ ...form, date: event.target.value })}/></label>
@@ -165,6 +147,9 @@ function MealModal({ onClose, onSave, initialType, initialDate, onBack, onRecord
         <label><span>份量说明</span><input required value={form.amountLabel} onChange={(event) => setForm({ ...form, amountLabel: event.target.value })} placeholder="例如 鸡蛋3个、燕麦50克" /></label>
         <div className="form-grid"><label><span>热量 kcal</span><input required type="number" min="0" value={form.calories} onChange={(event) => setForm({ ...form, calories: event.target.value })} /></label><label><span>蛋白质 g</span><input required type="number" min="0" step="0.1" value={form.protein} onChange={(event) => setForm({ ...form, protein: event.target.value })} /></label></div>
         <label><span>膳食纤维 g（可留空，留空不等于 0）</span><input type="number" min="0" step="0.1" value={form.fiber} onChange={(event) => setForm({ ...form, fiber: event.target.value })} /></label>
+        <div className="form-grid"><label><span>碳水 g（可留空）</span><input type="number" min="0" step="0.1" value={form.carbs} onChange={(event) => setForm({ ...form, carbs: event.target.value })} /></label><label><span>脂肪 g（可留空）</span><input type="number" min="0" step="0.1" value={form.fat} onChange={(event) => setForm({ ...form, fat: event.target.value })} /></label></div>
+        <div className="form-grid"><label><span>糖 g（可留空）</span><input type="number" min="0" step="0.1" value={form.sugar} onChange={(event) => setForm({ ...form, sugar: event.target.value })} /></label><label><span>钠 mg（可留空）</span><input type="number" min="0" value={form.sodium} onChange={(event) => setForm({ ...form, sodium: event.target.value })} /></label></div>
+        <p className="form-hint">留空的营养保持「未知」，不会按 0 计入日合计。</p>
         {action.message && <p className="form-error" role="alert">{action.message}</p>}
         <button className="button primary wide" type="submit" disabled={action.busy}>{action.busy ? "正在保存…" : "确认写入饮食日记"}</button>
         </fieldset>

@@ -92,13 +92,31 @@ pub(crate) fn apply(
             if fiber.is_some_and(|value| value < 0.0) {
                 return Err("纤维不能小于 0。".into());
             }
+            // 手工记餐可选补齐其余营养：缺省保持 unknown，不能当成 0。
+            let carbohydrates = optional_number(payload, "carbohydrates")?;
+            let fat = optional_number(payload, "fat")?;
+            let sugar = optional_number(payload, "sugar")?;
+            let sodium = optional_number(payload, "sodium")?;
+            for (label, value) in [
+                ("碳水化合物", carbohydrates),
+                ("脂肪", fat),
+                ("糖", sugar),
+                ("钠", sodium),
+            ] {
+                if value.is_some_and(|number| number < 0.0) {
+                    return Err(format!("{label}不能小于 0。"));
+                }
+            }
             let date = date(payload)?;
             array_mut(state, "meals")?.push(json!({
                 "id":id,"date":date,"type":meal_type,"name":name,"amountLabel":amount_label,
                 "nutrition":{
                     "calories":nutrient(Some(calories),"kcal"),"protein":nutrient(Some(protein),"g"),
-                    "fiber":nutrient(fiber,"g"),"carbohydrates":nutrient(None,"g"),"fat":nutrient(None,"g"),
-                    "sugar":nutrient(None,"g"),"sodium":nutrient(None,"mg")
+                    "fiber":nutrient(fiber,"g"),
+                    "carbohydrates":nutrient(carbohydrates,"g"),
+                    "fat":nutrient(fat,"g"),
+                    "sugar":nutrient(sugar,"g"),
+                    "sodium":nutrient(sodium,"mg")
                 },"consumedRatio":1,"source":"manual","confidence":"high","createdAt":now,
             }));
             audit(

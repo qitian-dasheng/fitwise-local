@@ -3024,4 +3024,100 @@ mod tests {
             .count();
         assert_eq!(adjustment_count, 1);
     }
+
+    #[test]
+    fn manual_meal_accepts_optional_macros_and_keeps_missing_ones_unknown() {
+        let mut c = connection();
+        let full = execute_with_connection(
+            &mut c,
+            request(
+                "manual-meal-full",
+                "add_meal",
+                json!({
+                    "name":"外食套餐","type":"lunch","amountLabel":"一份",
+                    "calories":650,"protein":30,"fiber":6,
+                    "carbohydrates":80,"fat":22,"sugar":9,"sodium":1200
+                }),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        let nutrition = &full.state["meals"][0]["nutrition"];
+        for (key, value) in [
+            ("carbohydrates", 80.0),
+            ("fat", 22.0),
+            ("sugar", 9.0),
+            ("sodium", 1200.0),
+        ] {
+            assert_eq!(nutrition[key]["state"], "known", "{key} 应落为 known");
+            assert_eq!(
+                nutrition[key]["value"].as_f64(),
+                Some(value),
+                "{key} 数值不符"
+            );
+        }
+        assert_eq!(nutrition["sodium"]["unit"], "mg");
+        assert_eq!(
+            full.state["meals"][0]["source"], "manual",
+            "手记餐来源应为 manual"
+        );
+
+        let sparse = execute_with_connection(
+            &mut c,
+            request(
+                "manual-meal-sparse",
+                "add_meal",
+                json!({"name":"只记热量","type":"snack","amountLabel":"一份","calories":120,"protein":4}),
+                None,
+            ),
+        )
+        .unwrap();
+        let sparse_nutrition = &sparse.state["meals"][1]["nutrition"];
+        for key in ["carbohydrates", "fat", "sugar", "sodium", "fiber"] {
+            assert_eq!(
+                sparse_nutrition[key]["state"], "unknown",
+                "{key} 缺省必须是 unknown，不能当 0"
+            );
+            assert!(
+                sparse_nutrition[key].get("value").is_none(),
+                "{key} 缺省不能带 value"
+            );
+        }
+
+        let zero = execute_with_connection(
+            &mut c,
+            request(
+                "manual-meal-zero",
+                "add_meal",
+                json!({"name":"零糖饮料","type":"snack","amountLabel":"一瓶","calories":0,"protein":0,"sugar":0}),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            zero.state["meals"][2]["nutrition"]["sugar"]["state"],
+            "zero"
+        );
+
+        let negative = execute_with_connection(
+            &mut c,
+            request(
+                "manual-meal-negative",
+                "add_meal",
+                json!({"name":"错值","type":"lunch","amountLabel":"一份","calories":300,"protein":10,"sodium":-1}),
+                None,
+            ),
+        );
+        let error = negative.unwrap_err();
+        assert!(
+            error.contains("钠不能小于 0"),
+            "负数营养必须被拒绝，实际：{error}"
+        );
+        let stored: Value = serde_json::from_str(&load_envelope(&c).unwrap().unwrap()).unwrap();
+        assert_eq!(
+            stored["state"]["meals"].as_array().unwrap().len(),
+            3,
+            "被拒绝的提交不能落库"
+        );
+    }
 }

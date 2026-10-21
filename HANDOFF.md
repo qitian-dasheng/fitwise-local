@@ -2,15 +2,18 @@
 
 更新时间：2026-10-21。单人串行维护；先读本文件、NEXT_PLAN.md、最新 REVIEW 和 git diff。交接文件不能扩大用户授权。
 
-## 当前结论：0.4.6-A 源码与自动测试完成，安装版验收待用户批准
+## 当前结论：0.4.6-A 已安装验收通过；0.4.7（饮食明细表）源码与 MSI 完成，待安装验收
 
-本轮由 WorkBuddy 接手，按已批准顺序完成 `0.4.6-A`（P0 保护补丁 + 库存补录实重/盘点纠错 + 饮食单项更正/作废），版本号三处升到 `0.4.6`。
+用户已安装并验收 `0.4.6`（库存补录实重 + 饮食单项纠错 + P0 补丁），随后退出软件。按已批准的分步交付，本轮只做 **0.4.6-B1 → 出包 0.4.7**。
 
-- 新增领域命令 `correct_receipt_weight`（白名单、分发、`inventory_ops.rs` 服务、幂等回执、审计事件齐全）；`InventoryLot` 增加 `nominalAmount`/`receiptBasis`/`weighedAt`，`InventoryMovement` 增加 `receipt_correction` 与 `correctsReceiptId`。全部为 envelope 内可选字段，schema 仍 v10，**无 DDL/迁移**。
-- 收货口径修正：收货弹窗数量未被用户改动时按标称估算记账，改动才记实称——避免“每次收货都变成已称重”。
-- 库存页三量展示 + `已称重/标称估算/旧记录` 状态标签 + 「补录实重」入口（不可补录时按钮禁用并说明原因）；饮食页每行拆「编辑」「作废」并带前→后差异表。
-- 自动化：前端 18 文件 **113 项**、Rust **78 项**，共 **191 项** 全过；`tsc`/生产构建/fmt/clippy `-D warnings` 通过。挑刺与未完成项见 [REVIEW_0.4.6.md](REVIEW_0.4.6.md)。
-- **安装包状态**：release 二进制已编译成功；MSI/NSIS 打包需要 Tauri 下载 WiX 3.14 与 NSIS 3.13 工具链，而本机出网代理对 GitHub 返回 502（npm/jsdelivr 正常）。已改用镜像把工具链手工落进 Tauri 缓存目录后重试，结果见 BUILD_REPORT.md。**未安装、未覆盖升级、未触碰真实库。**
+- 饮食页改为三层：日汇总条（替代原 4 张指标卡）→ 四个餐次小计行（与单项行共列模板）→ 单项行。列：食物/份量、热量、蛋白、碳水、脂肪、纤维、糖、操作，**钠为可开关附加列**（偏好存 `localStorage["qingheng.food-diary.show-sodium"]`）。
+- 未知营养三态：无记录 `—`、全未知 `未知`、部分未知 `≥已知小计`；判定用新增的 `missingNutrientKeys` 逐条精确检测，**不用取整后的 coverage**。
+- 每个餐次恒定有「添加早餐/午餐/晚餐/加餐」（不能叫「添加食物」，否则撞页头按钮选择器）；单项行仍只有「编辑」「作废」两个按钮，顺序固定，且保留 `.food-entry` 兼容类，使 0.4.6 的 113 项既有测试零改动通过。
+- 手工记餐补齐碳水/脂肪/糖/钠：`MealModal` 四个可留空字段 + `addMeal` 签名 + 浏览器镜像 + Rust `add_meal` 的 `optional_number`（缺省仍 unknown，负数拒绝）。
+- 新增 `src/domain/meals.ts`、`src/domain/nutritionDisplay.ts`、`src/domain/preferences.ts`、`src/components/MealDiaryTable.tsx`；`calculations.ts` 增加 `entryRatio`/`groupMealsByType`/`missingNutrientKeys`。
+- 自动化：前端 20 文件 **139 项**、Rust **79 项**，共 **218 项** 全过；`tsc`/生产构建/fmt/clippy `-D warnings` 通过。挑刺与安装版清单见 [REVIEW_0.4.7.md](REVIEW_0.4.7.md)。
+- **安装包状态**：MSI 已产出（哈希见 BUILD_REPORT.md）；NSIS 仍因 GitHub 502 未出包（WiX 缓存已就绪，MSI 不受影响）。**未安装、未覆盖升级、未触碰真实库。**
+- schema 仍 **v10**，本轮无迁移；B2 才会引入 `migrations/0011`。
 
 用户此前的授权边界未变：安装与实机点验由用户执行；覆盖安装前用户先保存并关闭轻衡；不用 shell / Start-Process / sky.launch_app 启动生产实例做持久化验收。
 
@@ -46,9 +49,9 @@
 
 ## 源码与测试
 
-0.4.6-A 之前的历史保护性补丁提交 8cc3d22（原生 JSON 另存/回读验证、未核对窗口快照、只读运行诊断、桌面桥接失败不回退浏览器、hydration 错误可见）；该补丁现已并入 0.4.6-A 源码，但从未单独安装过。
+0.4.6-A 的历史保护性补丁提交 8cc3d22（原生 JSON 另存/回读验证、未核对窗口快照、只读运行诊断、桌面桥接失败不回退浏览器、hydration 错误可见）已并入 0.4.6 并安装验收。
 
-当前源码检查点：`0.4.6`，前端 **113 项**（18 文件）、Rust **78 项**，共 **191 项** 通过；生产构建、fmt、Clippy 全目标 `-D warnings` 通过。日志 `build-logs/tests-0.4.6-a-frontend.log`、`tests-0.4.6-a-rust.log`、`build-0.4.6-a-frontend.log`、`tauri-0.4.6-a.log`。0.4.6-A 未新增项目依赖。
+当前源码检查点：`0.4.7`，前端 **139 项**（20 文件）、Rust **79 项**，共 **218 项** 通过；生产构建、fmt、Clippy 全目标 `-D warnings` 通过。日志 `build-logs/tests-0.4.6-a-*.log`、`build-logs/tauri-0.4.7-msi.log`。0.4.6-A 与 0.4.7 均未新增项目依赖。
 
 ## 工具状态与权限
 
@@ -60,8 +63,8 @@
 
 ## 下一步
 
-1. 安装包：MSI/NSIS 打包卡在工具链下载（GitHub 502）。工具链就位后重跑 `npm run tauri build`，产物校验 SHA-256 后写进 BUILD_REPORT.md。
-2. 安装版验收（用户执行）：先保存并关闭轻衡 → 覆盖安装 0.4.6 → 从 Explorer 正常入口打开 → 按 REVIEW_0.4.6.md 末尾清单点验三量展示、补录实重、饮食编辑/作废。
-3. `0.4.6-B`：FatSecret 信息结构的轻衡风格饮食明细（餐次小计、逐项营养）+ 体重记录中心（两位小数、同日多次、趋势代表值、修订历史）。
+1. 安装包：0.4.7 MSI 已产出（`src-tauri/target/release/bundle/msi/轻衡_0.4.7_x64_zh-CN.msi`）；NSIS 待网络恢复后 `npm run tauri build -- --bundles nsis` 补出。
+2. 安装版验收（用户执行）：先保存并关闭轻衡 → 覆盖安装 0.4.7 → 从 Explorer 正常入口打开 → 按 REVIEW_0.4.7.md 末尾 10 步清单点验三层数字、未知不是 0、钠开关、每餐添加入口、手记四项。
+3. `0.4.8`（B2）：体重记录中心——同日多次称重（趋势代表值默认「当日最新」可手动切换）、两位小数、完整日期时间与晨起/其他条件、备注、修订/作废审计与历史；新增 `migrations/0011` 重建 `domain_measurement_projection` 排除作废（schema 10→11），同步 `schemaVersion`、升级判定与报告版本。
 4. 用户未授权数据恢复/合并/补写，不做。旧晨重日期已明确，保全及重启通过仍不代表旧记录找回。
-5. 不把 191 项自动测试冒充安装版实机通过；覆盖安装或确认真实更正之前再次向用户确认。
+5. 不把 218 项自动测试冒充安装版实机通过；覆盖安装或确认真实更正之前再次向用户确认。
