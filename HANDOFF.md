@@ -26,7 +26,8 @@
 
 - 微软 Handle 已由用户批准并下载，Microsoft 数字签名 Valid。只读查询 PID41772，无数据库常驻句柄，符合每次操作后关闭连接的可能性，不能据此定位路径。
 - Process Monitor 临时驱动/管理员短时排查：用户已批准。微软官方工具已下载，数字签名 Valid，SHA-256 28495E642B2A465474A4EDC58380EAF8B7EE580F3FBCB4141061DEADAFE9B885。以 /AcceptEula /NoConnect 启动 PID60020；未发出开始捕获指令，过滤范围尚未核实，不得启动捕获。
-- Process Monitor 原生窗口仅暴露标题栏，截图未可靠显示目标工具；刷新绑定后仍然如此。已请用户手动恢复到前台、不要开始捕获，等待其回复。不要盲点、不操作其他窗口，不重新启动轻衡。开始监测前须先验证仅包含轻衡及 Drop Filtered Events，设置限时停止，结束后停止工具。
+- 用户已手动恢复 Process Monitor 前台；截图可见且底部确认 No events (capture disabled)。但鼠标点击 Filter 与重新激活后的 Ctrl+L 均未产生界面变化，停止继续输入。可能权限级别不匹配，尚未确证，不通过其他 UI 自动化绕过。改请用户手动设置 PID41772 / Path contains fitwise.db 的 Include 及 Drop Filtered Events，再核对截图；仍不开始捕获。
+- 只读进程核对：轻衡仍是 PID41772；本次 Procmon 启动器 PID60020，另有同次启动的 PID50876（路径读取不可用）。不得把所有 Procmon 都当成未经核实的同一进程。工具内置参数说明已确认 /Runtime 为指定秒数后终止、/Terminate 会终止所有 Procmon 实例；停止前必须再次核对目标范围。
 - tauri-plugin-single-instance 官方依赖：已询问，未收到批准前不可添加。
 - 不使用浏览器缓存/CDP等途径绕过已阻止的 localhost 浏览器访问。
 
