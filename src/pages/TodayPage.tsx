@@ -3,9 +3,10 @@ import { zhCN } from "date-fns/locale";
 import { diaryToday, isDemoPlan, shiftDiaryDate, type DiaryDateProps } from "../domain/diary";
 import { DiaryDateControl } from "../components/DiaryDateControl";
 import { ArrowRight, Check, Dumbbell, Plus, Scale, Sparkles, Utensils, Wheat } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { activeMeals, activeMeasurements, summarizeMeals } from "../domain/calculations";
+import { activeMeals, summarizeMeals } from "../domain/calculations";
+import { dailyRepresentatives } from "../domain/body";
 import { useAppStore } from "../store/appStore";
 import { Modal } from "../components/Modal";
 import { NutritionRing } from "../components/NutritionRing";
@@ -16,8 +17,6 @@ import { usePeriodSummary } from "../data/domainQueries";
 const mealLabels = { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", snack: "加餐" } as const;
 
 export function TodayPage({ goTo, date = diaryToday(), onDateChange }: { goTo: (page: string) => void } & DiaryDateProps) {
-  const [weightOpen, setWeightOpen] = useState(false);
-  const [weight, setWeight] = useState("");
   const action = useConfirmedAction();
   const profile = useAppStore((state) => state.profile);
   const meals = useAppStore((state) => state.meals);
@@ -26,7 +25,6 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange }: { goTo: (
   const checkIns = useAppStore((state) => state.checkIns);
   const inventory = useAppStore((state) => state.inventory);
   const plans = useAppStore((state) => state.plans);
-  const addWeight = useAppStore((state) => state.addWeight);
   const setCheckIn = useAppStore((state) => state.setCheckIn);
   const setDayComplete = useAppStore((state) => state.setDayComplete);
   const today = date;
@@ -36,7 +34,7 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange }: { goTo: (
   const todayWorkouts = workouts.filter((item) => item.date === today);
   const todayCheck = checkIns.find((item) => item.date === today);
   const selectedPlan = plans.find((item) => item.status === "selected") ?? plans[0];
-  const currentMeasurements = activeMeasurements(measurements).filter(item => item.date <= date);
+  const currentMeasurements = dailyRepresentatives(measurements).filter(item => item.date <= date);
   const weightData = currentMeasurements.slice(-14).map((item) => ({ date: item.date.slice(5), weight: item.weightKg }));
   const latestWeight = period.data?.latestWeightKg ?? currentMeasurements.at(-1)?.weightKg ?? profile.startWeightKg;
   const expiringCount = useMemo(() => inventory.filter((item) => item.remainingAmount > 0 && item.expiresAt && new Date(item.expiresAt).getTime() - Date.now() < 3 * 864e5).length, [inventory]);
@@ -86,7 +84,7 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange }: { goTo: (
               <p className="eyebrow">{currentMeasurements.length ? "体重趋势" : "起始参考 · 尚未记录晨重"}</p>
               <h2>{latestWeight.toFixed(1)} <small>kg</small></h2>
             </div>
-            <button className="icon-button solid" onClick={() => setWeightOpen(true)} aria-label="记录体重"><Plus size={19} /></button>
+            <button className="icon-button solid" onClick={() => goTo("body")} aria-label="记录体重" title="去「身体」页记录称重"><Plus size={19} /></button>
           </div>
           <div className="weight-target"><span>阶段目标 {profile.targetWeightKg} kg</span><b>还差 {(latestWeight - profile.targetWeightKg).toFixed(1)} kg</b></div>
           <div className="chart-small">
@@ -162,18 +160,6 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange }: { goTo: (
         <Rating label="饥饿感" disabled={action.busy} value={todayCheck?.hunger} onChange={(hunger) => { void action.run(`hunger:${today}:${hunger}`, (id) => setCheckIn({ hunger, date }, id)); }} />
         <Rating label="精力" disabled={action.busy} value={todayCheck?.energy} onChange={(energy) => { void action.run(`energy:${today}:${energy}`, (id) => setCheckIn({ energy, date }, id)); }} />
       </section>
-
-      {weightOpen && (
-        <Modal title="记录晨起体重" onClose={() => { if (!action.busy) setWeightOpen(false); }}>
-          <form className="form" onSubmit={async (event) => { event.preventDefault(); const value = Number(weight); const result = await action.run(`weight:${today}:${value}`, (id) => addWeight(value, today, id)); if (!result.error) { setWeightOpen(false); setWeight(""); if (result.isOutlier) action.setMessage("本次体重与最近记录相差较大，已保留原始值，请复核称量。 "); } }}>
-            <p className="form-hint">晨重日期：{date}。需要补录时，先切换日报日期。</p>
-            <label><span>体重（kg）</span><input autoFocus inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} placeholder="例如 82.6" /></label>
-            <p className="form-hint">相同日期重复记录会把旧值标为“已修订”并保留审计，不会静默删除；异常波动也不会自动删除。</p>
-            {action.message && <p className="form-error" role="alert">{action.message}</p>}
-            <button className="button primary wide" type="submit" disabled={action.busy}>{action.busy ? "正在保存…" : "确认记录"}</button>
-          </form>
-        </Modal>
-      )}
     </div>
   );
 }

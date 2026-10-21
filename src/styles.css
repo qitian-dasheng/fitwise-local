@@ -361,3 +361,162 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 .label-review { display: grid; gap: 12px; border-top: 1px solid var(--line); padding-top: 16px; }.label-review h3 { margin: 0; }
 .label-conversion { padding: 14px 0; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
 .label-close-warning { padding: 14px; border-radius: 10px; background: #fff3df; color: #805c21; }
+
+/* ===== 0.4.8 结构修整：右侧抽屉 ===== */
+.drawer-backdrop { position: fixed; inset: 0; z-index: 90; display: flex; justify-content: flex-end; background: rgba(17,31,25,.4); backdrop-filter: blur(3px); }
+.drawer { display: flex; width: min(460px, 100%); height: 100%; flex-direction: column; background: var(--surface); box-shadow: -24px 0 60px rgba(23,55,44,.2); }
+.drawer-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 24px 26px 18px; border-bottom: 1px solid var(--line); }
+.drawer-header h2 { margin: 0; font-size: 21px; }
+.drawer-body { display: grid; align-content: start; gap: 18px; padding: 22px 26px 34px; overflow-y: auto; }
+.drawer-body .button-row { flex-wrap: wrap; }
+.drawer-body .recipe-picker { margin: 0; }
+.drawer-summary { display: grid; gap: 5px; padding: 16px 18px; border-radius: 14px; background: var(--surface-soft); font-size: 12.5px; line-height: 1.7; }
+.drawer-summary strong { font-size: 14px; }
+.drawer-summary > span { color: var(--muted); }
+.drawer-summary .eyebrow { margin-bottom: 0; }
+
+/* ===== 0.4.8 结构修整：饮食页工作台 ===== */
+.food-page { display: grid; gap: 22px; }
+.food-page > .page-header,
+.food-page > .diary-date-control,
+.food-page > .form-hint,
+.food-page > .meal-correction-history,
+.food-page > .batch-history { margin: 0; }
+.food-page > .form-hint { font-size: 12px; }
+.food-page > .settings-notice { margin: 0; }
+.food-workbench { display: grid; grid-template-columns: minmax(560px, 1.6fr) minmax(340px, 1fr); gap: 22px; align-items: start; }
+
+.kitchen-card { display: grid; gap: 18px; padding: 24px; min-width: 0; }
+.kitchen-body { display: grid; gap: 16px; }
+.kitchen-top { display: flex; align-items: flex-start; gap: 16px; }
+.kitchen-top .recipe-visual { flex: 0 0 auto; margin-bottom: 0; }
+.kitchen-meta { min-width: 0; }
+.kitchen-meta h3 { margin-bottom: 6px; font-size: 18px; }
+.kitchen-meta p:not(.eyebrow) { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.7; }
+.kitchen-body .recipe-macros { margin: 0; }
+.kitchen-body .ingredient-list { margin: 0; }
+.kitchen-body .ingredient-list li { font-size: 12.5px; }
+.kitchen-empty { display: grid; justify-items: start; gap: 10px; padding: 22px; border: 1.5px dashed var(--line); border-radius: 16px; background: var(--surface-soft); }
+.kitchen-empty > svg { color: var(--green); }
+.kitchen-empty strong { font-size: 15px; }
+.kitchen-empty p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.7; }
+.kitchen-footnote { display: flex; align-items: flex-start; gap: 9px; margin: 0; padding-top: 14px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 11.5px; line-height: 1.65; }
+.kitchen-footnote > svg { flex: 0 0 auto; color: var(--green); }
+
+.batches-panel { display: grid; align-content: start; gap: 16px; min-width: 0; }
+.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 4px; }
+.panel-heading h2 { margin: 0; font-size: 19px; }
+.panel-heading .eyebrow { margin-bottom: 5px; }
+.batches-empty { display: grid; justify-items: start; gap: 9px; padding: 24px; border: 1.5px dashed var(--line); border-radius: 18px; background: rgba(255,255,255,.6); }
+.batches-empty > svg { color: var(--muted); }
+.batches-empty strong { font-size: 14px; }
+.batches-empty p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+
+@media (max-width: 1080px) { .food-workbench { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .drawer { width: 100%; } .drawer-header, .drawer-body { padding-left: 18px; padding-right: 18px; } }
+
+/* ===== 0.4.8 空餐次：一条跨列提示，不铺破折号 ===== */
+.diary-meal-head-empty { background: transparent; border-bottom: 1px dashed var(--line-soft); }
+.diary-empty-hint { grid-column: 2 / -1; align-self: center; justify-self: start; color: var(--muted); font-size: 11px; }
+.diary-empty-hint:hover { color: var(--green); }
+
+/* ===== 0.4.8 字号与密度：小字整体上调一档，对齐库存页 ===== */
+.form label { font-size: 12px; }
+.form .form-hint, .form-hint { font-size: 12px; }
+.form-error, .backup-message { font-size: 12px; }
+.form-success { margin: 0; padding: 10px 12px; color: var(--green-dark); border-radius: 9px; background: var(--green-pale); font-size: 12px; line-height: 1.6; }
+.text-button { font-size: 13px; }
+.status-pill { font-size: 11px; padding: 5px 10px; }
+.metric-card > span, .metric-card small { font-size: 11.5px; }
+.recipe-picker { font-size: 12.5px; }
+.recipe-picker select { font-size: 13px; }
+.recipe-macros span { font-size: 11px; }
+.recipe-macros b { font-size: 16px; }
+.batch-card p { font-size: 12px; }
+.batch-history-row small, .batch-history-row > div:first-child span { font-size: 11px; }
+.batch-history-row b { font-size: 16px; }
+
+/* 饮食明细：正文 13px / 表头 11px，数字列加宽以容纳新字号。 */
+.diary-table { --diary-cols: minmax(190px, 1fr) 84px 78px 78px 74px 70px 64px 92px; min-width: 860px; }
+.diary-table.with-sodium { --diary-cols: minmax(190px, 1fr) 84px 78px 78px 74px 70px 64px 78px 92px; min-width: 940px; }
+.diary-row { padding: 11px 8px; font-size: 13px; }
+.diary-head { min-height: 36px; font-size: 11px; }
+.diary-meal-head { padding: 12px 8px; }
+.diary-cell-food strong { font-size: 13.5px; }
+.diary-cell-food > span { font-size: 12px; }
+.diary-cell-num { font-size: 13px; }
+.diary-empty-hint { font-size: 12.5px; }
+.diary-legend { font-size: 11px; }
+.diary-sodium-toggle { font-size: 12px; }
+.diary-summary-lead strong { font-size: 14px; }
+.diary-summary-lead > span { font-size: 10.5px; }
+.diary-summary-cell > span { font-size: 11px; }
+.diary-summary-cell small { font-size: 10px; }
+.drawer .checkbox-label { font-size: 12.5px; line-height: 1.65; }
+
+/* ===== 0.4.8 身体页：体重录入、指标、历史表 ===== */
+.body-page { display: grid; gap: 22px; }
+.body-page > .page-header,
+.body-page > .diary-date-control,
+.body-page > .form-hint,
+.body-page > .metric-row,
+.body-page > .chart-card { margin: 0; }
+.body-page > .form-hint { font-size: 12px; }
+
+.body-entry { display: grid; gap: 18px; padding: 24px; }
+.body-entry-form { display: grid; gap: 14px; }
+.body-entry-form label { display: grid; gap: 7px; color: #48564f; font-size: 12px; font-weight: 600; }
+.body-entry-form input, .body-entry-form select { width: 100%; min-width: 0; height: 42px; padding: 0 12px; color: var(--ink); border: 1px solid var(--line); border-radius: 10px; outline: 0; background: #fff; font: inherit; font-weight: 400; }
+.body-entry-form input:focus, .body-entry-form select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(39,106,83,.08); }
+.body-entry .library-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.body-entry .body-entry-note { grid-column: 1 / -2; }
+.body-entry .library-fields > .button { grid-column: -2 / -1; align-self: end; height: 42px; }
+
+.body-history { display: grid; gap: 16px; padding: 24px; }
+.body-table-scroll { overflow-x: auto; }
+.body-table { --body-cols: minmax(150px, 1.2fr) 76px 92px 88px 84px minmax(130px, 1.3fr) 152px; min-width: 860px; }
+.body-row { display: grid; grid-template-columns: var(--body-cols); gap: 12px; align-items: center; min-height: 58px; padding: 11px 8px; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
+.body-row:last-child { border-bottom: 0; }
+.body-head { min-height: 36px; color: var(--muted); font-size: 11px; font-weight: 600; }
+.body-cell-main { min-width: 0; }
+.body-cell-main strong { display: block; font-size: 13px; font-variant-numeric: tabular-nums; }
+.body-row-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+.body-cell-num { font-size: 13px; font-variant-numeric: tabular-nums; }
+.body-cell-muted, .body-cell-note { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.body-cell-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+.body-cell-reason { color: var(--muted); font-size: 11.5px; text-align: right; overflow-wrap: anywhere; }
+/* 涨为暖色、降为绿色：与减脂目标一致，下降是好事。 */
+.body-delta-down { color: var(--green); font-weight: 600; }
+.body-delta-up { color: var(--coral); font-weight: 600; }
+.body-delta-flat { color: var(--muted); }
+.body-row-inactive { background: var(--surface-soft); }
+.body-row-inactive .body-cell-main strong, .body-row-inactive .body-cell-num { color: var(--muted); }
+.body-empty { display: grid; justify-items: center; gap: 9px; padding: 40px 24px; text-align: center; border: 1.5px dashed var(--line); border-radius: 16px; background: var(--surface-soft); }
+.body-empty > svg { color: var(--muted); }
+.body-empty strong { font-size: 15px; }
+.body-empty p { max-width: 430px; margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.7; }
+
+@media (max-width: 960px) { .body-entry .library-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .body-entry .body-entry-note, .body-entry .library-fields > .button { grid-column: 1 / -1; } }
+@media (max-width: 620px) { .body-entry .library-fields { grid-template-columns: 1fr; } }
+
+/* 右栏没有卡片外壳，标题需要下移一个卡片内边距，才能和左卡标题同高。 */
+.batches-panel { padding-top: 25px; }
+.panel-heading { padding: 0; }
+.body-page .chart-large:has(.empty-chart) { height: 210px; }
+
+/* 抽屉里的三个菜谱动作等宽排一行，避免折成两行。 */
+.drawer-body > .button-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.drawer-body > .button-row > .button { padding: 0 10px; font-size: 12.5px; }
+
+/* 以库存页实测基准收口：表头 12px / 正文 12px / 主文 13px / 次要 11px。 */
+.diary-row { font-size: 12px; }
+.diary-head { font-size: 12px; }
+.diary-cell-num { font-size: 12px; }
+.diary-cell-food strong { font-size: 13px; }
+.diary-cell-food > span { font-size: 11px; }
+.diary-empty-hint { font-size: 12px; }
+.body-row { font-size: 12px; }
+.body-head { font-size: 12px; }
+.body-cell-num { font-size: 12px; }
+.body-cell-main strong { font-size: 13px; }
+.body-cell-muted, .body-cell-note { font-size: 11px; }

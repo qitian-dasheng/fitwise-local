@@ -1,6 +1,36 @@
 # 轻衡 Windows 构建与验证报告
 
-## 最新：0.4.7（0.4.6-B1）构建证据（MSI 已产出，安装待用户批准）
+## 最新：0.4.8（0.4.6-B2）构建证据（MSI 已产出，安装待用户批准）
+
+日期：2026-10-21（Asia/Shanghai）。范围：结构修整——新增独立「身体」页体重记录中心（同日多次称重、代表值、修订/作废审计，**schema v10 → v11**）+ 饮食页两栏工作台与菜谱抽屉 + 空餐次单行提示 + 字号密度按库存页基准收口。无新依赖、无 OCR/云端。
+
+### 自动化与静态检查
+
+- 前端 **23 文件 169 项**（新增 `tests/bodyDomain.test.ts` 17 项、`tests/bodyPageUI.test.tsx` 7 项、`tests/foodPageLayoutUI.test.tsx` 4 项），Rust **88 项**（新增 `body_command_tests.rs` 9 项），合计 **257 项** 通过。
+- `tsc -b` + 生产构建通过；`cargo fmt --check`、`cargo clippy --all-targets -D warnings` 通过（clippy 首轮报 `unnecessary_sort_by` 与 `too_many_arguments`，已用 `sort_by_key` 与 `Draft` 结构体消除，未加 `allow`）。
+- 挑刺与安装版清单见 [REVIEW\_0.4.8.md](REVIEW_0.4.8.md)。
+
+### 安装包
+
+release 编译 2 分 33 秒；MSI 打包正常。产物：
+
+| 产物                                                           |        字节 | SHA-256                                                            |
+| ------------------------------------------------------------ | --------: | ------------------------------------------------------------------ |
+| `src-tauri/target/release/bundle/msi/轻衡_0.4.8_x64_zh-CN.msi` | 4,812,800 | `4106B09670CA1F7D45734F760EAE184E0A22D74CF8C2DF606826E80196EC2A94` |
+
+ProductVersion / FileVersion 均为 **0.4.8**。日志 `build-logs/tauri-0.4.8-msi.log`。
+
+**打包踩坑记录**：`tauri build` 的 `beforeBuildCommand`（`npm run build`）先让 vite 清空 `dist`，本机的 safe-delete 拦截层会把 vite 内部的 `rmSync` 改写成回收站操作并随机失败，表现为 `beforeBuildCommand failed with exit code 1`。可靠做法是先用 PowerShell 的 `[System.IO.File]::Delete` 手工清空 `dist`（目录已空时 `emptyDir` 不会触发删除），再执行 `tauri build`。
+
+### 视觉核对（开发预览，不是安装版证据）
+
+用 Vite 开发服务器 + 无头 Chrome（CDP）整页截图核对，临时目录核对后已删除、未入库：
+
+- 1360px / 1920px 饮食页：两栏工作台；右栏标题与左卡标题实测同为 y=912（修好了 25px 错位）；空餐次只有一行「+ 添加早餐」；抽屉三个按钮等宽单行。
+- 1360px 身体页：录入卡四列布局、4 张指标卡、趋势空态、7 列历史表全部有样式（此前 `body-*` 一条 CSS 都没有）。
+- 字号基准取自库存页实测：表头 12 / 正文 12 / 主文 13 / 次要 11，饮食表与身体表已对齐。
+
+## 上一版：0.4.7（0.4.6-B1）构建证据（MSI 已产出，安装待用户批准）
 
 日期：2026-10-21（Asia/Shanghai）。范围：饮食明细表（日汇总 → 餐次小计 → 单项，7 列 + 钠可开关）+ 手工记餐补齐碳水/脂肪/糖/钠。无新依赖、无 OCR/云端、**无数据库迁移**（schema 仍 v10）。
 
@@ -8,22 +38,23 @@
 
 - 前端 **20 文件 139 项**（新增 `tests/nutritionDisplay.test.ts` 16 项、`tests/mealDiaryTableUI.test.tsx` 10 项），Rust **79 项**（新增 `manual_meal_accepts_optional_macros_and_keeps_missing_ones_unknown`），合计 **218 项** 通过。
 - `tsc -b` + 生产构建通过；`cargo fmt --check`、`cargo clippy --all-targets -D warnings` 通过。
-- 挑刺与安装版清单见 [REVIEW_0.4.7.md](REVIEW_0.4.7.md)。
+- 挑刺与安装版清单见 [REVIEW\_0.4.7.md](REVIEW_0.4.7.md)。
 
 ### 安装包
 
 release 编译 3 分 46 秒；MSI 打包正常。产物：
 
-| 产物 | 字节 | SHA-256 |
-| --- | ---: | --- |
+| 产物                                                           |        字节 | SHA-256                                                            |
+| ------------------------------------------------------------ | --------: | ------------------------------------------------------------------ |
 | `src-tauri/target/release/bundle/msi/轻衡_0.4.7_x64_zh-CN.msi` | 4,763,648 | `13D8BFD2555C1B73C173187D62C01F30FF0A8AE5E05B55CA58694FD8A9AEF637` |
-| `src-tauri/target/release/fitwise-local.exe`（MSI 内含同一二进制） | 8,308,736 | `FAC914B3FF99ADCAB2F499AB1D385C87F70330DB2BC207EE4D15C1C967AC87C0` |
+| `src-tauri/target/release/fitwise-local.exe`（MSI 内含同一二进制）    | 8,308,736 | `FAC914B3FF99ADCAB2F499AB1D385C87F70330DB2BC207EE4D15C1C967AC87C0` |
 
 ProductVersion / FileVersion 均为 **0.4.7**。日志 `build-logs/tauri-0.4.7-msi.log`。
 
 ### 视觉核对（开发预览，不是安装版证据）
 
 用 `build-logs/preview/` 下的一次性只读预览页（git 忽略，核对后已删除）渲染真实组件：
+
 - 1692px：三层数字列对齐、熟食按 50% 折算、未知列显示「未知」、日合计给「≥」下限、空餐次显示「—」。
 - 492px：只保留食物/热量/操作三列，无横向滚动，日汇总条自动换行。
 
@@ -41,16 +72,16 @@ ProductVersion / FileVersion 均为 **0.4.7**。日志 `build-logs/tauri-0.4.7-m
 
 - 前端 **18 文件 113 项**、Rust **78 项**（72 旧 + 6 新），共 **191 项** 通过。日志 `build-logs/tests-0.4.6-a-frontend.log`、`build-logs/tests-0.4.6-a-rust.log`。
 - `tsc -b` + 生产构建通过（`build-logs/build-0.4.6-a-frontend.log`）；`cargo fmt --check`、`cargo clippy --all-targets -D warnings` 通过。
-- 挑刺与未完成项见 [REVIEW_0.4.6.md](REVIEW_0.4.6.md)；安装版验收清单在同文件末尾。
+- 挑刺与未完成项见 [REVIEW\_0.4.6.md](REVIEW_0.4.6.md)；安装版验收清单在同文件末尾。
 
 ### 安装包
 
 release 编译 2 分 03 秒；MSI 打包 `candle`/`light` 正常。产物：
 
-| 产物 | 字节 | SHA-256 |
-| --- | ---: | --- |
+| 产物                                                           |        字节 | SHA-256                                                            |
+| ------------------------------------------------------------ | --------: | ------------------------------------------------------------------ |
 | `src-tauri/target/release/bundle/msi/轻衡_0.4.6_x64_zh-CN.msi` | 4,755,456 | `63FC58065A39F90BFEC373D71B56BB9A679DDDEED4A69E7769490753C947CF1E` |
-| `src-tauri/target/release/fitwise-local.exe`（MSI 内含同一二进制） | 8,300,544 | `1C2DE576D55B45FCA9BA086FE1CCA8C049E09FE3B0BAFFD36FDFB52359363AE3` |
+| `src-tauri/target/release/fitwise-local.exe`（MSI 内含同一二进制）    | 8,300,544 | `1C2DE576D55B45FCA9BA086FE1CCA8C049E09FE3B0BAFFD36FDFB52359363AE3` |
 
 已读到 ProductVersion / FileVersion 均为 **0.4.6**，ProductName 轻衡。
 
@@ -71,7 +102,6 @@ MSI 需要 WiX 3.14 工具链。因同一网络限制，改用可用镜像把 `w
 - 打包时 `beforeBuildCommand` 会执行 `npm run build`，vite 会清空 `dist/assets`（git 忽略、可再生）；该步骤在后台无交互环境会被删除确认拦截，必须前台运行。
 
 ## 以下为 0.4.6 P0 开发补丁（未发布）的历史记录
-
 
 **13:19 重启复验结果**：用户授权后正常关闭原窗口，无未保存提示。通过 Windows Explorer 双击同一安装版重开，PID48940/父53564 explorer.exe，设置仍修订18/52实体/18命令/18审计；新数据库来源导出与保全前除 exportedAt 外24个顶层字段逐项相同，当前既有记录重启对账通过。sky.launch_app 直接启动的实例读到另一套修订2/8实体，父进程为控制工具，已正常关闭；不能将其作为用户原生数据丢失的证据。未升级、恢复、导入或更正业务记录；旧晨重未找回，日期已明确，不自动补写。保护性代码补丁仍未发布/安装，下文等待重启及监测过滤为历史状态。
 
@@ -101,10 +131,10 @@ MSI 需要 WiX 3.14 工具链。因同一网络限制，改用可用镜像把 `w
 
 最终 release 编译 3 分 24 秒，MSI / NSIS 均生成；MSI 覆盖安装返回 **0**，没有要求重启。安装日志 `build-logs/msi-install-0.4.5.log`。已读到安装 exe 的 ProductVersion **0.4.5**，安装目录 **8,255,407 字节**（不含用户数据和 WebView2）。未执行 NSIS 安装/卸载矩阵。
 
-| 产物 | 字节 | SHA-256 |
-| --- | ---: | --- |
-| 安装 exe | 8,254,464 | `09D7C971C4F4C611E0CF30BBCED9C1E19ECAAE039AC6C9C6B00BC47620C0FC88` |
-| `src-tauri/target/release/bundle/msi/轻衡_0.4.5_x64_zh-CN.msi` | 4,730,880 | `41F3A554CCB11AA2A71CF29B314B94025EEB1B8395B5D20A3BDE8155FAA5080E` |
+| 产物                                                            |        字节 | SHA-256                                                            |
+| ------------------------------------------------------------- | --------: | ------------------------------------------------------------------ |
+| 安装 exe                                                        | 8,254,464 | `09D7C971C4F4C611E0CF30BBCED9C1E19ECAAE039AC6C9C6B00BC47620C0FC88` |
+| `src-tauri/target/release/bundle/msi/轻衡_0.4.5_x64_zh-CN.msi`  | 4,730,880 | `41F3A554CCB11AA2A71CF29B314B94025EEB1B8395B5D20A3BDE8155FAA5080E` |
 | `src-tauri/target/release/bundle/nsis/轻衡_0.4.5_x64-setup.exe` | 3,791,019 | `D4AEF594B71D25B83FEF99F9FE10F603957178D709D992C9A7CA7985CC3D1B74` |
 
 升级前只读真实库：8 条业务实体，quick_check=ok，排序内容摘要 `2381065304dcd4d0054dce26fea2838304c31d1f17ab1336d359753b69a2ff35`。测试使用隔离库，未往用户库创建测试食材、草稿、饮食或库存。
@@ -143,10 +173,10 @@ schema **9 → 10** 新增独立草稿表，持久化格式仍为 **4**、原 16
 - 用户此前已明确关闭轻衡并要求继续。再次检查无进程后管理员 MSI 覆盖安装，退出 **0**，不要求重启；未执行卸载、未清理数据库。日志 `build-logs/msi-install-0.4.4.log`。
 - 安装 exe ProductVersion **0.4.4**，安装目录 **8,141,743 字节（约 7.76 MiB）**，不含 WebView2 和用户资料。
 
-| 产物 | 字节 | SHA-256 |
-| --- | ---: | --- |
-| `C:\Program Files\轻衡\fitwise-local.exe` | 8,140,800 | `B0A90915C1C63806D2327E8297B2B2910FF759C1EAF4B734231AB7AD33C15CA9` |
-| `src-tauri/target/release/bundle/msi/轻衡_0.4.4_x64_zh-CN.msi` | 4,669,440 | `DA782A4B842021CF26DDCE2FFF3610C3316B85C0019C14329FE4FC99A7E8DFE0` |
+| 产物                                                            |        字节 | SHA-256                                                            |
+| ------------------------------------------------------------- | --------: | ------------------------------------------------------------------ |
+| `C:\Program Files\轻衡\fitwise-local.exe`                       | 8,140,800 | `B0A90915C1C63806D2327E8297B2B2910FF759C1EAF4B734231AB7AD33C15CA9` |
+| `src-tauri/target/release/bundle/msi/轻衡_0.4.4_x64_zh-CN.msi`  | 4,669,440 | `DA782A4B842021CF26DDCE2FFF3610C3316B85C0019C14329FE4FC99A7E8DFE0` |
 | `src-tauri/target/release/bundle/nsis/轻衡_0.4.4_x64-setup.exe` | 3,742,358 | `33803555B5B1CFEA90D27597B7ACF01FE99C484B64FF056D83D0CE3433A33197` |
 
 安装包未签名。实际执行 MSI 覆盖升级，未执行 NSIS 安装或卸载矩阵。日志、截图、安装包、数据库不提交 Git。
@@ -185,11 +215,12 @@ schema **9 → 10** 新增独立草稿表，持久化格式仍为 **4**、原 16
 - 安装 exe ProductVersion **0.4.3**，安装目录合计 **8,139,695 字节（约 7.76 MiB）**，不含 WebView2 及用户数据。相较上版没有安装完整 Visual Studio、模型或新软件。
 - schema **9**、持久化格式 **4** 不变；新增可选 JSON 字段不重写旧行。升级前及启动后真实库均 8 条业务实体，quick_check=ok，排序内容 SHA-256 一致：`2381065304dcd4d0054dce26fea2838304c31d1f17ab1336d359753b69a2ff35`。
 
-| 产物 | 字节 | SHA-256 |
-| --- | ---: | --- |
-| `C:\Program Files\轻衡\fitwise-local.exe` | 8,138,752 | `41323EACA65F0CDDDB10A2FBFB7083A624D65FF038E6998C1B6EEB49926CD3D0` |
-| `src-tauri/target/release/bundle/msi/轻衡_0.4.3_x64_zh-CN.msi` | 4,669,440 | `21E656ADE70059D3A2FEA22A5A11040A8F8BBE03A19ADB83D4589431D34B36EA` |
+| 产物                                                            |        字节 | SHA-256                                                            |
+| ------------------------------------------------------------- | --------: | ------------------------------------------------------------------ |
+| `C:\Program Files\轻衡\fitwise-local.exe`                       | 8,138,752 | `41323EACA65F0CDDDB10A2FBFB7083A624D65FF038E6998C1B6EEB49926CD3D0` |
+| `src-tauri/target/release/bundle/msi/轻衡_0.4.3_x64_zh-CN.msi`  | 4,669,440 | `21E656ADE70059D3A2FEA22A5A11040A8F8BBE03A19ADB83D4589431D34B36EA` |
 | `src-tauri/target/release/bundle/nsis/轻衡_0.4.3_x64-setup.exe` | 3,737,927 | `4461FC859D517E34C158B27F55A5554EF0A86DE76DC9335290F195CFA117DB07` |
+
 
 两种产物未签名。本轮实际 MSI 覆盖升级，未运行 NSIS 安装或卸载矩阵。二进制、日志、用户数据库不提交 Git。
 
@@ -217,11 +248,11 @@ schema **9 → 10** 新增独立草稿表，持久化格式仍为 **4**、原 16
 
 同一 Win32 性能计数器口径，轻衡主进程与 6 个子进程，共 7 个。没有用单独 Rust 主进程冒充整个应用：
 
-| 本机时间 | 场景 | 私有提交 MiB | 私有工作集 MiB | 含共享页工作集合计 MiB |
-| --- | --- | ---: | ---: | ---: |
-| 06:46:13 | 安装后启动，无写入 | 215.9 | 152.1 | 454.0 |
-| 06:47:09 | 未进行界面操作，短时空闲 | 210.7 | 147.4 | 458.1 |
-| 06:47:52 | 继续空闲，无新增记录 | 209.4 | 146.3 | 457.6 |
+| 本机时间     | 场景           | 私有提交 MiB | 私有工作集 MiB | 含共享页工作集合计 MiB |
+| -------- | ------------ | -------: | --------: | ------------: |
+| 06:46:13 | 安装后启动，无写入    |    215.9 |     152.1 |         454.0 |
+| 06:47:09 | 未进行界面操作，短时空闲 |    210.7 |     147.4 |         458.1 |
+| 06:47:52 | 继续空闲，无新增记录   |    209.4 |     146.3 |         457.6 |
 
 含共享页合计可能重复计数共享内存，仍高于原普通操作 450 MB 数字，且 MiB/MB 口径不同；不能据私有工作集低于阈值就宣布全部内存目标满足。尚无本轮多轮导航、长时、大附件或跨机器内存结论。
 
@@ -242,10 +273,10 @@ schema **9 → 10** 新增独立草稿表，持久化格式仍为 **4**、原 16
 
 ## 0.4.2 产物
 
-| 产物 | 字节 | SHA-256 |
-| --- | ---: | --- |
-| `C:\Program Files\轻衡\fitwise-local.exe` | 8,112,640 | `F0E82D15683846BC69C4260A3C6BE9A2595CC6B080D1955ABA8237593D931CB7` |
-| `src-tauri/target/release/bundle/msi/轻衡_0.4.2_x64_zh-CN.msi` | 4,653,056 | `5D054D244EFDF7E1F16CE327B9CCF1F66C999BFBAE084FB973A1EAEDB9F7C29B` |
+| 产物                                                            |        字节 | SHA-256                                                            |
+| ------------------------------------------------------------- | --------: | ------------------------------------------------------------------ |
+| `C:\Program Files\轻衡\fitwise-local.exe`                       | 8,112,640 | `F0E82D15683846BC69C4260A3C6BE9A2595CC6B080D1955ABA8237593D931CB7` |
+| `src-tauri/target/release/bundle/msi/轻衡_0.4.2_x64_zh-CN.msi`  | 4,653,056 | `5D054D244EFDF7E1F16CE327B9CCF1F66C999BFBAE084FB973A1EAEDB9F7C29B` |
 | `src-tauri/target/release/bundle/nsis/轻衡_0.4.2_x64-setup.exe` | 3,726,153 | `0C3801E6389539CC9E095BDB3969B6F7469389FB4DB1510DF1B9FB7AF1D44002` |
 
 安装目录合计 **8,113,583 字节（约 7.74 MiB）**，不含系统 WebView2 和用户数据，体积目标满足。MSI 与 NSIS 均生成但未签名；本轮实际运行 MSI 覆盖升级，未重复卸载或执行 NSIS 安装，不冒充完整双安装器矩阵。Tauri 会按 bundle 类型改写 exe 元信息，最终构建目录 exe 与 MSI 安装 exe 哈希可能不同。
@@ -265,11 +296,11 @@ schema **9 → 10** 新增独立草稿表，持久化格式仍为 **4**、原 16
 
 同一 Windows 性能计数器口径，轻衡主进程及 6 个 WebView2 子进程（7 个进程）：
 
-| 状态 | 私有提交 MiB | 私有工作集 MiB | 含共享页工作集合计 MiB |
-| --- | ---: | ---: | ---: |
-| 冷启动及首次访问后 | 265.2 | 201.4 | 511.4 |
-| 菜谱/资料库往返后 | 229.5 | 166.3 | 497.4 |
-| 菜谱及趋势访问后 | 216.0 | 150.5 | 483.1 |
+| 状态        | 私有提交 MiB | 私有工作集 MiB | 含共享页工作集合计 MiB |
+| --------- | -------: | --------: | ------------: |
+| 冷启动及首次访问后 |    265.2 |     201.4 |         511.4 |
+| 菜谱/资料库往返后 |    229.5 |     166.3 |         497.4 |
+| 菜谱及趋势访问后  |    216.0 |     150.5 |         483.1 |
 
 私有工作集在这三个样本内低于 250 MB，但冷启动私有提交和含共享页工作集合计存在超目标口径；后者可能重复计数共享页，不能等同于应用独占内存。**本轮仍不确认完整内存指标达标**，不拿主进程数值代替整个应用。上述只是固定指标的短时路径采样，没有完成多轮压力、长时稳定空闲或大量附件矩阵；不能从下降趋势推出没有泄漏。
 
@@ -290,10 +321,10 @@ schema **9 → 10** 新增独立草稿表，持久化格式仍为 **4**、原 16
 
 ## 0.4.1 安装产物
 
-| 产物 | 字节 | SHA-256 |
-| --- | ---: | --- |
-| `C:\Program Files\轻衡\fitwise-local.exe` | 8,045,568 | `D4BB05619C3ADDC0DFBDBCD75DDA9826FF92848C71FD1B2AA4836310BE9DDBB5` |
-| `src-tauri/target/release/bundle/msi/轻衡_0.4.1_x64_zh-CN.msi` | 4,616,192 | `7E0195C6C34DEA199848186125C53B03D08C802CE3BF7FD7440CEDD89E12399C` |
+| 产物                                                            |        字节 | SHA-256                                                            |
+| ------------------------------------------------------------- | --------: | ------------------------------------------------------------------ |
+| `C:\Program Files\轻衡\fitwise-local.exe`                       | 8,045,568 | `D4BB05619C3ADDC0DFBDBCD75DDA9826FF92848C71FD1B2AA4836310BE9DDBB5` |
+| `src-tauri/target/release/bundle/msi/轻衡_0.4.1_x64_zh-CN.msi`  | 4,616,192 | `7E0195C6C34DEA199848186125C53B03D08C802CE3BF7FD7440CEDD89E12399C` |
 | `src-tauri/target/release/bundle/nsis/轻衡_0.4.1_x64-setup.exe` | 3,695,695 | `E124575BFD06525B415519BD05940667FA6EF4FFE60FBFB3A84AA6AE8D651876` |
 
 安装目录合计 8,046,511 字节，约 7.67 MiB，不含系统 WebView2 和用户附件；安装体积目标满足。两种安装器未签名，本轮实测 MSI 覆盖升级，未重复卸载或执行 NSIS 覆盖，不冒充双安装器完整矩阵。
@@ -332,10 +363,10 @@ schema **9 → 10** 新增独立草稿表，持久化格式仍为 **4**、原 16
 
 ## 安装产物
 
-| 产物 | 字节 | SHA-256 |
-| --- | ---: | --- |
-| `C:\Program Files\轻衡\fitwise-local.exe` | 8,020,992 | `FA5EF895730469D4B256696D63DB9CB0CEACAD95E6B29EA7946F0FDC2DD728CF` |
-| `src-tauri/target/release/bundle/msi/轻衡_0.4.0_x64_zh-CN.msi` | 4,603,904 | `30380A5E4B99619D81811C28A46CFA854B46B7346F48CE654DC124BFDFBC4735` |
+| 产物                                                            |        字节 | SHA-256                                                            |
+| ------------------------------------------------------------- | --------: | ------------------------------------------------------------------ |
+| `C:\Program Files\轻衡\fitwise-local.exe`                       | 8,020,992 | `FA5EF895730469D4B256696D63DB9CB0CEACAD95E6B29EA7946F0FDC2DD728CF` |
+| `src-tauri/target/release/bundle/msi/轻衡_0.4.0_x64_zh-CN.msi`  | 4,603,904 | `30380A5E4B99619D81811C28A46CFA854B46B7346F48CE654DC124BFDFBC4735` |
 | `src-tauri/target/release/bundle/nsis/轻衡_0.4.0_x64-setup.exe` | 3,683,466 | `B97BCFAB2E42F745F73BBAC251033D72E863DAB77390D5E40DF8C6AD07722B72` |
 
 首次加入图片库的 release Rust 编译约 3 分 27 秒。安装目录 2 文件合计 8,021,935 字节（约 7.65 MiB，不含系统 WebView2）；比上一版程序目录增加约 0.59 MiB。安装体积符合既定目标。

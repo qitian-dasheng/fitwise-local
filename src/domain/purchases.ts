@@ -24,8 +24,8 @@ export function purchaseSpecification(p:Pick<PurchaseDraft,"amount"|"unit"|"pack
 export function receivedQuantity(p:PurchaseDraft){return p.receipts?.reduce((sum,r)=>sum+r.quantity,0)??(p.status==="received"?p.amount:0);}
 export function outstandingQuantity(p:PurchaseDraft){return Math.max(0,p.amount-receivedQuantity(p)-(p.closedQuantity??0));}
 export function suggestedReceiptCost(p:PurchaseDraft,quantity:number){const previous=p.receipts?.reduce((s,r)=>s+r.costCny,0)??0;return Math.round(Math.max(0,quantity>=outstandingQuantity(p)-.00001?p.priceCny-previous:p.priceCny*quantity/p.amount)*100)/100;}
-export function localShanghaiInput(value=new Date().toISOString()){const d=new Date(value);return new Date(d.getTime()+8*3600e3).toISOString().slice(0,19);}
-export function shanghaiDate(value=new Date().toISOString()){return localShanghaiInput(value).slice(0,10);}
+import { localShanghaiInput, shanghaiDate } from "./time";
+export { localShanghaiInput, shanghaiDate };
 export function displayOrderedAt(value?:string){return value?localShanghaiInput(value).replace("T"," ")+"（北京时间）":"未记录";}
 export function validatePurchase(draft:Omit<PurchaseDraft,"id">){
   if(!draft.name.trim()||draft.name.length>160)throw new Error("请填写有效的商品名称。");

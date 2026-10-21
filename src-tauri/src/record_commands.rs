@@ -56,7 +56,7 @@ fn nutrient(value: Option<f64>, unit: &str) -> Value {
     }
 }
 
-fn audit(
+pub(crate) fn audit(
     state: &mut Map<String, Value>,
     command_id: &str,
     event_type: &str,
@@ -80,7 +80,7 @@ pub(crate) fn apply(
 ) -> Result<CommandMutation, String> {
     let (now, _) = now_and_date();
     let id = format!("{kind}-{command_id}");
-    let mut result = json!({});
+    let result = json!({});
     match kind {
         "add_meal" => {
             let name = payload_str(payload, "name")?;
@@ -127,58 +127,6 @@ pub(crate) fn apply(
                 &id,
                 json!({"date":date}),
             )?;
-        }
-        "add_weight" => {
-            let weight = positive(payload, "weightKg")?;
-            let date = date(payload)?;
-            let previous = array(state, "measurements")?
-                .iter()
-                .rev()
-                .find(|item| item["date"] == date && item["status"] != "superseded")
-                .cloned();
-            let previous_id = previous.as_ref().and_then(|item| item["id"].as_str());
-            let last_weight = array(state, "measurements")?
-                .iter()
-                .rev()
-                .find(|item| {
-                    item["status"] != "superseded"
-                        && item["date"]
-                            .as_str()
-                            .is_some_and(|value| value <= date.as_str())
-                })
-                .and_then(|item| item["weightKg"].as_f64());
-            let outlier = last_weight.is_some_and(|last| (last - weight).abs() > 3.0);
-            if let Some(previous_id) = previous_id {
-                for item in array_mut(state, "measurements")? {
-                    if item["id"] == previous_id {
-                        item["status"] = json!("superseded");
-                    }
-                }
-            }
-            let mut measurement = json!({"id":id,"date":date,"weightKg":weight,"status":"active","isOutlier":outlier,"createdAt":now});
-            if let Some(previous_id) = previous_id {
-                measurement["supersedesId"] = json!(previous_id);
-            }
-            array_mut(state, "measurements")?.push(measurement);
-            array_mut(state, "measurements")?.sort_by(|a, b| {
-                a["date"]
-                    .as_str()
-                    .cmp(&b["date"].as_str())
-                    .then(a["createdAt"].as_str().cmp(&b["createdAt"].as_str()))
-            });
-            audit(
-                state,
-                command_id,
-                if previous_id.is_some() {
-                    "body_measurement_superseded"
-                } else {
-                    "body_measurement_created"
-                },
-                "body_measurement",
-                &id,
-                json!({"date":date,"weightKg":weight,"supersedesId":previous_id,"isOutlier":outlier}),
-            )?;
-            result = json!({"isOutlier":outlier});
         }
         "add_workout" => {
             let date = date(payload)?;

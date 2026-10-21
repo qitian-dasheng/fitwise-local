@@ -144,7 +144,17 @@ pub(crate) fn period_summary(
             .checked_sub_days(Days::new(6))
             .unwrap_or(start_date)
             .to_string();
-        let mut statement = transaction.prepare("SELECT id,measured_date,weight_kg,is_outlier FROM domain_measurement_projection WHERE measured_date BETWEEN ?1 AND ?2 ORDER BY measured_date,created_at,id").map_err(|error|error.to_string())?;
+        // 同日可以多次称重：先按「当日代表值」折叠成每天一个点，再算 7 日窗口，
+        // 否则一天称三次就会在均线里被加权三次。
+        // 排序口径与 Rust/TS 的 dailyRepresentatives 一致：显式代表 > 时刻最新 > id。
+        let mut statement = transaction
+            .prepare(
+                "SELECT id,measured_date,weight_kg,is_outlier \
+             FROM domain_measurement_projection WHERE measured_date BETWEEN ?1 AND ?2 \
+             ORDER BY measured_date, COALESCE(day_representative,0), \
+               COALESCE(strftime('%s',measured_at), strftime('%s',created_at), 0), id",
+            )
+            .map_err(|error| error.to_string())?;
         let rows = statement
             .query_map([lookback.as_str(), end], |row| {
                 Ok((
@@ -155,11 +165,14 @@ pub(crate) fn period_summary(
                 ))
             })
             .map_err(|error| error.to_string())?;
-        let mut raw = Vec::new();
+        let mut daily: BTreeMap<String, (String, String, f64, bool)> = BTreeMap::new();
         for row in rows {
-            raw.push(row.map_err(|error| error.to_string())?);
+            let (id, date, weight, outlier) = row.map_err(|error| error.to_string())?;
+            // 升序遍历，后写入的覆盖先写入的，即保留当日最新（或显式代表）。
+            daily.insert(date.clone(), (id, date, weight, outlier.unwrap_or(false)));
         }
-        for (id, date, weight, outlier) in &raw {
+        let points: Vec<(String, String, f64, bool)> = daily.into_values().collect();
+        for (id, date, weight, outlier) in &points {
             if date.as_str() < start {
                 continue;
             }
@@ -168,15 +181,15 @@ pub(crate) fn period_summary(
                 .checked_sub_days(Days::new(6))
                 .ok_or("日期无效。")?
                 .to_string();
-            let window: Vec<f64> = raw
+            let window: Vec<f64> = points
                 .iter()
                 .filter(|(_, candidate, _, _)| candidate >= &earliest && candidate <= date)
                 .map(|(_, _, weight, _)| *weight)
                 .collect();
-            measurements.push(json!({"id":id,"date":date,"weightKg":weight,"isOutlier":outlier.unwrap_or(false),"average":window.iter().sum::<f64>()/window.len() as f64}));
+            measurements.push(json!({"id":id,"date":date,"weightKg":weight,"isOutlier":outlier,"average":window.iter().sum::<f64>()/window.len() as f64}));
         }
     }
-    let latest: Option<(String,f64)> = transaction.query_row("SELECT measured_date,weight_kg FROM domain_measurement_projection WHERE measured_date <= ?1 ORDER BY measured_date DESC,created_at DESC LIMIT 1",[end],|row|Ok((row.get(0)?,row.get(1)?))).optional().map_err(|error|error.to_string())?;
+    let latest: Option<(String,f64)> = transaction.query_row("SELECT measured_date,weight_kg FROM domain_measurement_projection WHERE measured_date <= ?1 ORDER BY measured_date DESC, COALESCE(day_representative,0) DESC, COALESCE(strftime('%s',measured_at), strftime('%s',created_at), 0) DESC, id DESC LIMIT 1",[end],|row|Ok((row.get(0)?,row.get(1)?))).optional().map_err(|error|error.to_string())?;
     Ok(
         json!({"revision":revision,"start":start,"end":end,"days":days.into_values().collect::<Vec<_>>(),"completedDayCalorieAverage":calorie_average,"eligibleDayCount":eligible_count,"workoutMinutes":workout_minutes,"measurements":measurements,"latestWeightKg":latest.as_ref().map(|item|item.1)}),
     )
@@ -269,7 +282,7 @@ fn export_domain_at_path(path: &std::path::Path) -> Result<Value, String> {
         .as_object()
         .ok_or("领域仓库格式无效。")?
         .clone();
-    data.insert("schemaVersion".into(), json!(10));
+    data.insert("schemaVersion".into(), json!(11));
     data.insert(
         "labelDrafts".into(),
         crate::label_drafts::manifest(&transaction)?,

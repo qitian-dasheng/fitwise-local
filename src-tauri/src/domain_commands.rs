@@ -571,6 +571,9 @@ fn execute_with_connection(
             | "record_food_meal"
             | "add_meal"
             | "add_weight"
+            | "revise_weight"
+            | "void_weight"
+            | "set_weight_representative"
             | "add_workout"
             | "set_checkin"
             | "set_day_complete"
@@ -683,6 +686,14 @@ fn execute_with_connection(
             &request.payload,
             &request.command_id,
         )?,
+        "add_weight" | "revise_weight" | "void_weight" | "set_weight_representative" => {
+            crate::body_commands::apply(
+                &mut state,
+                &request.kind,
+                &request.payload,
+                &request.command_id,
+            )?
+        }
         "add_purchase"
         | "revise_purchase"
         | "close_purchase"
@@ -783,6 +794,7 @@ mod tests {
     use crate::domain_store::ensure_repository_schema;
     include!("label_draft_tests.rs");
     include!("inventory_correction_tests.rs");
+    include!("body_command_tests.rs");
 
     fn connection() -> Connection {
         let connection = Connection::open_in_memory().unwrap();
@@ -1565,7 +1577,7 @@ mod tests {
         assert_eq!(load_envelope(&c).unwrap(), before);
         assert!(c
             .query_row(
-                "SELECT EXISTS(SELECT 1 FROM domain_upgrade_reports WHERE version=10)",
+                "SELECT EXISTS(SELECT 1 FROM domain_upgrade_reports WHERE version=11)",
                 [],
                 |r| r.get::<_, bool>(0)
             )
@@ -2637,11 +2649,18 @@ mod tests {
             ),
         )
         .unwrap();
+        assert!(first.applied);
         assert_eq!(second.state["measurements"].as_array().unwrap().len(), 2);
-        assert_eq!(second.state["measurements"][0]["status"], "superseded");
         assert_eq!(
-            second.state["measurements"][1]["supersedesId"],
-            first.state["measurements"][0]["id"]
+            second.state["measurements"][0]["status"], "active",
+            "同日第二次称重不再把旧值标成已修订"
+        );
+        assert_eq!(second.state["measurements"][1]["status"], "active");
+        assert!(
+            second.state["measurements"][0]
+                .get("supersedesId")
+                .is_none(),
+            "同日多条互不覆盖"
         );
         let replay = execute_with_connection(
             &mut connection,

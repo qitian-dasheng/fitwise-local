@@ -10,6 +10,7 @@ import type {
 } from "./types";
 import { nutrientKeys } from "./types";
 import { mealTypes } from "./meals";
+import { compareMeasurements, isActiveMeasurement } from "./body";
 
 export const known = (
   value: number,
@@ -103,13 +104,16 @@ export function movingAverage(values: { date: string; value: number }[], windowS
 }
 
 export function activeMeasurements(measurements: BodyMeasurement[]) {
-  return measurements
-    .filter((item) => item.status !== "superseded")
-    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+  return measurements.filter(isActiveMeasurement).slice().sort(compareMeasurements);
 }
 
 export function completedDateSet(checkIns: DailyCheckIn[]) {
   return new Set(checkIns.filter((item) => item.complete).map((item) => item.date));
+}
+
+/** [start, end] 区间内被确认完整的自然日数量。 */
+export function completedDayCount(checkIns: DailyCheckIn[], start: string, end: string) {
+  return [...completedDateSet(checkIns)].filter((date) => date >= start && date <= end).length;
 }
 
 export function completedDayCalorieAverage(entries: MealEntry[], checkIns: DailyCheckIn[]) {

@@ -32,9 +32,9 @@
 
 - 仓库：`C:\Users\21904\Documents\Obsidian\A\ai-fitness-platform`
 - 当前分支：`main`。
-- 本交接包生成前最新检查点：`159ae46 feat: record received weights and make per-item meal corrections explicit`（0.4.7 改动在该提交之后的工作区，收尾时另提交）。
-- 版本号：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 均为 `0.4.7`。
-- 数据库 schema **v10**（`migrations/0010_label_drafts.sql`，`domain_upgrade.rs` 硬编码 `version = 10`）；领域 envelope 持久化格式仍为 **4**。0.4.6-A 只在 envelope 内新增可选字段，**不涉及 DDL 或迁移**。
+- 最新检查点提交：`fe09234 feat: add the body page and restructure the food page`（0.4.8）；上一个检查点 `6012403 feat: show the food diary as daily summary, meal subtotals and item rows`（0.4.7）。
+- 版本号：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 均为 `0.4.8`。
+- 数据库 schema **v11**（`migrations/0011_measurement_conditions.sql`，`domain_upgrade.rs` 硬编码 `version = 11`）；领域 envelope 持久化格式仍为 **4**。0011 只 `DROP VIEW IF EXISTS` + 重建 `domain_measurement_projection`（暴露 `measured_at` / `condition` / `day_representative`，过滤改 `COALESCE(status,'active')='active'`），**不回填任何 payload**，否则升级对账会因 `before != after` 失败。
 - Node：`C:\Program Files\nodejs\npm.cmd`
 - Rust/Cargo：`C:\Users\21904\.cargo\bin\cargo.exe`，stable x86_64-pc-windows-msvc。
 - 已安装：VS Code、Visual Studio 2022 Build Tools 的 VCTools 工作负载、Windows SDK、WebView2。不要安装完整 Visual Studio IDE。
@@ -79,17 +79,20 @@ npm run tauri build
 - 饮食单项纠错（0.4.6-A）：每行记录拆为「编辑」「作废」两个入口，编辑弹窗给出前→后差异表，作废态单独语义说明（不删食材库、不返还生鲜、不可一键恢复）。
 - 饮食明细表（0.4.7）：日汇总 → 四个餐次小计 → 单项三层；列 = 食物/份量、热量、蛋白、碳水、脂肪、纤维、糖、操作，钠为可开关附加列（偏好只存 localStorage）；未知营养显示「未知」，部分未知显示「≥已知小计」，无记录显示「—」，从不当 0；每个餐次恒定保留「添加X餐」。
 - 手工记餐（0.4.7）：可选填碳水/脂肪/糖/钠，留空仍为 unknown；Rust `add_meal` 对应支持四个可选键并拒绝负数。
+- 身体页 / 体重记录中心（0.4.8）：独立「身体」页（导航第 3 位）。同日可多次称重且**全部保留**，不再把旧记录就地标 superseded；代表值口径 = 显式指定 > 时刻最新 > id 最大，前端 `dailyRepresentatives` 与 SQL 排序一致。字段含日期、时刻（`measuredAt`，缺省即「未标注」，不伪造）、条件（`morning`/`other`）、备注（≤200 字）；`revise_weight` 旧→superseded、`void_weight` 旧→void、`set_weight_representative` 同日唯一。守卫：20–400 kg、≤2 位小数、日期不得晚于今天、`measuredAt` 前 10 位须等于 date、不得晚于当前 +120s。趋势图虚线=每次称重、实线=七日移动平均（先按日折叠再算窗口，避免一天称三次被加权三次）。
+- 饮食页结构（0.4.8）：`.food-workbench` 两栏（`minmax(560px,1.6fr)` / `minmax(340px,1fr)`），左「今日下厨」单卡、右「待处理」批次面板（无批次时虚线空态）；菜谱管理（新建/修订/另存 + 历史版本开关 + 选择标准菜谱）收进右侧 `Drawer`（z-index 90、Esc 关闭），公共 `Modal` 未改。空餐次只留一条跨列 `.diary-empty-hint`，不再铺 6–7 个破折号。
+- 字号密度基准（0.4.8）：以库存页实测为准——表头 12 / 正文 12 / 主文 13 / 次要 11；饮食表、身体表均已对齐。
 - 体重、运动、七日趋势、完整日均值；运动消耗不自动增加饮食额度。
 - 收件箱：本地文件/文字与可信局域网上传、内容哈希、缩略图、手工隐私遮挡、回收站、分页。
 - 离线营养标签草稿：手工抄录、保存/重开、核对后建档；没有 OCR 或真实 AI 请求。
 - SQLite 事务、领域命令回执/请求指纹、升级前快照与对账、JSON 导出、现有加密备份/暂存恢复、Windows 凭据存储边界。
 - 源码中的 P0 保护：原生 JSON 另存/回读校验、只读运行诊断、桌面桥接失败不回退浏览器存储、hydration 错误显式呈现。
 
-截至 0.4.7 源码检查点：前端 **20 文件 139 项**、Rust **79 项**，共 **218 项** 通过；生产构建、fmt、Clippy 全目标 `-D warnings` 通过。证据见 `BUILD_REPORT.md`、`REVIEW_0.4.7.md` 与 `build-logs/*0.4.7*.log`。这些测试不等于尚未安装的 0.4.7 已完成原生验收。
+截至 0.4.8 源码检查点：前端 **23 文件 169 项**、Rust **88 项**，共 **257 项** 通过；生产构建、fmt、Clippy 全目标 `-D warnings` 通过。证据见 `BUILD_REPORT.md`、`REVIEW_0.4.8.md` 与 `build-logs/*0.4.8*.log`。这些测试不等于尚未安装的 0.4.8 已完成原生验收。
 
 ## 6. 当前安装与数据事实（非常重要）
 
-- 当前已安装版本仍为 0.4.5；0.4.6-A（P0 保护补丁 + 库存实重/补录 + 饮食单项纠错）已完成源码、自动测试与生产构建，安装包需用户单独批准后覆盖安装。
+- 当前已安装版本为 **0.4.6**（用户已验收并退出）。0.4.7 与 0.4.8 已完成源码、自动测试与生产构建并各自产出 MSI，**均未安装**；一次覆盖安装 0.4.8 即同时包含两轮改动。
 - 用户真实数据已通过原生窗口导出和 Explorer 复制的数据库副本保全；副本完整性与导出逐项一致。
 - 用户从 Windows Explorer 正常打开 `C:\Program Files\轻衡\fitwise-local.exe` 后，重启前后的数据库来源导出除 `exportedAt` 外完全相同，既有记录持久化验收通过。
 - 电脑控制工具或命令行直接启动同一 exe/读取同名字面 AppData 路径时，会看到另一套较小数据库。这是运行上下文/文件视图差异，底层原因未完全确定。

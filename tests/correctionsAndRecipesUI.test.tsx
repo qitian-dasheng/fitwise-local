@@ -122,10 +122,19 @@ it("batch ledger includes cross-day waste, marks inactive evidence and excludes 
 it("historical recipe picker keeps the selected version and only permits copy or original-version cooking", async () => {
   const old=structuredClone(initialState.recipes[0]),newer={...old,id:"recipe-v2",name:"新版配方",version:2};
   useAppStore.setState({recipes:[old,newer]});await act(async()=>root.render(<FoodPage/>));
-  expect(host.querySelector('select[aria-label="选择标准菜谱"]')!.textContent).not.toContain("（历史）");
-  await act(async()=>input("菜谱管理：显示历史版本").click());await select(host.querySelector('select[aria-label="选择标准菜谱"]')!,old.id);
+  // 菜谱管理控件已收进抽屉：主页不再出现下拉与管理按钮组。
+  expect(host.querySelector('select[aria-label="选择标准菜谱"]')).toBeNull();
+  expect(host.querySelector(".drawer")).toBeNull();
+  expect([...host.querySelectorAll("button")].filter(b=>["新建菜谱","修订当前菜谱","另存为新菜谱"].includes(b.textContent?.trim()??""))).toHaveLength(0);
+  await act(async()=>button("管理菜谱").click());
+  expect(host.querySelector(".drawer")!.textContent).toContain("管理菜谱");
+  const picker=()=>host.querySelector<HTMLSelectElement>('select[aria-label="选择标准菜谱"]')!;
+  expect(picker().textContent).not.toContain("（历史）");
+  await act(async()=>input("菜谱管理：显示历史版本").click());await select(picker(),old.id);
   expect(host.textContent).toContain("正在复用历史 v1");expect(button("修订当前菜谱").disabled).toBe(true);
-  await act(async()=>button("另存为新菜谱").click());expect(host.textContent).toContain("另存历史配方");expect(input("菜谱名称").value).toBe(old.name+"（副本）");
+  await act(async()=>button("另存为新菜谱").click());
+  expect(host.querySelector(".drawer")).toBeNull();
+  expect(host.textContent).toContain("另存历史配方");expect(input("菜谱名称").value).toBe(old.name+"（副本）");
 });
 it("save-as creates independent recipe identity while pinning historical food versions and source", async () => {
   const food=await makeFood(),save=vi.fn().mockResolvedValue({recipeVersionId:"copy-v1"});useAppStore.setState({saveRecipe:save});

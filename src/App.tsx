@@ -1,4 +1,4 @@
-import { Archive, Bot, ChartNoAxesCombined, ChevronLeft, ChevronRight, ClipboardList, CookingPot, Dumbbell, Inbox, LayoutDashboard, Settings, Wheat } from "lucide-react";
+import { Archive, Bot, ChartNoAxesCombined, ChevronLeft, ChevronRight, ClipboardList, CookingPot, Dumbbell, Inbox, LayoutDashboard, Scale, Settings, Wheat } from "lucide-react";
 import { Component, lazy, Suspense, useEffect, useLayoutEffect, useState, useSyncExternalStore, type ErrorInfo, type ReactNode } from "react";
 import { useAppStore } from "./store/appStore";
 import { listen } from "@tauri-apps/api/event";
@@ -8,6 +8,7 @@ import { getStorageFailure, subscribeStorageFailure } from "./data/storage";
 
 const TodayPage = lazy(() => import("./pages/TodayPage").then((module) => ({ default: module.TodayPage })));
 const FoodPage = lazy(() => import("./pages/FoodPage").then((module) => ({ default: module.FoodPage })));
+const BodyPage = lazy(() => import("./pages/BodyPage").then((module) => ({ default: module.BodyPage })));
 const WorkoutPage = lazy(() => import("./pages/WorkoutPage").then((module) => ({ default: module.WorkoutPage })));
 const InventoryPage = lazy(() => import("./pages/InventoryPage").then((module) => ({ default: module.InventoryPage })));
 const PlanPage = lazy(() => import("./pages/PlanPage").then((module) => ({ default: module.PlanPage })));
@@ -19,6 +20,7 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => 
 const navItems = [
   { id: "today", label: "今日", icon: LayoutDashboard },
   { id: "food", label: "饮食", icon: CookingPot },
+  { id: "body", label: "身体", icon: Scale },
   { id: "workout", label: "运动", icon: Dumbbell },
   { id: "inventory", label: "库存", icon: Archive },
   { id: "plan", label: "计划", icon: ClipboardList },
@@ -91,10 +93,11 @@ export default function App() {
   const content = {
     today: <TodayPage goTo={setPage} date={date} onDateChange={setDate} />,
     food: <FoodPage date={date} onDateChange={setDate} />,
+    body: <BodyPage date={date} onDateChange={setDate} />,
     workout: <WorkoutPage date={date} onDateChange={setDate} />,
     inventory: <InventoryPage />,
     plan: <PlanPage />,
-    trends: <TrendsPage date={date} onDateChange={setDate} />,
+    trends: <TrendsPage date={date} onDateChange={setDate} goTo={setPage} />,
     inbox: <InboxPage />,
     assistant: <AssistantPage />,
     settings: <SettingsPage />,

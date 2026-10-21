@@ -133,15 +133,30 @@ export interface DailyCheckIn {
   completedAt?: string;
 }
 
+export type MeasurementCondition = "morning" | "other";
+
 export interface BodyMeasurement {
   id: string;
+  /** 日记日（北京时间自然日）：投影与趋势窗口都依赖它，是权威日期。 */
   date: ISODate;
   weightKg: number;
+  /** 称重时刻，'YYYY-MM-DDTHH:mm:ss+08:00'。旧记录缺失，缺失时不要用 createdAt 冒充。 */
+  measuredAt?: string;
+  condition?: MeasurementCondition;
+  note?: string;
+  source?: "manual" | "import";
   waistCm?: number;
   bodyFatPercent?: number;
   isOutlier?: boolean;
-  status?: "active" | "superseded";
+  /** superseded = 已被更正，void = 已作废；缺失视为 active。 */
+  status?: "active" | "superseded" | "void";
   supersedesId?: string;
+  supersededBy?: string;
+  correctionReason?: string;
+  correctedAt?: string;
+  voidedAt?: string;
+  /** 当日趋势代表值，同一日最多一条为真。 */
+  dayRepresentative?: boolean;
   createdAt: string;
 }
 

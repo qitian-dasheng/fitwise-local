@@ -1,6 +1,6 @@
 import { diaryToday, ratioPercent, type DiaryDateProps } from "../domain/diary";
 import { DiaryDateControl } from "../components/DiaryDateControl";
-import { AlertTriangle, ChefHat, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertTriangle, BookOpen, ChefHat, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { MealEntry, RecipeVersion, MealType } from "../domain/types";
 import { useAppStore } from "../store/appStore";
@@ -11,6 +11,7 @@ import type { ActionResult } from "../store/appStore";
 import { FoodLibraryModal } from "../components/FoodLibraryModal";
 import { MealCorrectionModal } from "../components/MealCorrectionModal";
 import { RecipeEditor } from "../components/RecipeEditor";
+import { RecipeManagerDrawer } from "../components/RecipeManagerDrawer";
 import { latestRecipes } from "../domain/recipes";
 import { BatchHistory } from "../components/BatchHistory";
 import { MealDiaryTable } from "../components/MealDiaryTable";
@@ -23,6 +24,7 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   const [selectedRecipeId,setSelectedRecipeId]=useState("");
   const [showHistory,setShowHistory]=useState(false);
   const [copyRecipe,setCopyRecipe]=useState(false);
+  const [recipeDrawer,setRecipeDrawer]=useState(false);
   const [showSodium,setShowSodium]=useState(readDiaryShowSodium);
   const [mealOpen, setMealOpen] = useState(false);
   const [manualMeal, setManualMeal] = useState(false);
@@ -52,9 +54,15 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   const recipe = recipeOptions.find(r=>r.id===selectedRecipeId)??recipeOptions[0];
   const activeBatches = batches.filter((item) => item.status === "open" && item.remainingRatio > 0);
   const selectedBatch = batches.find((item) => item.id === batchOpen);
+  /** 编辑器盖在抽屉之上会形成双层遮罩，打开编辑器时先收起抽屉。 */
+  function openRecipeEditor(target: RecipeVersion | "new", copy: boolean) {
+    setCopyRecipe(copy);
+    setRecipeEditor(target);
+    setRecipeDrawer(false);
+  }
 
   return (
-    <div className="page">
+    <div className="page food-page">
       <PageHeader eyebrow="实际摄入" title="饮食日记" description="新食物确认一次规格，以后选择食物、填写吃了多少，自动计算营养。" action={<button className="button primary" onClick={() => openMeal()}><Plus size={17} /> 添加食物</button>} />
       <DiaryDateControl date={date} onChange={onDateChange}/>
       <p className="form-hint">补录或新增餐食会把该日重新标为待核对，请在日报再次确认完成。</p>
@@ -71,35 +79,82 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
         onVoid={(meal) => setCorrection({ meal, mode: "void" })}
       />
 
-      <div className="two-column equal">
-        <section className="stack">
-          <div className="button-row"><button className="button secondary" onClick={()=>{setCopyRecipe(false);setRecipeEditor("new");}}>新建菜谱</button>{recipe&&<><button className="button secondary" disabled={!latest.some(r=>r.id===recipe.id)} onClick={()=>{setCopyRecipe(false);setRecipeEditor(recipe);}}>修订当前菜谱</button><button className="button secondary" onClick={()=>{setCopyRecipe(true);setRecipeEditor(recipe);}}>另存为新菜谱</button></>}</div>
-          <label className="checkbox-label"><input type="checkbox" checked={showHistory} onChange={e=>{setShowHistory(e.target.checked);setSelectedRecipeId("");}}/><span>菜谱管理：显示历史版本（可按原配方制作或另存）</span></label>
-          {recipeOptions.length>0&&<label className="recipe-picker"><span>选择标准菜谱（{showHistory?"含历史版本":"每道菜的最新版本"}）</span><select aria-label="选择标准菜谱" value={recipe?.id??""} onChange={e=>setSelectedRecipeId(e.target.value)}>{recipeOptions.map(r=><option key={r.id} value={r.id}>{r.name} · v{r.version}{latest.some(l=>l.id===r.id)?"（最新）":"（历史）"}</option>)}</select></label>}
-          {recipe ? <article className="card recipe-card">
-            <div className="recipe-visual"><ChefHat size={32} /></div>
-            <p className="eyebrow">标准菜谱 · v{recipe.version}</p>
-            <h2>{recipe.name}</h2>
-            {!latest.some(r=>r.id===recipe.id)&&<p className="library-notice">正在复用历史 v{recipe.version}：制作会沿用此版本的原料和营养，不替换为最新版。修订请先选择最新版，或另存为新菜谱。</p>}
-            <p>制作、实际进食与丢弃分别记账。确认制作只扣原料，不会提前计入饮食。</p>
-            <div className="recipe-macros"><span><b>{recipe.nutrition.calories.value ?? "未知"}</b> kcal</span><span><b>{recipe.nutrition.protein.value ?? "未知"}</b> g 蛋白质</span><span><b>{recipe.totalMinutes}</b> 分钟</span></div>
-            <ul className="ingredient-list">{recipe.ingredients.map((item) => <li key={item.foodId}><span>{item.name}</span><b>{item.amount} {item.unit}</b></li>)}</ul>
-            <button className="button primary wide" disabled={busyAction || date !== diaryToday()} onClick={() => { setMessage(""); setCookCommandId(crypto.randomUUID()); setCookOpen(true); }}>{date === diaryToday() ? "确认今日制作" : "回到今天后确认实际制作"}</button>
-          </article> : <article className="card"><h3>暂无标准菜谱</h3><p>仍可通过食材库或仅记录本次入口记餐。</p></article>}
+      <div className="food-workbench">
+        <section className="card kitchen-card">
+          <div className="card-heading compact">
+            <div>
+              <p className="eyebrow">标准菜谱</p>
+              <h2>今日下厨</h2>
+            </div>
+            <button className="button secondary small" onClick={() => setRecipeDrawer(true)}><BookOpen size={15} /> 管理菜谱</button>
+          </div>
+
+          {recipe ? (
+            <div className="kitchen-body">
+              <div className="kitchen-top">
+                <div className="recipe-visual"><ChefHat size={30} /></div>
+                <div className="kitchen-meta">
+                  <p className="eyebrow">v{recipe.version} · {recipe.totalMinutes} 分钟</p>
+                  <h3>{recipe.name}</h3>
+                  <p>制作、实际进食与丢弃分别记账。确认制作只扣原料，不会提前计入饮食。</p>
+                </div>
+              </div>
+              {!latest.some(r=>r.id===recipe.id)&&<p className="library-notice">正在复用历史 v{recipe.version}：制作沿用原版本的原料和营养，不会替换为最新版。</p>}
+              <div className="recipe-macros"><span><b>{recipe.nutrition.calories.value ?? "未知"}</b> kcal</span><span><b>{recipe.nutrition.protein.value ?? "未知"}</b> g 蛋白质</span><span><b>{recipe.totalMinutes}</b> 分钟</span></div>
+              <ul className="ingredient-list">{recipe.ingredients.map((item) => <li key={item.foodId}><span>{item.name}</span><b>{item.amount} {item.unit}</b></li>)}</ul>
+              <button className="button primary wide" disabled={busyAction || date !== diaryToday()} onClick={() => { setMessage(""); setCookCommandId(crypto.randomUUID()); setCookOpen(true); }}>{date === diaryToday() ? "确认今日制作" : "回到今天后确认实际制作"}</button>
+            </div>
+          ) : (
+            <div className="kitchen-empty">
+              <ChefHat size={26} />
+              <strong>暂无标准菜谱</strong>
+              <p>仍可通过食材库或仅记录本次入口记餐；固定搭配建议先建成菜谱，之后一锅两吃只需两次点击。</p>
+              <button className="button secondary small" onClick={() => openRecipeEditor("new", false)}>新建第一个菜谱</button>
+            </div>
+          )}
+
+          <p className="kitchen-footnote"><ShieldCheck size={15} /><span>营养值不会把空白当成零：首次商品会校验千焦／千卡、每份／每百克和净含量。</span></p>
         </section>
 
-        <section className="stack">
-          {activeBatches.map((batch) => <article className="card batch-card" key={batch.id}>
+        <section className="batches-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">熟食批次</p>
+              <h2>待处理</h2>
+            </div>
+            <span className={`status-pill ${activeBatches.length ? "warning" : "neutral"}`}>{activeBatches.length} 个</span>
+          </div>
+
+          {activeBatches.length === 0 ? (
+            <article className="batches-empty">
+              <ChefHat size={24} />
+              <strong>没有待处理的批次</strong>
+              <p>确认制作后，剩余熟食会在这里等您记录实际进食或丢弃；处理完自动归档到下方台账。</p>
+            </article>
+          ) : activeBatches.map((batch) => <article className="card batch-card" key={batch.id}>
             <div className="card-heading compact"><div><p className="eyebrow">制作于 {batch.date} · 待处理</p><h3>{recipes.find(item => item.id === batch.recipeVersionId)?.name ?? "菜谱版本缺失"}</h3></div><span className="status-pill warning">剩余 {ratioPercent(batch.remainingRatio)}%</span></div>
             <div className="batch-progress"><i style={{ width: `${batch.remainingRatio * 100}%` }}/></div>
             <p>已吃 {ratioPercent(batch.consumedRatio)}%，已丢弃 {ratioPercent(batch.wastedRatio)}%。跨日保存前请自行核对冷藏条件与食材状态；系统不判断是否安全。</p>
             <div className="button-row"><button className="button primary small" disabled={busyAction || date < batch.date} onClick={() => { setConsumeRatio(String(ratioPercent(Math.min(.5, batch.remainingRatio)))); setConsumeCommandId(crypto.randomUUID()); setBatchOpen(batch.id); setMessage(""); }}>记录实际进食</button><button className="button danger small" disabled={busyAction} onClick={async () => { if (!confirm(`确认将剩余 ${ratioPercent(batch.remainingRatio)}% 记为熟食丢弃？`)) return; const commandId = discardCommandIds[batch.id] ?? crypto.randomUUID(); setDiscardCommandIds((current) => ({ ...current, [batch.id]: commandId })); setBusyAction(true); const result = await discardBatchRemainder(batch.id, "discarded", commandId); setBusyAction(false); if (result.error) { setStatusMessage(result.error); } else { setStatusMessage("剩余熟食已记入浪费记录。"); setDiscardCommandIds((current) => { const next = { ...current }; delete next[batch.id]; return next; }); } }}><Trash2 size={14}/> {busyAction ? "处理中…" : "丢弃剩余"}</button></div>
           </article>)}
-          <article className="card validation-card"><ShieldCheck size={22} /><div><strong>营养值不会把空白当成零</strong><p>首次商品会校验千焦/千卡、每份/每百克和净含量。</p></div></article>
         </section>
       </div>
 
       <BatchHistory date={date} />
+
+      {recipeDrawer && <RecipeManagerDrawer
+        recipes={recipes}
+        latest={latest}
+        options={recipeOptions}
+        recipe={recipe}
+        showHistory={showHistory}
+        onShowHistoryChange={(visible) => { setShowHistory(visible); setSelectedRecipeId(""); }}
+        onSelect={setSelectedRecipeId}
+        onNew={() => openRecipeEditor("new", false)}
+        onRevise={() => { if (recipe) openRecipeEditor(recipe, false); }}
+        onCopy={() => { if (recipe) openRecipeEditor(recipe, true); }}
+        onClose={() => setRecipeDrawer(false)}
+      />}
 
       {correction&&<MealCorrectionModal meal={correction.meal} mode={correction.mode} onClose={()=>setCorrection(null)} onSaved={onDateChange}/>}
       {recipeEditor&&<RecipeEditor copyMode={copyRecipe} recipe={recipeEditor==="new"?undefined:recipeEditor} onClose={()=>setRecipeEditor(null)} onSaved={setSelectedRecipeId}/>}

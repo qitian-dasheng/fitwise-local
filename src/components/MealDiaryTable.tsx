@@ -85,7 +85,8 @@ export function MealDiaryTable({
           <span>
             {batchCount} 个已确认批次 · 热量覆盖率 {summary.coverage.calories}%
           </span>
-          <span className={`status-pill ${status.tone}`}>{status.label}</span>
+          {/* 空日已经在上一行写了「尚无记录」，不再重复一个同文徽标。 */}
+          {!isEmpty && <span className={`status-pill ${status.tone}`}>{status.label}</span>}
         </div>
         {cols.map((column) => {
           const display = totalNutrient(summary, column.key, { entryCount: active.length, missing: missing.includes(column.key) });
@@ -118,25 +119,35 @@ export function MealDiaryTable({
 
           {groups.map((group) => {
             const groupMissing = missingNutrientKeys(group.entries);
+            // 空餐次不铺一排「—」：营养格会变成 6–7 个破折号，视觉噪音大于信息量。
+            const isEmptyMeal = group.entries.length === 0;
             return (
               <div className="diary-meal" data-meal-type={group.type} key={group.type}>
-                <div className="diary-row diary-meal-head">
+                <div className={`diary-row diary-meal-head${isEmptyMeal ? " diary-meal-head-empty" : ""}`}>
                   <div className="diary-cell-food">
                     <strong>{mealLabels[group.type]}</strong>
-                    <small>{group.entries.length ? `${group.entries.length} 项` : "还没有记录"}</small>
+                    <small>{isEmptyMeal ? "还没有记录" : `${group.entries.length} 项`}</small>
                   </div>
-                  {cols.map((column) => {
-                    const display = totalNutrient(group.summary, column.key, {
-                      entryCount: group.entries.length,
-                      missing: groupMissing.includes(column.key),
-                    });
-                    return <NumberCell column={column} display={display} key={column.key} />;
-                  })}
-                  <div className="diary-cell-actions">
-                    <button className="text-button" onClick={() => onAdd(group.type)}>
+                  {isEmptyMeal ? (
+                    <button className="text-button diary-empty-hint" onClick={() => onAdd(group.type)}>
                       <Plus size={13} /> 添加{mealLabels[group.type]}
                     </button>
-                  </div>
+                  ) : (
+                    <>
+                      {cols.map((column) => {
+                        const display = totalNutrient(group.summary, column.key, {
+                          entryCount: group.entries.length,
+                          missing: groupMissing.includes(column.key),
+                        });
+                        return <NumberCell column={column} display={display} key={column.key} />;
+                      })}
+                      <div className="diary-cell-actions">
+                        <button className="text-button" onClick={() => onAdd(group.type)}>
+                          <Plus size={13} /> 添加{mealLabels[group.type]}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {group.entries.map((entry) => {

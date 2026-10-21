@@ -73,9 +73,12 @@ it("renders the three layers: daily summary, four meal subtotals and item rows",
   expect(host.querySelectorAll(".food-entry")).toHaveLength(1);
   expect(host.querySelector(".diary-summary")).not.toBeNull();
 
-  // 空餐次也渲染，但营养格显示「—」而不是 0
+  // 空餐次只给一条跨列提示，不再铺一排「—」
   expect(group("breakfast").textContent).toContain("还没有记录");
-  expect(mealHead("breakfast").querySelector('[data-nutrient="calories"]')!.textContent).toBe("—");
+  expect(mealHead("breakfast").querySelector('[data-nutrient="calories"]')).toBeNull();
+  expect(mealHead("breakfast").querySelectorAll(".diary-cell-num")).toHaveLength(0);
+  expect(group("breakfast").querySelector(".diary-empty-hint")!.textContent).toContain("添加早餐");
+  expect(group("breakfast").textContent).not.toContain("—");
   expect(group("breakfast").textContent).not.toContain("0 kcal");
 });
 

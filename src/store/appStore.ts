@@ -16,17 +16,78 @@ import type {
   FoodDefinitionInput,
   FoodMealInput,
   ReceivePurchaseInput, InventoryCountInput, InventoryDisposalInput, InventoryReceiptCorrectionInput,
-  MealCorrectionInput, RecipeInput,
+  MealCorrectionInput, RecipeInput, MeasurementCondition, BodyMeasurement,
 } from "../domain/types";
 import { enqueueDomainCommand, executeDomainCommand, type DomainCommandKind } from "../data/domainCommands";
 import { appStorage, flushAppStorageWrites, isTauriRuntime, reportStorageFailure, suppressNextAppStorageWrite } from "../data/storage";
 import { foodMealEntries, saveFoodInState } from "../domain/foodLibrary";
 import { applyInventoryOperation } from "../domain/purchases";
 import { diaryToday, ratioPercent } from "../domain/diary";
+import { compareMeasurements, isActiveMeasurement, makeMeasuredAt, shanghaiNowParts } from "../domain/body";
 
 const uid = () => crypto.randomUUID();
+
+interface WeightPayload {
+  [key: string]: unknown;
+  weightKg: number;
+  date: string;
+  measuredAt?: string;
+  condition?: MeasurementCondition;
+  note?: string;
+}
+
+/** 与 Rust body_commands 保持同一套守卫，浏览器预览不能放松。 */
+function weightPayload(input: WeightRecordInput): { payload?: WeightPayload; error?: string } {
+  const { weightKg, date } = input;
+  if (!Number.isFinite(weightKg) || weightKg < 20 || weightKg > 400) {
+    return { error: "体重需在 20–400 kg 之间。" };
+  }
+  if (Math.abs(weightKg * 100 - Math.round(weightKg * 100)) > 1e-6) {
+    return { error: "体重最多保留两位小数。" };
+  }
+  const payload: WeightPayload = { weightKg: Math.round(weightKg * 100) / 100, date };
+  if (input.time) payload.measuredAt = makeMeasuredAt(date, input.time);
+  if (input.condition) payload.condition = input.condition;
+  const note = input.note?.trim();
+  if (note) payload.note = note;
+  return { payload };
+}
+
+function measurementFromPayload(
+  id: string,
+  payload: WeightPayload,
+  now: string,
+  extra: Partial<BodyMeasurement>,
+): BodyMeasurement {
+  return {
+    id,
+    date: payload.date,
+    weightKg: payload.weightKg,
+    ...(payload.measuredAt ? { measuredAt: payload.measuredAt } : {}),
+    ...(payload.condition ? { condition: payload.condition } : {}),
+    ...(payload.note ? { note: payload.note } : {}),
+    source: "manual",
+    status: "active",
+    createdAt: now,
+    ...extra,
+  };
+}
 const reopenedCheckIns = (state: AppState, date: string) => state.checkIns.map(item => item.date === date && item.complete ? { ...item, complete: false, completedAt: undefined } : item);
 export interface ActionResult { error?: string; duplicate?: boolean; isOutlier?: boolean; foodId?: string; foodVersionId?: string; mealIds?: string[]; recipeVersionId?: string; date?: string; draftId?: string; draftRevision?: number }
+
+export interface WeightRecordInput {
+  weightKg: number;
+  date: string;
+  /** 'HH:mm'；留空表示未标注称重时刻。 */
+  time?: string;
+  condition?: MeasurementCondition;
+  note?: string;
+}
+
+export interface WeightReviseInput extends WeightRecordInput {
+  measurementId: string;
+  reason: string;
+}
 
 interface AppActions {
   labelDraftCommand: (kind: "save_label_draft" | "confirm_label_draft" | "discard_label_draft", payload: Record<string, unknown>, commandId: string) => Promise<ActionResult>;
@@ -50,6 +111,10 @@ interface AppActions {
     date?: string;
   }, commandId?: string) => Promise<ActionResult>;
   addWeight: (weightKg: number, date?: string, commandId?: string) => Promise<ActionResult>;
+  recordWeight: (input: WeightRecordInput, commandId?: string) => Promise<ActionResult>;
+  reviseWeight: (input: WeightReviseInput, commandId?: string) => Promise<ActionResult>;
+  voidWeight: (input: { measurementId: string; reason: string }, commandId?: string) => Promise<ActionResult>;
+  setWeightRepresentative: (measurementId: string, commandId?: string) => Promise<ActionResult>;
   addWorkout: (input: Omit<WorkoutSession, "id" | "createdAt">, commandId?: string) => Promise<ActionResult>;
   setCheckIn: (input: { hunger?: number; energy?: number; date?: string }, commandId?: string) => Promise<ActionResult>;
   setDayComplete: (date: string, complete: boolean, commandId?: string) => Promise<ActionResult>;
@@ -161,33 +226,156 @@ export const useAppStore = create<AppStore>()(
         set((state) => ({ checkIns: reopenedCheckIns(state, meal.date), meals: [...state.meals, meal] }));
         return {};
       },
-      async addWeight(weightKg, date = format(new Date(), "yyyy-MM-dd"), commandId = uid()) {
-        if (isTauriRuntime()) return submit("add_weight", { weightKg, date }, commandId);
-        if (!Number.isFinite(weightKg) || weightKg <= 0) return { error: "体重必须大于 0。" };
+      async addWeight(weightKg, date = diaryToday(), commandId = uid()) {
+        const { time } = shanghaiNowParts();
+        return get().recordWeight({ weightKg, date, time }, commandId);
+      },
+      async recordWeight(input, commandId = uid()) {
+        const built = weightPayload(input);
+        if (built.error || !built.payload) return { error: built.error ?? "体重无效。" };
+        if (isTauriRuntime()) return submit("add_weight", built.payload, commandId);
         const now = new Date().toISOString();
         const id = uid();
-        set((state) => {
-          const previous = [...state.measurements]
-            .reverse()
-            .find((item) => item.date === date && item.status !== "superseded");
-          return {
-            measurements: [
-              ...state.measurements.map((item) => item.id === previous?.id ? { ...item, status: "superseded" as const } : item),
-              { id, date, weightKg, status: "active" as const, supersedesId: previous?.id, createdAt: now },
-            ].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt)),
-            auditEvents: [
-              ...state.auditEvents,
-              {
-                id: uid(),
-                eventType: previous ? "body_measurement_superseded" : "body_measurement_created",
-                entityType: "body_measurement",
-                entityId: id,
-                payload: { date, weightKg, supersedesId: previous?.id },
-                createdAt: now,
-              },
-            ],
-          };
+        const state = get();
+        const previous = [...state.measurements]
+          .filter(isActiveMeasurement)
+          .filter((item) => item.date <= built.payload!.date)
+          .sort(compareMeasurements)
+          .at(-1);
+        const outlier = previous ? Math.abs(previous.weightKg - built.payload.weightKg) > 3 : false;
+        const measurement = measurementFromPayload(id, built.payload, now, { isOutlier: outlier });
+        set((current) => ({
+          measurements: [...current.measurements, measurement].sort(compareMeasurements),
+          auditEvents: [
+            ...current.auditEvents,
+            {
+              id: `${commandId}:audit`,
+              eventType: "body_measurement_created",
+              entityType: "body_measurement",
+              entityId: id,
+              payload: { ...built.payload, isOutlier: outlier },
+              createdAt: now,
+            },
+          ],
+        }));
+        return { isOutlier: outlier };
+      },
+      async reviseWeight(input, commandId = uid()) {
+        const built = weightPayload(input);
+        if (built.error || !built.payload) return { error: built.error ?? "体重无效。" };
+        const reason = input.reason.trim();
+        if (!reason) return { error: "请填写修改原因。" };
+        if (isTauriRuntime()) {
+          return submit("revise_weight", { ...built.payload, measurementId: input.measurementId, reason }, commandId);
+        }
+        const state = get();
+        const target = state.measurements.find((item) => item.id === input.measurementId);
+        if (!target) return { error: "找不到这条体重记录。" };
+        if (!isActiveMeasurement(target)) return { error: "这条体重已修订或作废，请刷新后操作最新记录。" };
+        const now = new Date().toISOString();
+        const id = uid();
+        const previous = [...state.measurements]
+          .filter(isActiveMeasurement)
+          .filter((item) => item.id !== target.id && item.date <= built.payload!.date)
+          .sort(compareMeasurements)
+          .at(-1);
+        const outlier = previous ? Math.abs(previous.weightKg - built.payload.weightKg) > 3 : false;
+        const measurement = measurementFromPayload(id, built.payload, now, {
+          isOutlier: outlier,
+          supersedesId: target.id,
+          ...(target.dayRepresentative ? { dayRepresentative: true } : {}),
         });
+        set((current) => ({
+          measurements: [
+            ...current.measurements.map((item) =>
+              item.id === target.id
+                ? {
+                    ...item,
+                    status: "superseded" as const,
+                    supersededBy: id,
+                    correctedAt: now,
+                    correctionReason: reason,
+                    dayRepresentative: false,
+                  }
+                : item,
+            ),
+            measurement,
+          ].sort(compareMeasurements),
+          auditEvents: [
+            ...current.auditEvents,
+            {
+              id: `${commandId}:audit`,
+              eventType: "body_measurement_revised",
+              entityType: "body_measurement",
+              entityId: id,
+              payload: { before: target, after: built.payload, reason },
+              createdAt: now,
+            },
+          ],
+        }));
+        return {};
+      },
+      async voidWeight(input, commandId = uid()) {
+        const reason = input.reason.trim();
+        if (!reason) return { error: "请填写修改原因。" };
+        if (isTauriRuntime()) {
+          return submit("void_weight", { measurementId: input.measurementId, reason }, commandId);
+        }
+        const state = get();
+        const target = state.measurements.find((item) => item.id === input.measurementId);
+        if (!target) return { error: "找不到这条体重记录。" };
+        if (!isActiveMeasurement(target)) return { error: "这条体重已修订或作废，请刷新后操作最新记录。" };
+        const now = new Date().toISOString();
+        set((current) => ({
+          measurements: current.measurements.map((item) =>
+            item.id === target.id
+              ? { ...item, status: "void" as const, voidedAt: now, correctionReason: reason, dayRepresentative: false }
+              : item,
+          ),
+          auditEvents: [
+            ...current.auditEvents,
+            {
+              id: `${commandId}:audit`,
+              eventType: "body_measurement_voided",
+              entityType: "body_measurement",
+              entityId: target.id,
+              payload: { before: target, reason },
+              createdAt: now,
+            },
+          ],
+        }));
+        return {};
+      },
+      async setWeightRepresentative(measurementId, commandId = uid()) {
+        if (isTauriRuntime()) return submit("set_weight_representative", { measurementId }, commandId);
+        const state = get();
+        const target = state.measurements.find((item) => item.id === measurementId);
+        if (!target) return { error: "找不到这条体重记录。" };
+        if (!isActiveMeasurement(target)) return { error: "这条体重已修订或作废，请刷新后操作最新记录。" };
+        const siblings = state.measurements.filter((item) => item.date === target.date && isActiveMeasurement(item));
+        const already = siblings.every((item) => (item.id === target.id ? item.dayRepresentative === true : item.dayRepresentative !== true));
+        if (already) return {};
+        const now = new Date().toISOString();
+        const previous = siblings.find((item) => item.dayRepresentative === true)?.id;
+        set((current) => ({
+          measurements: current.measurements.map((item) => {
+            if (item.date !== target.date || !isActiveMeasurement(item)) return item;
+            if (item.id === target.id) return { ...item, dayRepresentative: true };
+            const { dayRepresentative: _ignored, ...rest } = item;
+            return rest;
+          }),
+          auditEvents: [
+            ...current.auditEvents,
+            {
+              id: `${commandId}:audit`,
+              eventType: "body_measurement_representative_changed",
+              entityType: "body_measurement",
+              entityId: target.id,
+              payload: { date: target.date, measurementId: target.id, previousId: previous },
+              createdAt: now,
+            },
+          ],
+        }));
         return {};
       },
       async addWorkout(input, commandId = uid()) {

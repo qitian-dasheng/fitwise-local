@@ -59,9 +59,11 @@ pub(crate) fn open_database(app: &AppHandle) -> Result<Connection, String> {
 }
 
 pub(crate) fn ensure_repository_schema(connection: &Connection) -> Result<(), String> {
-    let transaction = connection
-        .unchecked_transaction()
-        .map_err(|error| error.to_string())?;
+    // 必须用 IMMEDIATE：0011 会 DROP + 重建测量投影视图，需要写锁。
+    // DEFERRED 事务在并发命令下会「读到一半再升级写锁」而直接以 BUSY 失败，绕开 busy_timeout。
+    let transaction =
+        rusqlite::Transaction::new_unchecked(connection, rusqlite::TransactionBehavior::Immediate)
+            .map_err(|error| error.to_string())?;
     apply_repository_schema(&transaction)?;
     transaction.commit().map_err(|error| error.to_string())
 }
@@ -87,6 +89,7 @@ pub(crate) fn apply_repository_schema(connection: &Connection) -> Result<(), Str
         include_str!("../migrations/0008_input_artifacts.sql"),
         include_str!("../migrations/0009_meal_corrections.sql"),
         include_str!("../migrations/0010_label_drafts.sql"),
+        include_str!("../migrations/0011_measurement_conditions.sql"),
     ] {
         connection
             .execute_batch(sql)
