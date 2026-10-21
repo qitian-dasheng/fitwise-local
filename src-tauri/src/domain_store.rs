@@ -90,6 +90,7 @@ pub(crate) fn apply_repository_schema(connection: &Connection) -> Result<(), Str
         include_str!("../migrations/0009_meal_corrections.sql"),
         include_str!("../migrations/0010_label_drafts.sql"),
         include_str!("../migrations/0011_measurement_conditions.sql"),
+        include_str!("../migrations/0012_workout_corrections.sql"),
     ] {
         connection
             .execute_batch(sql)

@@ -137,7 +137,37 @@ pub(crate) fn period_summary(
                 / eligible_count as f64,
         )
     };
-    let workout_minutes: f64 = transaction.query_row("SELECT COALESCE(SUM(duration_minutes),0.0) FROM domain_workout_projection WHERE workout_date BETWEEN ?1 AND ?2",[start,end],|row|row.get(0)).map_err(|error|error.to_string())?;
+    // 逐日运动：阶段复盘需要按日着色，所以除了区间总和，也把每天的量填进 days[]。
+    // 视图自 0012 起已过滤 void/superseded，作废的运动不会进入这里。
+    let mut workout_days = BTreeMap::<String, (f64, i64)>::new();
+    let mut workout_minutes = 0.0f64;
+    {
+        let mut statement = transaction
+            .prepare(
+                "SELECT workout_date, COALESCE(duration_minutes,0) \
+                 FROM domain_workout_projection WHERE workout_date BETWEEN ?1 AND ?2",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([start, end], |row| {
+                Ok((row.get::<_, Option<String>>(0)?, row.get::<_, f64>(1)?))
+            })
+            .map_err(|error| error.to_string())?;
+        for row in rows {
+            let (date, minutes) = row.map_err(|error| error.to_string())?;
+            workout_minutes += minutes;
+            if let Some(date) = date {
+                let entry = workout_days.entry(date).or_insert((0.0, 0));
+                entry.0 += minutes;
+                entry.1 += 1;
+            }
+        }
+    }
+    for (date, day) in &mut days {
+        let (minutes, count) = workout_days.get(date).copied().unwrap_or((0.0, 0));
+        day["workoutMinutes"] = json!(minutes);
+        day["workoutCount"] = json!(count);
+    }
     let mut measurements = Vec::new();
     {
         let lookback = start_date
@@ -282,7 +312,7 @@ fn export_domain_at_path(path: &std::path::Path) -> Result<Value, String> {
         .as_object()
         .ok_or("领域仓库格式无效。")?
         .clone();
-    data.insert("schemaVersion".into(), json!(11));
+    data.insert("schemaVersion".into(), json!(12));
     data.insert(
         "labelDrafts".into(),
         crate::label_drafts::manifest(&transaction)?,

@@ -22,6 +22,8 @@ export type DomainCommandKind =
   | "void_weight"
   | "set_weight_representative"
   | "add_workout"
+  | "revise_workout"
+  | "void_workout"
   | "set_checkin"
   | "set_day_complete"
   | "add_purchase"

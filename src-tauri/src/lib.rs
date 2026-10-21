@@ -15,6 +15,7 @@ mod meal_corrections;
 mod recipes;
 mod record_commands;
 mod upload;
+mod workout_commands;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

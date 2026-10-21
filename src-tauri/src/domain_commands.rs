@@ -575,6 +575,8 @@ fn execute_with_connection(
             | "void_weight"
             | "set_weight_representative"
             | "add_workout"
+            | "revise_workout"
+            | "void_workout"
             | "set_checkin"
             | "set_day_complete"
             | "add_purchase"
@@ -694,6 +696,14 @@ fn execute_with_connection(
                 &request.command_id,
             )?
         }
+        // 运动更正必须显式匹配：留到 `_ =>` 兜底会落到 record_commands，
+        // 那里只认 add_workout，两个新 kind 会被当成未知命令拒绝。
+        "revise_workout" | "void_workout" => crate::workout_commands::apply(
+            &mut state,
+            &request.kind,
+            &request.payload,
+            &request.command_id,
+        )?,
         "add_purchase"
         | "revise_purchase"
         | "close_purchase"
@@ -795,6 +805,7 @@ mod tests {
     include!("label_draft_tests.rs");
     include!("inventory_correction_tests.rs");
     include!("body_command_tests.rs");
+    include!("workout_command_tests.rs");
 
     fn connection() -> Connection {
         let connection = Connection::open_in_memory().unwrap();
@@ -1577,7 +1588,7 @@ mod tests {
         assert_eq!(load_envelope(&c).unwrap(), before);
         assert!(c
             .query_row(
-                "SELECT EXISTS(SELECT 1 FROM domain_upgrade_reports WHERE version=11)",
+                "SELECT EXISTS(SELECT 1 FROM domain_upgrade_reports WHERE version=12)",
                 [],
                 |r| r.get::<_, bool>(0)
             )

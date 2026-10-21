@@ -1,6 +1,38 @@
 # 轻衡 Windows 构建与验证报告
 
-## 最新：0.4.8（0.4.6-B2）构建证据（MSI 已产出，安装待用户批准）
+## 最新：0.4.9 构建证据（MSI 已产出，安装待用户批准）
+
+日期：2026-10-21（Asia/Shanghai）。范围：趋势页整页重写为**阶段复盘**（7/14/30 天区间、达标日历、滚动周降幅刻度条、规则型复盘提示）+ **运动记录更正/作废**（`revise_workout` / `void_workout`，**schema v11 → v12**）+ 文档版本口径对齐。无新依赖、无 OCR/云端。
+
+### 自动化与静态检查
+
+- 前端 **26 文件 208 项**（新增 `tests/reviewDomain.test.ts` 26 项、`tests/trendsReviewUI.test.tsx` 8 项、`tests/workoutCorrectionUI.test.tsx` 5 项），Rust **99 项**（新增 `workout_command_tests.rs` 11 项），合计 **307 项** 通过。
+- `tsc -b` + 生产构建通过；`cargo fmt --check`、`cargo clippy --all-targets -D warnings` 通过。
+- 本轮 `tsc -b` 首次抓到测试目录的类型错误（`tests/trendsReviewUI.test.tsx` 里 `unit` 被推成 `string`、`MealEntry` 缺 `source`/`confidence`，共 6 处），说明此前只跑 `tsc --noEmit` 覆盖不全——今后固定用 `tsc -b`。
+- clippy 首轮报 `needless_late_init`（`workout_commands::apply` 的 `let result;` + 分支赋值），已改为 `let result = match kind { ... };`，未加 `allow`。
+- 挑刺与安装版清单见 [REVIEW\_0.4.9.md](REVIEW_0.4.9.md)。
+
+### 安装包
+
+release 编译 2 分 10 秒；MSI 打包正常。产物：
+
+| 产物                                                           |        字节 | SHA-256                                                            |
+| ------------------------------------------------------------ | --------: | ------------------------------------------------------------------ |
+| `src-tauri/target/release/bundle/msi/轻衡_0.4.9_x64_zh-CN.msi` | 4,857,856 | `1B83116A3DD6529FBCDFCBEBB8F70F7CA7722BEA00EDA638599A662E443C9B4D` |
+
+ProductVersion / FileVersion 均为 **0.4.9**。日志 `build-logs/tauri-build-0.4.9.log`。
+
+**打包踩坑记录（本轮解法更省事）**：0.4.8 记的做法是先用 PowerShell `[System.IO.File]::Delete` 手工清空 `dist` 再打包。本轮发现根因更直接——本机 `NODE_OPTIONS` 预置了 safe-delete shim（`node-language-shim.cjs` / `node-safe-delete-shim.cjs`），`tauri build` 调起的 `npm run build` 继承它，vite 清空 `dist` 时被改写成回收站操作并失败，表现为 `beforeBuildCommand failed with exit code 1`。**在构建 shell 里 `unset NODE_OPTIONS` 后直接 `npx tauri build --bundles msi` 即可一次成功**，不需要手工清 `dist`。
+
+### 视觉核对（开发预览，不是安装版证据）
+
+用只读预览页 + 无头 Chrome（CDP）整页截图核对，临时目录核对后已删除、未入库：
+
+- 1360px / 1920px 趋势页：区间控件与 7/14/30 预设、4 卡同行、周降幅刻度条（安全区可见）、48px 日历网格、复盘提示与免责声明全部正常；空库时只留一条「这段时间还没有记录」，热量图收成 190px 紧凑空态。
+- 1920px 核对时发现预览页自带 `max-width: 1120px` 会让版式失真，改为先用预览页把演示数据写进同源 `localStorage`，再在真实 App 上截图。
+- 运动页：新增第 6 列操作区后行高与既有 5 列不冲突；inactive 行灰化、显示「已更正 / 已作废 · 原因」且不再有按钮。
+
+## 上一版：0.4.8（0.4.6-B2）构建证据（MSI 已产出，安装待用户批准）
 
 日期：2026-10-21（Asia/Shanghai）。范围：结构修整——新增独立「身体」页体重记录中心（同日多次称重、代表值、修订/作废审计，**schema v10 → v11**）+ 饮食页两栏工作台与菜谱抽屉 + 空餐次单行提示 + 字号密度按库存页基准收口。无新依赖、无 OCR/云端。
 

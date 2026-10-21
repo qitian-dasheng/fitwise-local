@@ -24,6 +24,13 @@ import { foodMealEntries, saveFoodInState } from "../domain/foodLibrary";
 import { applyInventoryOperation } from "../domain/purchases";
 import { diaryToday, ratioPercent } from "../domain/diary";
 import { compareMeasurements, isActiveMeasurement, makeMeasuredAt, shanghaiNowParts } from "../domain/body";
+import {
+  isActiveWorkout,
+  validateWorkoutDraft,
+  workoutDraftPayload,
+  WORKOUT_REASON_LIMIT,
+  type WorkoutReviseInput,
+} from "../domain/workouts";
 
 const uid = () => crypto.randomUUID();
 
@@ -116,6 +123,8 @@ interface AppActions {
   voidWeight: (input: { measurementId: string; reason: string }, commandId?: string) => Promise<ActionResult>;
   setWeightRepresentative: (measurementId: string, commandId?: string) => Promise<ActionResult>;
   addWorkout: (input: Omit<WorkoutSession, "id" | "createdAt">, commandId?: string) => Promise<ActionResult>;
+  reviseWorkout: (input: WorkoutReviseInput, commandId?: string) => Promise<ActionResult>;
+  voidWorkout: (input: { workoutId: string; reason: string }, commandId?: string) => Promise<ActionResult>;
   setCheckIn: (input: { hunger?: number; energy?: number; date?: string }, commandId?: string) => Promise<ActionResult>;
   setDayComplete: (date: string, complete: boolean, commandId?: string) => Promise<ActionResult>;
   toggleDayComplete: (commandId?: string) => Promise<ActionResult>;
@@ -384,6 +393,81 @@ export const useAppStore = create<AppStore>()(
         if (input.sourceFingerprint && get().workouts.some((item) => item.sourceFingerprint === input.sourceFingerprint)) return { duplicate: true };
         set((state) => ({
           workouts: [...state.workouts, { ...input, id: uid(), createdAt: new Date().toISOString() }],
+        }));
+        return {};
+      },
+      async reviseWorkout(input, commandId = uid()) {
+        const validation = validateWorkoutDraft(input);
+        if (validation.error) return { error: validation.error };
+        const reason = input.reason.trim();
+        if (!reason) return { error: "请填写修改原因。" };
+        if (reason.length > WORKOUT_REASON_LIMIT) return { error: `原因不能超过 ${WORKOUT_REASON_LIMIT} 字。` };
+        const draft = workoutDraftPayload(input) as unknown as Omit<WorkoutSession, "id" | "createdAt">;
+        if (isTauriRuntime()) {
+          return submit("revise_workout", { ...draft, workoutId: input.workoutId, reason }, commandId);
+        }
+        const state = get();
+        const target = state.workouts.find((item) => item.id === input.workoutId);
+        if (!target) return { error: "找不到这条运动记录。" };
+        if (!isActiveWorkout(target)) return { error: "这条运动已修订或作废，请刷新后操作最新记录。" };
+        const now = new Date().toISOString();
+        const id = uid();
+        set((current) => ({
+          workouts: [
+            ...current.workouts.map((item) =>
+              item.id === target.id
+                ? {
+                    ...item,
+                    status: "superseded" as const,
+                    supersededBy: id,
+                    correctedAt: now,
+                    correctionReason: reason,
+                  }
+                : item,
+            ),
+            { ...draft, id, createdAt: now, status: "active" as const, supersedesId: target.id },
+          ],
+          auditEvents: [
+            ...current.auditEvents,
+            {
+              id: `${commandId}:audit`,
+              eventType: "workout_revised",
+              entityType: "workout_session",
+              entityId: id,
+              payload: { before: target, after: draft, reason },
+              createdAt: now,
+            },
+          ],
+        }));
+        return {};
+      },
+      async voidWorkout(input, commandId = uid()) {
+        const reason = input.reason.trim();
+        if (!reason) return { error: "请填写修改原因。" };
+        if (reason.length > WORKOUT_REASON_LIMIT) return { error: `原因不能超过 ${WORKOUT_REASON_LIMIT} 字。` };
+        if (isTauriRuntime()) return submit("void_workout", { workoutId: input.workoutId, reason }, commandId);
+        const state = get();
+        const target = state.workouts.find((item) => item.id === input.workoutId);
+        if (!target) return { error: "找不到这条运动记录。" };
+        if (!isActiveWorkout(target)) return { error: "这条运动已修订或作废，请刷新后操作最新记录。" };
+        const now = new Date().toISOString();
+        set((current) => ({
+          workouts: current.workouts.map((item) =>
+            item.id === target.id
+              ? { ...item, status: "void" as const, voidedAt: now, correctionReason: reason }
+              : item,
+          ),
+          auditEvents: [
+            ...current.auditEvents,
+            {
+              id: `${commandId}:audit`,
+              eventType: "workout_voided",
+              entityType: "workout_session",
+              entityId: target.id,
+              payload: { before: target, reason },
+              createdAt: now,
+            },
+          ],
         }));
         return {};
       },

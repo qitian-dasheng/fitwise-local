@@ -162,6 +162,13 @@ export interface BodyMeasurement {
 
 export interface WorkoutSession {
   id: string;
+  /** 缺失视为 active；作废/更正后保留旧行留证。 */
+  status?: "active" | "superseded" | "void";
+  supersedesId?: string;
+  supersededBy?: string;
+  correctionReason?: string;
+  correctedAt?: string;
+  voidedAt?: string;
   date: ISODate;
   name: string;
   type: string;

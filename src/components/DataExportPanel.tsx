@@ -10,7 +10,7 @@ const collections = ["foodDefinitions", "foodDefinitionVersions", "meals", "chec
 
 export function captureWindowSnapshot(state: AppState) {
   return {
-    app: "Fitwise Local", schemaVersion: 11, persistVersion: 4,
+    app: "Fitwise Local", schemaVersion: 12, persistVersion: 4,
     source: "window_snapshot_unverified", exportedAt: new Date().toISOString(),
     warning: "当前窗口快照，不代表数据库已保存；不含附件原件和独立标签草稿。恢复前须核对差异并另行确认。",
     profile: state.profile,

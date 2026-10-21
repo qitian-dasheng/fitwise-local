@@ -365,7 +365,7 @@ fn label_draft_file_restart_and_old_schema_upgrade_preserve_data() {
         ensure_repository_schema(&c).unwrap();
         let saved = label_save(&mut c, "label-restart", label_form());
         old_state = saved.state.clone();
-        c.execute_batch("DROP TABLE nutrition_label_drafts;DELETE FROM domain_upgrade_reports WHERE version=11;").unwrap();
+        c.execute_batch("DROP TABLE nutrition_label_drafts;DELETE FROM domain_upgrade_reports WHERE version=12;").unwrap();
         crate::domain_upgrade::upgrade(&mut c, &path).unwrap();
         assert_eq!(
             serde_json::from_str::<Value>(

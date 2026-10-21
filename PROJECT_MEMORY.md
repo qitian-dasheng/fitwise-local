@@ -34,7 +34,7 @@
 - 当前分支：`main`。
 - 最新检查点提交：`3c788fc feat: add the body page and restructure the food page`（0.4.8）；上一个检查点 `6012403 feat: show the food diary as daily summary, meal subtotals and item rows`（0.4.7）。
 - 版本号：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 均为 `0.4.8`。
-- 数据库 schema **v11**（`migrations/0011_measurement_conditions.sql`，`domain_upgrade.rs` 硬编码 `version = 11`）；领域 envelope 持久化格式仍为 **4**。0011 只 `DROP VIEW IF EXISTS` + 重建 `domain_measurement_projection`（暴露 `measured_at` / `condition` / `day_representative`，过滤改 `COALESCE(status,'active')='active'`），**不回填任何 payload**，否则升级对账会因 `before != after` 失败。
+- 数据库 schema **v12**（`migrations/0011_measurement_conditions.sql` + `migrations/0012_workout_corrections.sql`，`domain_upgrade.rs` 硬编码 `version = 12`）；领域 envelope 持久化格式仍为 **4**。0011 只 `DROP VIEW IF EXISTS` + 重建 `domain_measurement_projection`（暴露 `measured_at` / `condition` / `day_representative`，过滤改 `COALESCE(status,'active')='active'`）；0012 用同样的 `DROP VIEW IF EXISTS` + 重建处理 `domain_workout_projection`（暴露 `status`，只留 `active`），让已更正/作废的运动退出所有查询。两份迁移都**不回填任何 payload**，否则升级对账会因 `before != after` 失败。
 - Node：`C:\Program Files\nodejs\npm.cmd`
 - Rust/Cargo：`C:\Users\21904\.cargo\bin\cargo.exe`，stable x86_64-pc-windows-msvc。
 - 已安装：VS Code、Visual Studio 2022 Build Tools 的 VCTools 工作负载、Windows SDK、WebView2。不要安装完整 Visual Studio IDE。
@@ -63,6 +63,9 @@ npm run tauri build
 - `src-tauri/src/domain_commands.rs`：正式领域命令与事务入口。
 - `src-tauri/src/domain_store.rs`、`domain_queries.rs`、`domain_upgrade.rs`：SQLite 仓库、投影、导出与升级。
 - `src-tauri/src/food_library.rs`、`inventory_ops.rs`、`meal_corrections.rs`、`recipes.rs`：关键业务服务。`inventory_ops.rs` 内含 `receive_purchase` 与 0.4.6 新增的 `correct_receipt_weight`；对应测试在模块内 `include!("inventory_correction_tests.rs")`。
+- `src-tauri/src/body_commands.rs`（0.4.8）、`src-tauri/src/workout_commands.rs`（0.4.9）：体重与运动的增改作废服务，照同一范式写；`record_commands.rs` 里的 `add_workout` 刻意不搬走（`positive()` 只被它使用，搬走会变孤儿触发 clippy `dead_code`），也因此 `add_workout` 不写 `status`，旧记录靠视图里的 `COALESCE(json_extract(payload_json,'$.status'),'active')` 兜住。
+- `src/domain/review.ts`（0.4.9）：阶段复盘纯函数（`buildReview` / `dayStatus` / `rollingDelta` / `rangeWeightChange` / `safeRateRange`）。**体重复盘必须在前端用全量 `state.measurements` 自算**，不能用 `period_summary`——后者只从 `start` 前回溯 6 天并丢掉更早的点，7 天预设下滚动窗口会被裁掉一半。
+- `src/domain/workouts.ts`（0.4.9）：`isActiveWorkout` 白名单、`isInactiveLabel`、`validateWorkoutDraft`、`workoutDraftPayload`。
 - `src-tauri/src/artifacts.rs`、`upload.rs`、`label_drafts.rs`：附件、局域网上传与离线标签草稿。
 - `tests/` 与 Rust 模块测试：隔离数据回归，不得写入真实用户库。
 
@@ -88,11 +91,11 @@ npm run tauri build
 - SQLite 事务、领域命令回执/请求指纹、升级前快照与对账、JSON 导出、现有加密备份/暂存恢复、Windows 凭据存储边界。
 - 源码中的 P0 保护：原生 JSON 另存/回读校验、只读运行诊断、桌面桥接失败不回退浏览器存储、hydration 错误显式呈现。
 
-截至 0.4.8 源码检查点：前端 **23 文件 169 项**、Rust **88 项**，共 **257 项** 通过；生产构建、fmt、Clippy 全目标 `-D warnings` 通过。证据见 `BUILD_REPORT.md`、`REVIEW_0.4.8.md` 与 `build-logs/*0.4.8*.log`。这些测试不等于尚未安装的 0.4.8 已完成原生验收。
+截至 0.4.9 源码检查点：前端 **26 文件 208 项**、Rust **99 项**，共 **307 项** 通过；生产构建、fmt、Clippy 全目标 `-D warnings` 通过。证据见 `BUILD_REPORT.md`、`REVIEW_0.4.9.md` 与 `build-logs/*0.4.9*.log`。这些测试不等于尚未安装的 0.4.9 已完成原生验收。
 
 ## 6. 当前安装与数据事实（非常重要）
 
-- 当前已安装版本为 **0.4.6**（用户已验收并退出）。0.4.7 与 0.4.8 已完成源码、自动测试与生产构建并各自产出 MSI，**均未安装**；一次覆盖安装 0.4.8 即同时包含两轮改动。
+- 当前已安装版本为 **0.4.8**（用户已验收并退出）。0.4.9 已完成源码、自动测试与生产构建并产出 MSI，**尚未安装**；一步覆盖安装 0.4.9 即完成本检查点。注意 0.4.9 把 schema 从 v11 升到 v12，覆盖安装前必须让用户先保存并关闭轻衡。
 - 用户真实数据已通过原生窗口导出和 Explorer 复制的数据库副本保全；副本完整性与导出逐项一致。
 - 用户从 Windows Explorer 正常打开 `C:\Program Files\轻衡\fitwise-local.exe` 后，重启前后的数据库来源导出除 `exportedAt` 外完全相同，既有记录持久化验收通过。
 - 电脑控制工具或命令行直接启动同一 exe/读取同名字面 AppData 路径时，会看到另一套较小数据库。这是运行上下文/文件视图差异，底层原因未完全确定。
@@ -106,23 +109,24 @@ npm run tauri build
 
 ### P0/可靠性
 
-- P0 保护性补丁尚未发布和安装。
+- P0 保护性补丁已随 **0.4.6** 发布，并在安装版上验收通过。
 - 启动上下文造成两套文件视图的底层机制未定位；正常用户入口可稳定读到真实数据，但诊断流程必须继续区分来源。
-- 旧导出按钮虽然实际下载文件，但反馈不明显；新源码已改为显式另存/回读验证，待发布。
+- 旧导出按钮虽然实际下载文件，但反馈不明显；显式另存/回读验证已随 **0.4.6** 发布并验收。
 - 不要无理由重启 Handle/Process Monitor 排查；此前 Process Monitor 从未开始捕获，已退出。
 
-### 已在 0.4.6-A 源码中解决、待安装验收
+### 已随 0.4.6 安装并验收
 
-- 库存入库后的“标称量 / 实收称重 / 当前余量”结构与补录实重流程已实现（含盘点前的成本影响预览），但尚未在安装版上跑过真实点击。
-- 餐食单项的更正/作废入口已改为每行独立按钮并带前→后差异表，同样待安装版验收。
-- 以上两项在浏览器预览里的行为是 `src/domain/purchases.ts` 的镜像实现，只能证明逻辑一致，不能替代 Rust 事务在安装版上的验证。
+- 库存入库后的“标称量 / 实收称重 / 当前余量”结构与补录实重流程（含盘点前的成本影响预览）已在安装版上跑过真实点击。
+- 餐食单项的更正/作废入口已改为每行独立按钮并带前→后差异表，已验收。
+- 两者的浏览器预览行为是 `src/domain/purchases.ts` 的镜像实现，只能证明逻辑一致；原生事务由用户在安装版上逐项点击确认。
 
 ### 仍未解决
 
-- 0.4.6-A 只允许“唯一采购流水、未发生退货/损耗/制作”的批次补录实重；已发生后续操作的旧批次不能补录，也没有撤销上一次补录的界面入口。
+- 只允许“唯一采购流水、未发生退货/损耗/制作”的批次补录实重；已发生后续操作的旧批次不能补录，也没有撤销上一次补录的界面入口。
 - 饮食明细仍不记录**进食时刻**：`MealEntry` 只有 `createdAt`（记录时间），不能冒充进食时间；也没有排序、筛选、搜索、CSV 导出，列只能开关钠。
 - 旧记录若缺 `foodSnapshot`（手记餐、熟食批次），只显示名称与份量，无法追溯来源版本。
-- 体重入口和历史不明显；完整两位小数、同日多次、趋势代表值与修订历史需分开呈现（0.4.8 处理）。
+- 运动记录（0.4.9 起）可更正/作废，但**没有撤消上一次更正的界面入口**，也没有同日多次训练的合并视图；Keep 截图仍需手工誊抄。
+- 阶段复盘只做展示与提醒，不生成目标调整建议（原静态占位卡已删除，避免假功能）。
 - 一些已录营养疑似混用 kJ/kcal。未经用户核对标签，不能自动改。仅修订食材库也不能静默更改历史餐食快照。
 
 ### 后置能力
@@ -134,12 +138,13 @@ npm run tauri build
 ## 8. 已批准的下一实施顺序
 
 1. `0.4.6-A`：库存实重/盘点纠错 + 饮食单项更正/作废 + P0 保护补丁一起收口。**已完成并安装验收（出包 0.4.6）。**
-2. `0.4.6-B1` → 出包 **0.4.7**：FatSecret 信息结构的轻衡风格饮食明细（三层 + 7 列 + 钠开关）+ 手工记餐补齐四项。**源码与 MSI 已完成，安装验收待用户执行。**
-3. `0.4.6-B2` → 出包 **0.4.8**：体重记录中心（同日多次、两位小数、日期时间与条件、备注、修订/作废审计与历史），含 `migrations/0011` 重建测量投影视图（schema 10→11）。
-4. `0.4.9`：跨 Agent 的文件/Git 接续固化（原编号 0.4.7 因版本递增顺延）。
-5. 动态菜单：用确定性本地约束替换演示候选。
-6. MCP/CLI：先只读摘要，再允许创建草稿；绝不直写正式记录。
-7. 备份扩展、云端识别和其他增强在正常使用观察后再讨论。
+2. `0.4.6-B1` → 出包 **0.4.7**：FatSecret 信息结构的轻衡风格饮食明细（三层 + 7 列 + 钠开关）+ 手工记餐补齐四项。**已随 0.4.8 覆盖安装验收。**
+3. `0.4.6-B2` → 出包 **0.4.8**：体重记录中心（同日多次、两位小数、日期时间与条件、备注、修订/作废审计与历史），含 `migrations/0011` 重建测量投影视图（schema 10→11）。**已完成并安装验收。**
+4. `0.4.9`：趋势页升级为阶段复盘（7/14/30 区间、达标日历、滚动周降幅、规则型提示）+ 运动记录更正/作废，含 `migrations/0012` 重建运动投影视图（schema 11→12）。口径由用户拍定：达标判定「严格区间 + 严格目标」，周降幅「滚动 7 天 vs 前 7 天」。**源码、307 项自动测试与 MSI 已完成，安装验收待用户执行。**
+5. 跨 Agent 的文件/Git 接续固化（原编号 0.4.7，因版本递增反复顺延）。
+6. 动态菜单：用确定性本地约束替换演示候选。
+7. MCP/CLI：先只读摘要，再允许创建草稿；绝不直写正式记录。
+8. 备份扩展、云端识别和其他增强在正常使用观察后再讨论。
 
 每一阶段必须执行：实现 → 主动挑刺 → 修复/回归 → 隔离库验证 → 构建/安装版验证 → 更新本文件和下一步。不可用测试数量代替实机验收。
 

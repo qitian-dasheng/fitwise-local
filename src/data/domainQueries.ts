@@ -9,7 +9,16 @@ export interface PeriodSummary {
   revision: number;
   start: string;
   end: string;
-  days: { date: string; complete: boolean; mealCount: number; totals: Record<NutrientKey, number>; coverage: Record<NutrientKey, number> }[];
+  days: {
+    date: string;
+    complete: boolean;
+    mealCount: number;
+    totals: Record<NutrientKey, number>;
+    coverage: Record<NutrientKey, number>;
+    /** 0.4.9 起由 Rust 逐日聚合；缺失时按 0 处理，兼容旧快照。 */
+    workoutMinutes?: number;
+    workoutCount?: number;
+  }[];
   completedDayCalorieAverage: number | null;
   eligibleDayCount: number;
   workoutMinutes: number;

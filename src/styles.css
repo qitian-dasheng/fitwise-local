@@ -520,3 +520,91 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 .body-cell-num { font-size: 12px; }
 .body-cell-main strong { font-size: 13px; }
 .body-cell-muted, .body-cell-note { font-size: 11px; }
+
+/* ===== 0.4.9 运动记录：行内更正/作废与作废留证 ===== */
+.workout-row { grid-template-columns: 48px 1fr repeat(3, minmax(75px, .35fr)) 96px; }
+.workout-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.workout-actions .danger-text { color: var(--coral); }
+.workout-actions .danger-text:hover { color: #a33b30; }
+.workout-inactive-note { color: var(--muted); font-size: 11px; line-height: 1.5; text-align: right; overflow-wrap: anywhere; }
+.workout-row-inactive { background: var(--surface-soft); }
+.workout-row-inactive strong, .workout-row-inactive b { color: var(--muted); }
+
+/* ===== 0.4.9 阶段复盘：区间控制、周降幅刻度、达标日历、复盘提示 ===== */
+.trends-page { display: grid; gap: 22px; }
+.trends-page > .page-header,
+.trends-page > .form-hint,
+.trends-page > .review-controls,
+.trends-page > .metric-row { margin: 0; }
+.trends-page > .form-hint { font-size: 12px; }
+
+.review-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; }
+.range-tabs { display: inline-flex; gap: 2px; padding: 4px; border-radius: 13px; background: var(--surface-soft); }
+.range-tabs button { min-width: 64px; padding: 8px 14px; color: var(--muted); border: 0; border-radius: 10px; background: transparent; font: inherit; font-size: 12.5px; cursor: pointer; transition: background .15s, color .15s; }
+.range-tabs button:hover { color: var(--green-dark); }
+.range-tabs button.active { color: var(--green-dark); background: #fff; font-weight: 600; box-shadow: 0 1px 5px rgba(23,55,44,.13); }
+
+.metric-card strong.metric-down { color: var(--green-dark); }
+.metric-card strong.metric-up { color: var(--coral); }
+
+.review-gauge { display: grid; gap: 14px; padding: 24px; }
+.gauge-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.gauge-title { display: flex; align-items: center; gap: 13px; }
+.gauge-icon { display: grid; flex: 0 0 auto; width: 40px; height: 40px; place-items: center; color: var(--green); border-radius: 13px; background: var(--green-pale); }
+.gauge-title h2 { margin: 0; font-size: 19px; }
+.gauge-title .eyebrow { margin-bottom: 5px; }
+.gauge-value { font-size: 26px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gauge-ok { color: var(--green-dark); }
+.gauge-warn { color: var(--coral); }
+.gauge-muted { color: var(--muted); font-size: 19px; }
+
+.gauge-track { position: relative; height: 12px; margin: 6px 2px 0; border-radius: 999px; background: var(--surface-soft); }
+.gauge-safe { position: absolute; top: 0; height: 100%; border-radius: 999px; background: rgba(39,106,83,.2); }
+.gauge-pin { position: absolute; top: 50%; width: 3px; height: 26px; margin-left: -1.5px; border-radius: 2px; background: var(--green-dark); transform: translateY(-50%); }
+.gauge-pin-warn { background: var(--coral); }
+.gauge-pin-muted { background: var(--muted); }
+.gauge-scale { display: flex; justify-content: space-between; margin: 0 2px; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.gauge-note { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.7; }
+
+.review-calendar { display: grid; gap: 16px; padding: 24px; }
+.calendar-total { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.calendar-cell { position: relative; display: grid; place-items: center; aspect-ratio: 1 / 1; min-height: 34px; color: var(--muted); border: 1px solid var(--line); border-radius: 11px; background: #fff; font-size: 12px; font-variant-numeric: tabular-nums; }
+.calendar-cell.calendar-hit { color: var(--green-dark); border-color: #9ccfae; background: #dcf0e3; font-weight: 600; }
+.calendar-cell.calendar-miss { color: #a3462f; border-color: #e5b0a3; background: #fbe4df; font-weight: 600; }
+.calendar-cell.calendar-partial { color: #8a6a20; border-color: #e3c98c; background: #fdf2da; }
+.calendar-cell.calendar-none { color: #b3bdb6; border-style: dashed; background: transparent; }
+.calendar-cell.calendar-complete { box-shadow: inset 0 0 0 2px var(--green-dark); }
+.calendar-dot { position: absolute; right: 5px; bottom: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+.calendar-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; padding: 0; color: var(--muted); font-size: 11px; list-style: none; }
+.calendar-legend li { display: flex; align-items: center; gap: 6px; }
+.calendar-legend .calendar-cell { width: 14px; min-height: 0; height: 14px; aspect-ratio: auto; border-radius: 4px; }
+.calendar-dot-legend { position: static; width: 6px; height: 6px; }
+
+.chart-note { margin: 10px 0 0; color: var(--muted); font-size: 11px; }
+
+.review-notes { display: grid; gap: 16px; padding: 24px; }
+.notes-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.notes-list li { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: 13px; background: var(--surface-soft); }
+.note-icon { display: grid; flex: 0 0 auto; width: 27px; height: 27px; place-items: center; border-radius: 9px; }
+.notes-list strong { display: block; margin-bottom: 5px; color: var(--ink); font-size: 13px; }
+.notes-list p { margin: 0; color: #4d5a53; font-size: 12px; line-height: 1.7; }
+.note-ok .note-icon { color: var(--green-dark); background: #dcf0e3; }
+.note-warn .note-icon { color: var(--coral); background: #fbe4df; }
+.note-info .note-icon { color: var(--muted); background: #eaeeea; }
+.review-disclaimer { margin: 0; padding-top: 14px; color: var(--muted); border-top: 1px solid var(--line-soft); font-size: 11px; line-height: 1.7; }
+
+@media (max-width: 900px) {
+  .review-controls { align-items: stretch; }
+  .range-tabs { width: 100%; }
+  .range-tabs button { flex: 1; }
+  .gauge-head { flex-direction: column; gap: 10px; }
+}
+
+/* 日历宽度随窗口撑开，但高度固定：aspect-ratio 会让 1360px 下的格子涨到 100px 以上。 */
+.calendar-grid { grid-auto-rows: 48px; }
+.calendar-cell { aspect-ratio: auto; height: 48px; }
+.calendar-legend .calendar-cell { height: 14px; }
+/* 安全区间稍微加深，浅一档在浅绿底上几乎看不出边界。 */
+.gauge-safe { background: rgba(39,106,83,.3); box-shadow: inset 0 0 0 1px rgba(39,106,83,.16); }
+.trends-page .chart-large:has(.empty-chart) { height: 190px; }

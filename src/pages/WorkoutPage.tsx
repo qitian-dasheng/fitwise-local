@@ -8,25 +8,46 @@ import { useAppStore } from "../store/appStore";
 import type { WorkoutSession } from "../domain/types";
 import { useConfirmedAction } from "../components/useConfirmedAction";
 import type { ActionResult } from "../store/appStore";
+import { WorkoutCorrectionModal } from "../components/WorkoutCorrectionModal";
+import { isActiveWorkout, isInactiveLabel } from "../domain/workouts";
 
 export function WorkoutPage({ date = diaryToday(), onDateChange }: DiaryDateProps = {}) {
   const [open, setOpen] = useState(false);
+  const [correction, setCorrection] = useState<{ workout: WorkoutSession; mode: "edit" | "void" } | null>(null);
   const allWorkouts = useAppStore((state) => state.workouts);
-  const workouts = allWorkouts.filter(item => item.date === date);
+  const dayWorkouts = allWorkouts.filter((item) => item.date === date);
+  const workouts = dayWorkouts.filter(isActiveWorkout);
   const addWorkout = useAppStore((state) => state.addWorkout);
   const totalMinutes = workouts.reduce((sum, item) => sum + item.durationMinutes, 0);
   const totalCalories = workouts.reduce((sum, item) => sum + (item.caloriesKcal ?? 0), 0);
-  const heartWorkouts = workouts.filter(item => item.averageHeartRate != null);
+  const heartWorkouts = workouts.filter((item) => item.averageHeartRate != null);
   const heartMinutes = heartWorkouts.reduce((sum, item) => sum + item.durationMinutes, 0);
   const avgHeartRate = heartMinutes ? heartWorkouts.reduce((sum, item) => sum + item.averageHeartRate! * item.durationMinutes, 0) / heartMinutes : 0;
-  const calorieCount = workouts.filter(item => item.caloriesKcal != null).length;
+  const calorieCount = workouts.filter((item) => item.caloriesKcal != null).length;
+  const inactiveCount = dayWorkouts.length - workouts.length;
   return <div className="page">
     <PageHeader eyebrow="消耗独立展示" title="运动记录" description="运动热量不会增加饮食额度。当前支持手工记录；Keep 截图自动识别尚未接通。" action={<button className="button primary" onClick={() => setOpen(true)}><Plus size={17}/> 记录运动</button>}/>
     <DiaryDateControl date={date} onChange={onDateChange}/>
-    <p className="form-hint">仅统计 {date}：热量已知 {calorieCount}/{workouts.length} 次；平均心率按已知记录时长加权，不是逐秒测量。</p>
+    <p className="form-hint">仅统计 {date} 的有效记录：热量已知 {calorieCount}/{workouts.length} 次；平均心率按已知记录时长加权，不是逐秒测量。{inactiveCount > 0 ? `另有 ${inactiveCount} 条已更正或作废，不计入统计。` : ""}</p>
     <div className="metric-row"><Metric icon={<Clock3/>} label="所选日时长" value={`${totalMinutes} 分钟`}/><Metric icon={<Flame/>} label="运动消耗" value={calorieCount ? `${Math.round(totalCalories)} kcal${calorieCount < workouts.length ? "（部分已知）" : ""}` : "未知"}/><Metric icon={<HeartPulse/>} label="时长加权心率" value={avgHeartRate ? `${Math.round(avgHeartRate)} 次/分` : "暂无"}/><Metric icon={<Activity/>} label="训练次数" value={`${workouts.length} 次`}/></div>
-    <section className="card workout-list"><div className="card-heading compact"><div><p className="eyebrow">训练历史</p><h2>已确认运动</h2></div></div>{workouts.length ? workouts.slice().reverse().map((item) => <article className="workout-row" key={item.id}><div className="workout-icon"><Dumbbell/></div><div><strong>{item.name}</strong><span>{item.date} · {item.type}</span></div><div><b>{item.durationMinutes}</b><span>分钟</span></div><div><b>{item.caloriesKcal ?? "—"}</b><span>千卡</span></div><div><b>{item.averageHeartRate ?? "—"}</b><span>平均心率</span></div></article>) : <div className="large-empty"><Dumbbell/><h3>尚未记录运动</h3><p>可先手工录入；Keep 截图目前只能保存在收件箱，暂不会自动生成运动草稿。</p><button className="button secondary" onClick={() => setOpen(true)}>添加第一条记录</button></div>}</section>
+    <section className="card workout-list"><div className="card-heading compact"><div><p className="eyebrow">训练历史</p><h2>本日记录</h2></div></div>{dayWorkouts.length ? dayWorkouts.slice().reverse().map((item) => {
+      const active = isActiveWorkout(item);
+      return <article className={`workout-row${active ? "" : " workout-row-inactive"}`} key={item.id}>
+        <div className="workout-icon"><Dumbbell/></div>
+        <div><strong>{item.name}</strong><span>{item.date} · {item.type}</span></div>
+        <div><b>{item.durationMinutes}</b><span>分钟</span></div>
+        <div><b>{item.caloriesKcal ?? "—"}</b><span>千卡</span></div>
+        <div><b>{item.averageHeartRate ?? "—"}</b><span>平均心率</span></div>
+        <div className="workout-actions">
+          {active ? <>
+            <button className="text-button" onClick={() => setCorrection({ workout: item, mode: "edit" })}>编辑</button>
+            <button className="text-button danger-text" onClick={() => setCorrection({ workout: item, mode: "void" })}>作废</button>
+          </> : <span className="workout-inactive-note">{isInactiveLabel(item)}{item.correctionReason ? ` · ${item.correctionReason}` : ""}</span>}
+        </div>
+      </article>;
+    }) : <div className="large-empty"><Dumbbell/><h3>尚未记录运动</h3><p>可先手工录入；Keep 截图目前只能保存在收件箱，暂不会自动生成运动草稿。</p><button className="button secondary" onClick={() => setOpen(true)}>添加第一条记录</button></div>}</section>
     {open && <WorkoutModal initialDate={date} onRecorded={onDateChange} onClose={() => setOpen(false)} onSave={addWorkout}/>}
+    {correction && <WorkoutCorrectionModal workout={correction.workout} mode={correction.mode} onClose={() => setCorrection(null)}/>}
   </div>;
 }
 
