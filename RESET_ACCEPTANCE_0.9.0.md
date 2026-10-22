@@ -1,0 +1,98 @@
+# 轻衡 0.9.0 重置功能修复 · 发布前验收报告
+
+日期：2026-10-23（Asia/Shanghai）
+验收人：用户（安装与 UI 操作）+ AI（自动化与只读核查）
+范围：index.html 标题修正、重置功能方案 B 实现、MSI 重打包、安装版验收、重置功能副本库验收
+
+---
+
+## 1. 实际执行的命令（按时间序）
+
+| # | 命令 | 目的 | 结果 |
+|---|---|---|---|
+| 1 | `Edit index.html`（title 一行） | 与 tauri.conf.json 对齐为「轻衡 · 本地健康记录」 | 完成 |
+| 2 | `npm test` | vitest 全量 | **246/246 通过** |
+| 3 | `npx tsc -b` | 类型检查 | 0 错误 |
+| 4 | `npx vite build --outDir build-logs/verify-dist-2 --emptyOutDir false` | 零删除生产构建验证 | 通过，title 已进产物 |
+| 5 | `npx tauri build --bundles msi` | 出 MSI（beforeBuildCommand 清理 dist/，范围＝dist 49+1 项可再生产物，执行前列清单） | 通过，1m58s |
+| 6 | `msiexec /i ... /passive /norestart /l*v`（PowerShell Start-Process -Verb RunAs） | 覆盖安装 0.9.0 | ExitCode 0，日志 189 KB |
+| 7 | `Start-Process fitwise-local.exe`（用户双击） | 启动安装版 | 进程稳定，标题「轻衡 · 本地健康记录」 |
+| 8 | PrintWindow 截图（Python ctypes，无点击只滚轮） | UI 验收取证 | 17 张截图存 build-logs |
+| 9 | SQLite 只读核查（`mode=ro`） | 数据基线/重置结果/还原校验 | 多轮，见第 5 节 |
+| 10 | 库替换：真实库 → `build-logs/reset-verify-20261023/real-fitwise.db.staged`，预重置副本 → 数据库路径 | 副本库验收（不碰真实数据） | sha256 对账一致 |
+| 11 | 还原：删验证副本 3 文件（fitwise.db/-wal/-shm）→ 移回真实库 | 恢复真实数据 | sha256 `68a37e12…` 逐字节一致 |
+
+## 2. 测试结果
+
+| 套件 | 结果 |
+|---|---|
+| `npm test`（vitest） | **246/246 通过**（含 2 个新增 resetDemo 前端测试） |
+| `npx tsc -b` | 0 错误 |
+| `cargo fmt --check` | 通过 |
+| `cargo clippy --all-targets -- -D warnings` | 0 警告 |
+| `cargo test` | **86/86 通过**（含 5 个新增重置测试：保留/清空/回执/回滚/重启重读/菜谱可保存） |
+| 生产构建（独立目录） | 通过，无 TS/Vite 错误，无废弃页面 chunk |
+
+## 3. MSI
+
+- 路径：`src-tauri/target/release/bundle/msi/轻衡_0.9.0_x64_zh-CN.msi`
+- 大小：**7,086,080 字节（6.76 MiB）**；SHA-256：`72cafeeab1abb08d685edf4a6e50abb89634655cb610532ad59d722215ba633a`
+- 构成：含重置命令修复（domain_store.rs / domain_reset_tests.rs）+ title 修正；安装记录 ExitCode 0
+- 历史 32 个 MSI 全部保留未动
+
+## 4. 安装版 UI 验收（第 4 步，全部通过）
+
+| 项 | 结果 |
+|---|---|
+| 安装包生成/安装/启动 | 通过（进程稳定、无崩溃对话框） |
+| 窗口标题 | 「轻衡 · 本地健康记录」✓（另修复了 HTML title 同款文案） |
+| 基础导航 | 今日/饮食/身体/运动 四页逐一截图通过；0.9.0 的 4+1 架构 |
+| 重置入口 | 设置页危险区在，文案与实际行为一致 |
+| 确认弹窗 | 「将清除全部饮食、身体、运动、打卡记录与命令回执；保留食材库、引用有效的菜谱、个人目标与显示偏好。建议先导出 JSON 备份。」✓ |
+
+## 5. 重置功能验收（第 5 步，副本库上执行）
+
+**方法**：真实库暂存 → 预重置副本装入 → 用户在 UI 点重置 → 逐项核查 → 还原真实库（sha256 校验）。
+
+| 验收项 | 重置前 | 重置后（期望） | 实测 | 结论 |
+|---|---|---|---|---|
+| 饮食记录 meals | 8 | 0 | 0 | ✓ |
+| 身体测量 measurements | 7 | 0 | 0 | ✓ |
+| 运动 workouts | 6 | 0 | 0 | ✓ |
+| 打卡 checkIns | 0 | 0 | 0 | ✓ |
+| 审计事件 auditEvents | 58 | 0 | 0 | ✓ |
+| 命令回执 + 负载 | 56 | 0 | 0 | ✓ |
+| 食材库 foodDefinitions | 8 | 保留 | 8 | ✓ |
+| 营养版本 foodDefinitionVersions | 10 | 保留 | 10 | ✓ |
+| 菜谱 recipes | 1（种子，引用失效） | 剔除失效项 | 0（摘要列名） | ✓ 按规则 |
+| profile 单例 | 库中无此行（该库从未在 UI 改目标，未落库） | 有则留 | 无 | ✓ 数据现状 |
+| 个人目标（UI） | 1700–1900 kcal 等 | 保留 | 种子默认值正常显示 | ✓ 前端兜底 |
+| 显示偏好（能量单位等） | 千卡 | 保留 | 千卡 | ✓（独立键，未受影响） |
+| 迁移版本 userVersion | 14 | 保留 | 14 | ✓ |
+| 升级对账报告 | 3 | 保留 | 3 | ✓ |
+| 趋势/统计空状态 | 有数据 | 空状态 | 饮食 0 条/身体五项「—」/运动 0 次 | ✓ |
+| 重启一致性 | — | 不复活 | 重启后集合与首页状态与重置后逐一相同 | ✓ |
+| 重置后新建菜谱 | — | 可编辑保存 | 「测试」菜谱保存成功，2 项原料引用均有效（version ID 在保留集中），营养预览 467.3 kcal/蛋白 8.8 g 实时算出 | ✓ |
+
+**快照证据**：`build-logs/reset-verify-20261023/07`–`17`（重置前首页、确认框、重置消息、饮食/身体/运动空状态、重启后首页、菜谱表单与保存结果）。
+
+## 6. 数据备份位置
+
+| 备份 | 路径 | 状态 |
+|---|---|---|
+| SQLite 冷拷贝（预重置） | `build-logs/reset-backup-20261023/fitwise-pre-reset.db` | 完好（sha256 `ca826771…`） |
+| 应用同构 JSON 导出 | `build-logs/reset-backup-20261023/fitwise-pre-reset-export.json` | 完好 |
+| 真实库（还原后原位） | `%APPDATA%/cn.fitwise.local/fitwise.db` | sha256 `68a37e12…`，数据 8/10/8/0/7/6/1/58/56，与基线一致 |
+| 应用自带升级前备份 | `%APPDATA%/cn.fitwise.local/fitwise.db.pre-0014` | 未动 |
+
+## 7. 已知问题与剩余风险
+
+1. **仓库状态面板刷新时机瑕疵（待用户定夺是否修）**：重置成功后「运行与保存诊断」面板仍短暂显示旧计数（98/56/58），需手动点「刷新诊断」才更新为 18/0/0（数据库本身始终正确）。根因：`SettingsPage.tsx` 的 useEffect 依赖 `[auditEventCount]`，重置后刷新存在时延。建议修法：重置成功回调里主动重查 `get_domain_storage_status`（约 3 行）。**未修，等批准。**
+2. **种子菜谱会被剔除**：若用户从未重建种子菜谱的原料引用，重置后菜谱数为 0。属防悬挂引用的既定行为，UI 摘要会列名；本次副本验收已实测。
+3. **本环境启动安装版会崩 WebView2**（AI 会话 GPU/沙箱限制，`Error launching CrashSenderer.exe` 为次生弹窗）：用户桌面双击启动完全正常。仅影响 AI 代跑 UI，不影响交付物。带 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--disable-gpu --no-sandbox` 可在本环境稳定启动。
+4. **真实库尚未建正式基线**：本次为副本验收，真实库维持测试数据原样。是否现在执行真实重置由用户决定（操作前会先跑一次 JSON 导出确认）。
+5. MSI 打包依赖 vite `emptyOutDir` 清理 dist（50 项可再生产物）——已在用户设定的允许范围内执行并列清单；后续打包仍会触发一次审批。
+
+## 8. 结论
+
+0.9.0「重置本地记录」功能满足全部保留/清除规则，自动化（332 项测试）与安装版实测（副本库全链路）双重通过；真实数据零损失，可进入「用户决定何时建正式基线」阶段。
