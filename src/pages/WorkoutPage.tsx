@@ -18,6 +18,7 @@ import {
   isActiveWorkout,
   isInactiveLabel,
   latestActiveWorkout,
+  undoHeadFor,
 } from "../domain/workouts";
 
 export function WorkoutPage({ date = diaryToday(), onDateChange }: DiaryDateProps = {}) {
@@ -41,8 +42,10 @@ export function WorkoutPage({ date = diaryToday(), onDateChange }: DiaryDateProp
     <DiaryDateControl date={date} onChange={onDateChange}/>
     <p className="form-hint">仅统计 {date} 的有效记录：热量已知 {calorieCount}/{workouts.length} 次；平均心率按已知记录时长加权，不是逐秒测量。{inactiveCount > 0 ? `另有 ${inactiveCount} 条已更正或作废，不计入统计。` : ""}</p>
     <div className="metric-row"><Metric icon={<Clock3/>} label="所选日时长" value={`${totalMinutes} 分钟`}/><Metric icon={<Flame/>} label="运动消耗" value={calorieCount ? `${Math.round(totalCalories)} kcal${calorieCount < workouts.length ? "（部分已知）" : ""}` : "未知"}/><Metric icon={<HeartPulse/>} label="时长加权心率" value={avgHeartRate ? `${Math.round(avgHeartRate)} 次/分` : "暂无"}/><Metric icon={<Activity/>} label="训练次数" value={`${workouts.length} 次`}/></div>
-    <section className="card workout-list"><div className="card-heading compact"><div><p className="eyebrow">训练历史</p><h2>本日记录</h2></div></div>{dayWorkouts.length ? dayWorkouts.slice().reverse().map((item) => {
+    <section className="card workout-list"><div className="card-heading compact"><div><p className="eyebrow">训练历史</p><h2>本日记录</h2></div></div>    {dayWorkouts.length ? dayWorkouts.slice().reverse().map((item) => {
       const active = isActiveWorkout(item);
+      // 旧行也给撤销入口：更正时改过日期的话，新行会跑到另一天去。
+      const undoHead = active ? null : undoHeadFor(item, allWorkouts);
       return <article className={`workout-row${active ? "" : " workout-row-inactive"}`} key={item.id}>
         <div className="workout-icon"><Dumbbell/></div>
         <div><strong>{item.name}</strong><span>{item.date} · {item.type}</span></div>
@@ -57,6 +60,7 @@ export function WorkoutPage({ date = diaryToday(), onDateChange }: DiaryDateProp
           </> : <>
             <span className="workout-inactive-note">{isInactiveLabel(item)}{item.correctionReason ? ` · ${item.correctionReason}` : ""}</span>
             {canRestoreVoid(item, allWorkouts) && <button className="text-button" onClick={() => setRevert({ workout: item, mode: "restore" })}>恢复</button>}
+            {undoHead && <button className="text-button" onClick={() => setRevert({ workout: undoHead, mode: "undo" })}>撤销更正</button>}
           </>}
         </div>
       </article>;

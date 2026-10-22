@@ -22,6 +22,9 @@ const fieldFor = (workout: WorkoutSession) => ({
   maxHeartRate: workout.maxHeartRate === undefined ? "" : String(workout.maxHeartRate),
 });
 
+/** 常用原因一键填入：只替用户省打字，填进去仍可修改，不替他编造没发生的事。 */
+const REASON_CHIPS = ["记错时长", "记错日期", "课程选错", "重复录入"] as const;
+
 /** 空串按「没填」处理，不要变成 0。 */
 function optionalNumber(raw: string) {
   const text = raw.trim();
@@ -224,7 +227,19 @@ export function WorkoutCorrectionModal({
             </>
           )}
           <label>
-            <span>修改／作废原因</span>
+            <span>修改／作废原因（必填）</span>
+            <div className="reason-chips" role="group" aria-label="常用原因">
+              {REASON_CHIPS.map((text) => (
+                <button
+                  key={text}
+                  type="button"
+                  className={reason === text ? "active" : ""}
+                  onClick={() => setReason(text)}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
             <textarea
               required
               maxLength={WORKOUT_REASON_LIMIT}
@@ -233,6 +248,9 @@ export function WorkoutCorrectionModal({
               placeholder="例如 把两节课记成了一节"
             />
           </label>
+          <p className="form-hint">
+            更正与作废都会写进审计，所以要留下原因；「撤销更正」不需要。
+          </p>
           <label className="checkbox-label">
             <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
             <span>我已核对修改内容及其对运动统计的影响</span>

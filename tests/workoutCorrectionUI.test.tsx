@@ -229,3 +229,39 @@ it("hides the fill button once the name is typed", async () => {
   await act(async () => setValue(fieldByLabel(dialog, "课程或训练名称"), "自己写的课程"));
   expect(button("填入上次训练", dialog)).toBeUndefined();
 });
+
+// ===== 0.4.12 常用原因快选与「为什么按钮是灰的」 =====
+
+it("fills a common reason with one click and enables the submit button", async () => {
+  await renderPage([workout({ id: "a" })]);
+  await act(async () => button("编辑")!.click());
+  const dialog = document.querySelector(".modal") as HTMLElement;
+
+  const confirm = () => button("确认更正", dialog)!;
+  // 弹窗里有两个勾选框：第一个是「作废这次运动」，要的是下面那个「我已核对」。
+  const confirmedBox = () =>
+    [...dialog.querySelectorAll("label")]
+      .find((item) => item.textContent?.includes("我已核对"))!
+      .querySelector('input[type="checkbox"]') as HTMLInputElement;
+  await act(async () => confirmedBox().click());
+  // 勾了核对、但原因还空着：仍然不能提交。
+  expect(confirm().disabled).toBe(true);
+
+  const chips = [...dialog.querySelectorAll(".reason-chips button")] as HTMLButtonElement[];
+  expect(chips.map((item) => item.textContent)).toEqual(["记错时长", "记错日期", "课程选错", "重复录入"]);
+
+  await act(async () => chips[0].click());
+  expect(fieldByLabel(dialog, "修改／作废原因").value).toBe("记错时长");
+  expect(confirm().disabled).toBe(false);
+});
+
+it("explains why the submit button is disabled while the reason is empty", async () => {
+  await renderPage([workout({ id: "a" })]);
+  await act(async () => button("编辑")!.click());
+  const dialog = document.querySelector(".modal") as HTMLElement;
+
+  // 标签要写明必填，正文要解释「撤销不用填」，否则灰按钮就是个谜。
+  expect(dialog.textContent).toContain("修改／作废原因（必填）");
+  expect(dialog.textContent).toContain("「撤销更正」不需要");
+  expect(button("确认更正", dialog)!.disabled).toBe(true);
+});

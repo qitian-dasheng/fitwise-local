@@ -121,6 +121,21 @@ export function canUndoCorrection(workout: WorkoutSession, list: WorkoutSession[
   return parent.status === "superseded" && parent.supersededBy === workout.id;
 }
 
+/**
+ * 从「被更正的那条旧行」反查可以撤销的链头。
+ *
+ * 撤销入口原本只挂在新生成的那行上，可一旦更正时改过日期，旧行留在原日期、
+ * 新行跑到另一天，用户在自己那天只会看到一行「已更正」而无从撤回。
+ * 所以旧行也给一个入口，但真正执行时仍要拿链头的 id 去调命令。
+ */
+export function undoHeadFor(workout: WorkoutSession, list: WorkoutSession[]): WorkoutSession | null {
+  if (workout.status !== "superseded" || !workout.supersededBy) return null;
+  const head = list.find((item) => item.id === workout.supersededBy);
+  if (!head) return null;
+  if (!isActiveWorkout(head) || head.supersedesId !== workout.id) return null;
+  return head;
+}
+
 /** 只有作废行能恢复；如果它本来是某次更正，链还得对得上，否则会出现父子双活。 */
 export function canRestoreVoid(workout: WorkoutSession, list: WorkoutSession[]) {
   if (workout.status !== "void") return false;

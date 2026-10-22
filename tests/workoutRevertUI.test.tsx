@@ -87,8 +87,9 @@ it("offers undo only on a correction that still owns its parent", async () => {
 
   await renderPage(revisedPair());
   expect(button("撤销更正", rowFor("B4 全身进阶"))).toBeTruthy();
-  // 旧行是「已更正」的中间版本，不能撤销也不能恢复。
-  expect(button("撤销更正", rowFor("低冲击有氧"))).toBeUndefined();
+  // 0.4.12 起旧行也给入口：更正时改过日期的话，新行会跑到另一天去。
+  expect(button("撤销更正", rowFor("低冲击有氧"))).toBeTruthy();
+  // 但旧行永远不会出现「恢复」——那是作废行的专属。
   expect(button("恢复", rowFor("低冲击有氧"))).toBeUndefined();
 });
 
@@ -165,7 +166,9 @@ it("never offers restore on a superseded row", async () => {
   await renderPage(revisedPair());
   const superseded = rowFor("低冲击有氧");
   expect(superseded.textContent).toContain("已更正");
-  expect(superseded.querySelectorAll("button")).toHaveLength(0);
+  // 已更正的行只有「撤销更正」，绝不会同时冒出「恢复」。
+  expect(button("恢复", superseded)).toBeUndefined();
+  expect(superseded.querySelectorAll("button")).toHaveLength(1);
 });
 
 it("keeps both snapshots in the audit entry", async () => {
@@ -217,4 +220,51 @@ it("survives a broken chain without offering undo", async () => {
   // 父行不存在 → 不渲染；supersededBy 指向别人 → 也不渲染。
   expect(button("撤销更正", rowFor("B4 全身进阶"))).toBeUndefined();
   expect(button("撤销更正", rowFor("关系错乱的一条"))).toBeUndefined();
+});
+
+// ===== 0.4.12 旧行也能撤销：更正时改过日期，新行会跑到另一天去 =====
+
+it("offers undo on the superseded row that still owns the active head", async () => {
+  await renderPage(revisedPair());
+  const oldRow = rowFor("低冲击有氧");
+  expect(oldRow.textContent).toContain("已更正");
+
+  await act(async () => button("撤销更正", oldRow)!.click());
+  expect(dialog().textContent).toContain("恢复为");
+  expect(dialog().textContent).toContain("低冲击有氧");
+});
+
+it("undoes from the superseded row and restores the same values", async () => {
+  await renderPage(revisedPair());
+  // 从旧行进入，命令仍然打在链头（新行）上，结果与从新行撤销完全一致。
+  await act(async () => button("撤销更正", rowFor("低冲击有氧"))!.click());
+  await act(async () => {
+    (dialog().querySelector('input[type="checkbox"]') as HTMLInputElement).click();
+  });
+  await act(async () => button("确认撤销更正", dialog())!.click());
+
+  const stored = useAppStore.getState().workouts;
+  expect(stored.find((item) => item.id === "old")?.status).toBe("active");
+  expect(stored.find((item) => item.id === "new")?.status).toBe("reverted");
+  expect(card("所选日时长").textContent).toContain("22 分钟");
+  // 撤销之后父行重新有效，但链已断，旧行不该再留撤销入口。
+  expect(button("撤销更正", rowFor("低冲击有氧"))).toBeUndefined();
+});
+
+it("hides the old-row entry when the head is voided or the chain moved on", async () => {
+  // A→B→C：A 的下一环是 B，而 B 已经不是有效记录，A 行不能撤销。
+  await renderPage([
+    workout({ id: "a", name: "第一版", type: "类型A", status: "superseded", supersededBy: "b" }),
+    workout({ id: "b", name: "第二版", type: "类型B", status: "superseded", supersededBy: "c", supersedesId: "a", createdAt: "2026-10-19T01:00:00Z" }),
+    workout({ id: "c", name: "第三版", type: "类型C", status: "active", supersedesId: "b", createdAt: "2026-10-19T02:00:00Z" }),
+  ]);
+  expect(button("撤销更正", rowFor("第一版"))).toBeUndefined();
+  expect(button("撤销更正", rowFor("第二版"))).toBeTruthy();
+
+  // 更正之后又被作废：先把作废恢复，才谈得上撤销那次更正。
+  await renderPage([
+    workout({ id: "old2", name: "被改的旧值", type: "类型D", status: "superseded", supersededBy: "h" }),
+    workout({ id: "h", name: "改后又被作废", type: "类型E", status: "void", supersedesId: "old2", voidedAt: "2026-10-19T03:00:00Z", createdAt: "2026-10-19T01:00:00Z" }),
+  ]);
+  expect(button("撤销更正", rowFor("被改的旧值"))).toBeUndefined();
 });

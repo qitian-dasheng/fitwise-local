@@ -635,3 +635,10 @@ button.calendar-cell:focus-visible { outline: 2px solid var(--green); outline-of
 .calendar-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; }
 .calendar-target { width: auto; padding: 3px; }
 .calendar-target button { flex: 0 0 auto; min-width: 46px; padding: 6px 10px; font-size: 12px; }
+
+/* ===== 0.4.12 更正原因：常用原因快选 ===== */
+/* 只做「点一下填入」，仍然可改；胶囊外观比下拉少一次点击，窄屏能自然换行。 */
+.reason-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.reason-chips button { padding: 5px 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; background: var(--surface-soft); font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
+.reason-chips button:hover { color: var(--green-dark); border-color: var(--green); }
+.reason-chips button.active { color: var(--green-dark); border-color: var(--green); background: var(--green-pale); font-weight: 600; }
