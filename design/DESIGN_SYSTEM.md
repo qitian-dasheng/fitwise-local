@@ -4,7 +4,7 @@
 > 想改视觉：改 tokens.css → 打开 `design/prototype/index.html` 看效果 → 跑设计守卫。
 > 想让文档与代码一致：不要往这里抄色值。
 
-样张：`design/prototype/index.html`（今日 / 饮食 / 身体三页，浏览器直接打开）。
+样张：`design/prototype/index.html`（今日 / 饮食 / 身体三页）。**它是生成物**——改 `design/prototype/src/index.template.html` 后跑 `npm run design:build` 重新生成；令牌与字体在生成时内联，所以双击即可打开，不依赖任何本地服务。
 
 ---
 

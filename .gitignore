@@ -11,3 +11,6 @@ vite.config.d.ts
 !.env.example
 *.log
 build-logs/
+
+# 设计样张是生成物（node scripts/build-prototype.mjs 产出，含内联字体，约 4.6 MB）
+design/prototype/index.html

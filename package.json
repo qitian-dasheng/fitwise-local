@@ -9,7 +9,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "test:watch": "vitest",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "design:build": "node scripts/build-prototype.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.1",
