@@ -112,6 +112,8 @@ export interface MealEntry {
   confidence: Confidence;
   preparedBatchId?: string;
   consumptionEventId?: string;
+  /** 「照搬上次」产生的新记录指回来源条目，便于回溯这次复制从哪来。 */
+  copiedFromId?: string;
   foodDefinitionId?: string;
   foodVersionId?: string;
   foodSnapshot?: {

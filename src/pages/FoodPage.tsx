@@ -1,7 +1,7 @@
 import { diaryToday, ratioPercent, type DiaryDateProps } from "../domain/diary";
 import { DiaryDateControl } from "../components/DiaryDateControl";
 import { AlertTriangle, BookOpen, ChefHat, Plus, ShieldCheck, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { MealEntry, RecipeVersion, MealType } from "../domain/types";
 import { useAppStore } from "../store/appStore";
 import { Modal } from "../components/Modal";
@@ -15,7 +15,8 @@ import { RecipeManagerDrawer } from "../components/RecipeManagerDrawer";
 import { latestRecipes } from "../domain/recipes";
 import { BatchHistory } from "../components/BatchHistory";
 import { MealDiaryTable } from "../components/MealDiaryTable";
-import { mealLabels } from "../domain/meals";
+import { CopyMealModal } from "../components/CopyMealModal";
+import { mealCopySource, mealLabels, mealTypes, type MealCopySource } from "../domain/meals";
 import { readDiaryShowSodium, writeDiaryShowSodium } from "../domain/preferences";
 
 export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps = {}) {
@@ -27,6 +28,7 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   const [recipeDrawer,setRecipeDrawer]=useState(false);
   const [showSodium,setShowSodium]=useState(readDiaryShowSodium);
   const [mealOpen, setMealOpen] = useState(false);
+  const [copyTarget, setCopyTarget] = useState<{ type: MealType; source: MealCopySource } | null>(null);
   const [manualMeal, setManualMeal] = useState(false);
   const [initialMealType, setInitialMealType] = useState<MealType>("breakfast");
   function openMeal(type: MealType = "breakfast") { setManualMeal(false); setInitialMealType(type); setMealOpen(true); }
@@ -49,6 +51,14 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   const consumeBatch = useAppStore((state) => state.consumeBatch);
   const discardBatchRemainder = useAppStore((state) => state.discardBatchRemainder);
   const today = date;
+  // 每个餐次能照搬哪一天：只在目标日期之前、同餐次、仍然有效的记录里取最近一天。
+  const copySources = useMemo(
+    () =>
+      Object.fromEntries(mealTypes.map((type) => [type, mealCopySource(meals, type, today)])) as Partial<
+        Record<MealType, MealCopySource | null>
+      >,
+    [meals, today],
+  );
   const latest=latestRecipes(recipes);
   const recipeOptions=showHistory?recipes:latest;
   const recipe = recipeOptions.find(r=>r.id===selectedRecipeId)??recipeOptions[0];
@@ -75,6 +85,8 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
         batchCount={batches.filter((item) => item.date === today && item.status !== "void").length}
         notes={{ protein: "目标约 100 g", fiber: "提醒线 25 g" }}
         onAdd={openMeal}
+        copySources={copySources}
+        onCopy={(type, source) => setCopyTarget({ type, source })}
         onEdit={(meal) => setCorrection({ meal, mode: "edit" })}
         onVoid={(meal) => setCorrection({ meal, mode: "void" })}
       />
@@ -157,6 +169,7 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
       />}
 
       {correction&&<MealCorrectionModal meal={correction.meal} mode={correction.mode} onClose={()=>setCorrection(null)} onSaved={onDateChange}/>}
+      {copyTarget && <CopyMealModal date={today} type={copyTarget.type} source={copyTarget.source} onClose={() => setCopyTarget(null)} />}
       {recipeEditor&&<RecipeEditor copyMode={copyRecipe} recipe={recipeEditor==="new"?undefined:recipeEditor} onClose={()=>setRecipeEditor(null)} onSaved={setSelectedRecipeId}/>}
       {meals.some(m=>m.date===date&&m.status&&m.status!=="active")&&<details className="card meal-correction-history"><summary>查看所选日修订／作废的原始记录</summary>{meals.filter(m=>m.date===date&&m.status&&m.status!=="active").map(m=><article key={m.id}><strong>{m.name} · {m.status==="void"?"已作废":"已修订"}</strong><p>{m.date} · {m.amountLabel} · 原始营养 {m.nutrition.calories.state==="unknown"?"未知":m.nutrition.calories.value} kcal（参考规格，非重新入账）</p><p>原因：{m.correctionReason}；原记录 ID：{m.id}</p></article>)}</details>}
       {mealOpen && <><div hidden={manualMeal}><FoodLibraryModal initialType={initialMealType} initialDate={date} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onManual={() => setManualMeal(true)} /></div>{manualMeal && <MealModal initialType={initialMealType} initialDate={date} onBack={() => setManualMeal(false)} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onSave={addMeal}/>}</>}

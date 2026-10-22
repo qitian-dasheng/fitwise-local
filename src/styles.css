@@ -642,3 +642,12 @@ button.calendar-cell:focus-visible { outline: 2px solid var(--green); outline-of
 .reason-chips button { padding: 5px 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; background: var(--surface-soft); font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
 .reason-chips button:hover { color: var(--green-dark); border-color: var(--green); }
 .reason-chips button.active { color: var(--green-dark); border-color: var(--green); background: var(--green-pale); font-weight: 600; }
+
+/* ===== 0.4.13 照搬上次：空餐次两个入口并排 ===== */
+.diary-empty-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; grid-column: 2 / -1; }
+.diary-empty-actions .diary-empty-hint { grid-column: auto; }
+.copy-meal-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.copy-meal-list li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 9px 12px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--surface-soft); font-size: 12.5px; }
+.copy-meal-list li strong { font-weight: 600; }
+.copy-meal-list li span { color: var(--muted); font-size: 12px; }
+.copy-meal-list li b { color: var(--green-dark); font-variant-numeric: tabular-nums; }

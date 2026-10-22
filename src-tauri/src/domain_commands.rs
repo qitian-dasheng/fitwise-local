@@ -570,6 +570,7 @@ fn execute_with_connection(
             | "set_food_favorite"
             | "record_food_meal"
             | "add_meal"
+            | "copy_meal"
             | "add_weight"
             | "revise_weight"
             | "void_weight"
@@ -741,7 +742,7 @@ fn execute_with_connection(
     // changes require another explicit confirmation before joining weekly averages.
     if matches!(
         request.kind.as_str(),
-        "add_meal" | "record_food_meal" | "consume_batch"
+        "add_meal" | "copy_meal" | "record_food_meal" | "consume_batch"
     ) {
         let date = crate::record_commands::date(&request.payload)?;
         let mut reopened = false;
@@ -811,6 +812,7 @@ mod tests {
     include!("label_draft_tests.rs");
     include!("inventory_correction_tests.rs");
     include!("body_command_tests.rs");
+    include!("meal_copy_tests.rs");
     include!("workout_command_tests.rs");
 
     fn connection() -> Connection {

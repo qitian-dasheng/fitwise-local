@@ -1,7 +1,7 @@
-import { Plus } from "lucide-react";
+import { Copy, Plus } from "lucide-react";
 import type { MealEntry, MealType, NutrientKey } from "../domain/types";
 import { activeMeals, groupMealsByType, missingNutrientKeys, summarizeMeals } from "../domain/calculations";
-import { mealLabels } from "../domain/meals";
+import { mealLabels, type MealCopySource } from "../domain/meals";
 import {
   columns,
   entryNutrient,
@@ -20,6 +20,9 @@ interface MealDiaryTableProps {
   notes?: Partial<Record<NutrientKey, string>>;
   onSodiumChange: (visible: boolean) => void;
   onAdd: (type: MealType) => void;
+  /** 每个餐次「照搬上次」的来源；没有可照搬的就不显示入口。 */
+  copySources?: Partial<Record<MealType, MealCopySource | null>>;
+  onCopy?: (type: MealType, source: MealCopySource) => void;
   onEdit: (entry: MealEntry) => void;
   onVoid: (entry: MealEntry) => void;
 }
@@ -45,6 +48,8 @@ export function MealDiaryTable({
   notes,
   onSodiumChange,
   onAdd,
+  copySources,
+  onCopy,
   onEdit,
   onVoid,
 }: MealDiaryTableProps) {
@@ -121,6 +126,7 @@ export function MealDiaryTable({
             const groupMissing = missingNutrientKeys(group.entries);
             // 空餐次不铺一排「—」：营养格会变成 6–7 个破折号，视觉噪音大于信息量。
             const isEmptyMeal = group.entries.length === 0;
+            const copySource = isEmptyMeal ? copySources?.[group.type] ?? null : null;
             return (
               <div className="diary-meal" data-meal-type={group.type} key={group.type}>
                 <div className={`diary-row diary-meal-head${isEmptyMeal ? " diary-meal-head-empty" : ""}`}>
@@ -129,9 +135,20 @@ export function MealDiaryTable({
                     <small>{isEmptyMeal ? "还没有记录" : `${group.entries.length} 项`}</small>
                   </div>
                   {isEmptyMeal ? (
-                    <button className="text-button diary-empty-hint" onClick={() => onAdd(group.type)}>
-                      <Plus size={13} /> 添加{mealLabels[group.type]}
-                    </button>
+                    <div className="diary-empty-actions">
+                      <button className="text-button diary-empty-hint" onClick={() => onAdd(group.type)}>
+                        <Plus size={13} /> 添加{mealLabels[group.type]}
+                      </button>
+                      {copySource && (
+                        <button
+                          className="text-button diary-empty-hint"
+                          title={`把 ${copySource.date} 的${mealLabels[group.type]} ${copySource.entries.length} 项复制到这一天`}
+                          onClick={() => onCopy?.(group.type, copySource)}
+                        >
+                          <Copy size={13} /> 照搬 {copySource.date.slice(5)} · {copySource.entries.length} 项
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     <>
                       {cols.map((column) => {

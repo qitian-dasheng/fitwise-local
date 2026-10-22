@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { deductInventoryFEFO, nutrition } from "../domain/calculations";
+import { activeMeals, deductInventoryFEFO, nutrition } from "../domain/calculations";
 import { createPersonalState, initialState } from "../domain/seed";
 import type {
   AppState,
@@ -21,6 +21,7 @@ import type {
 import { enqueueDomainCommand, executeDomainCommand, type DomainCommandKind } from "../data/domainCommands";
 import { appStorage, flushAppStorageWrites, isTauriRuntime, reportStorageFailure, suppressNextAppStorageWrite } from "../data/storage";
 import { foodMealEntries, saveFoodInState } from "../domain/foodLibrary";
+import { mealCopySource, mealLabels } from "../domain/meals";
 import { applyInventoryOperation } from "../domain/purchases";
 import { diaryToday, ratioPercent } from "../domain/diary";
 import {
@@ -157,6 +158,7 @@ interface AppActions {
     sodium?: number;
     date?: string;
   }, commandId?: string) => Promise<ActionResult>;
+  copyMeal: (input: { date: string; type: MealType; sourceDate?: string }, commandId?: string) => Promise<ActionResult>;
   addWeight: (weightKg: number, date?: string, commandId?: string) => Promise<ActionResult>;
   recordWeight: (input: WeightRecordInput, commandId?: string) => Promise<ActionResult>;
   reviseWeight: (input: WeightReviseInput, commandId?: string) => Promise<ActionResult>;
@@ -275,6 +277,65 @@ export const useAppStore = create<AppStore>()(
           createdAt: now.toISOString(),
         };
         set((state) => ({ checkIns: reopenedCheckIns(state, meal.date), meals: [...state.meals, meal] }));
+        return {};
+      },
+      async copyMeal(input, commandId = uid()) {
+        const payload: Record<string, unknown> = { date: input.date, type: input.type };
+        if (input.sourceDate) payload.sourceDate = input.sourceDate;
+        if (isTauriRuntime()) return submit("copy_meal", payload, commandId);
+
+        // 预览分支与 Rust 同口径：目标餐次必须空着、来源取最近一天、批次引用不跟过来。
+        if (input.date > diaryToday()) return { error: "不能照搬到未来的日期。" };
+        const state = get();
+        const targetHasEntry = activeMeals(state.meals).some(
+          (entry) => entry.date === input.date && entry.type === input.type,
+        );
+        if (targetHasEntry) return { error: `${mealLabels[input.type]}已有记录，先编辑或作废再照搬。` };
+        const source = mealCopySource(state.meals, input.type, input.date);
+        if (input.sourceDate) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(input.sourceDate)) return { error: "来源日期必须为有效的 YYYY-MM-DD。" };
+          if (!source || source.date !== input.sourceDate) {
+            return { error: `${input.sourceDate} 没有${mealLabels[input.type]}记录。` };
+          }
+        }
+        if (!source) return { error: `之前还没有${mealLabels[input.type]}记录，先记一次再照搬。` };
+
+        const now = new Date().toISOString();
+        const entryIds: string[] = [];
+        const copies = source.entries.map((entry) => {
+          const id = uid();
+          entryIds.push(id);
+          const copy: MealEntry = { ...entry, id, date: input.date, createdAt: now, copiedFromId: entry.id };
+          delete copy.status;
+          delete copy.supersededBy;
+          delete copy.supersedesId;
+          delete copy.correctedAt;
+          delete copy.correctionReason;
+          // 批次与消耗事件属于来源那一天的锅，抄过来会指向不存在的制作记录。
+          delete copy.preparedBatchId;
+          delete copy.consumptionEventId;
+          return copy;
+        });
+        set((current) => ({
+          meals: [...current.meals, ...copies],
+          auditEvents: [
+            ...current.auditEvents,
+            {
+              id: `${commandId}:audit`,
+              eventType: "meals_copied",
+              entityType: "meal",
+              entityId: `${input.date}:${input.type}`,
+              payload: {
+                date: input.date,
+                type: input.type,
+                sourceDate: source.date,
+                count: copies.length,
+                entryIds,
+              },
+              createdAt: now,
+            },
+          ],
+        }));
         return {};
       },
       async addWeight(weightKg, date = diaryToday(), commandId = uid()) {

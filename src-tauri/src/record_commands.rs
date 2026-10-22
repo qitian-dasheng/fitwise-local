@@ -56,6 +56,61 @@ fn nutrient(value: Option<f64>, unit: &str) -> Value {
     }
 }
 
+/// 有效餐食白名单：缺失 status 或显式 active。禁止写成「不等于 superseded」。
+fn meal_is_active(entry: &Value) -> bool {
+    matches!(entry["status"].as_str(), None | Some("active"))
+}
+
+fn meal_label(meal_type: &str) -> &'static str {
+    match meal_type {
+        "breakfast" => "早餐",
+        "lunch" => "午餐",
+        "dinner" => "晚餐",
+        _ => "加餐",
+    }
+}
+
+/// 照搬时只认「目标日期之前、同餐次、仍然有效」的记录，取最近的一天。
+fn latest_meal_source(meals: &[Value], meal_type: &str, before: &str) -> Result<String, String> {
+    meals
+        .iter()
+        .filter(|entry| entry["type"].as_str() == Some(meal_type) && meal_is_active(entry))
+        .filter_map(|entry| entry["date"].as_str())
+        .filter(|date| *date < before)
+        .max()
+        .map(str::to_string)
+        .ok_or_else(|| format!("之前还没有{}记录，先记一次再照搬。", meal_label(meal_type)))
+}
+
+/// 复制一条餐食：保留名称/份量/营养/食材版本快照，换掉身份与日期，
+/// 丢掉「属于来源那一天那口锅」的批次与消耗事件，也丢掉旧行的修订链。
+pub(crate) fn copy_entry(
+    entry: &Value,
+    new_id: &str,
+    date: &str,
+    now: &str,
+) -> Result<Value, String> {
+    let mut copy = entry.clone();
+    let object = copy.as_object_mut().ok_or("餐食记录格式无效。")?;
+    object.insert("id".into(), json!(new_id));
+    object.insert("date".into(), json!(date));
+    object.insert("status".into(), json!("active"));
+    object.insert("createdAt".into(), json!(now));
+    object.insert("copiedFromId".into(), json!(entry["id"]));
+    for key in [
+        "supersedesId",
+        "supersededBy",
+        "correctedAt",
+        "correctionReason",
+        // 批次与消耗事件属于来源那一天的那口锅，抄过来会指向不存在的制作记录。
+        "preparedBatchId",
+        "consumptionEventId",
+    ] {
+        object.remove(key);
+    }
+    Ok(copy)
+}
+
 pub(crate) fn audit(
     state: &mut Map<String, Value>,
     command_id: &str,
@@ -127,6 +182,80 @@ pub(crate) fn apply(
                 &id,
                 json!({"date":date}),
             )?;
+        }
+        // 照搬上次：把之前某天同一餐次的记录整组复制到今天。
+        // 只复制快照（名称、份量、营养、食材版本），批次与消耗事件属于那一天的锅，不跟过来。
+        "copy_meal" => {
+            let date = date(payload)?;
+            let meal_type = choice(payload, "type", &["breakfast", "lunch", "dinner", "snack"])?;
+            let (_, today) = now_and_date();
+            if date > today {
+                return Err("不能照搬到未来的日期。".into());
+            }
+
+            let (source_date, source_entries) = {
+                let meals = array(state, "meals")?;
+                // 目标餐次必须还空着：已有记录时静默追加会变成重复计热量。
+                if meals.iter().any(|entry| {
+                    entry["date"].as_str() == Some(date.as_str())
+                        && entry["type"].as_str() == Some(meal_type)
+                        && meal_is_active(entry)
+                }) {
+                    return Err(format!(
+                        "{}已有记录，先编辑或作废再照搬。",
+                        meal_label(meal_type)
+                    ));
+                }
+                let source_date = match payload.get("sourceDate").and_then(Value::as_str) {
+                    Some(raw) => {
+                        if raw.len() != 10 || NaiveDate::parse_from_str(raw, "%Y-%m-%d").is_err() {
+                            return Err("来源日期必须为有效的 YYYY-MM-DD。".into());
+                        }
+                        raw.to_string()
+                    }
+                    None => latest_meal_source(meals, meal_type, &date)?,
+                };
+                let entries: Vec<Value> = meals
+                    .iter()
+                    .filter(|entry| {
+                        entry["date"].as_str() == Some(source_date.as_str())
+                            && entry["type"].as_str() == Some(meal_type)
+                            && meal_is_active(entry)
+                    })
+                    .cloned()
+                    .collect();
+                if entries.is_empty() {
+                    return Err(format!("{source_date} 没有{}记录。", meal_label(meal_type)));
+                }
+                (source_date, entries)
+            };
+
+            let mut created: Vec<String> = Vec::with_capacity(source_entries.len());
+            for (index, entry) in source_entries.iter().enumerate() {
+                let new_id = format!("{id}-{index}");
+                let copy = copy_entry(entry, &new_id, &date, &now)?;
+                array_mut(state, "meals")?.push(copy);
+                created.push(new_id);
+            }
+
+            audit(
+                state,
+                command_id,
+                "meals_copied",
+                "meal",
+                &format!("{date}:{meal_type}"),
+                json!({
+                    "date":&date, "type":meal_type, "sourceDate":&source_date,
+                    "count":created.len(), "entryIds":&created,
+                }),
+            )?;
+            return Ok(CommandMutation {
+                applied: true,
+                result: json!({
+                    "date":&date, "type":meal_type, "sourceDate":&source_date,
+                    "count":created.len(), "entryIds":&created,
+                }),
+            });
         }
         "add_workout" => {
             let date = date(payload)?;

@@ -192,3 +192,64 @@ it("renders the brand once when the amount label already carries it", async () =
   const occurrences = (host.querySelector(".food-entry") as HTMLElement).textContent!.split("示例品牌").length - 1;
   expect(occurrences).toBe(1);
 });
+
+// ===== 0.4.13 照搬上次这一餐 =====
+import { shiftDiaryDate } from "../src/domain/diary";
+
+const yesterday = shiftDiaryDate(day, -1);
+
+it("offers to copy the latest same-meal day and lists what comes over", async () => {
+  await renderPage([
+    entry({ id: "燕麦", date: yesterday, type: "breakfast", name: "燕麦", amountLabel: "50 g", nutrition: nutrition({ calories: 200, protein: 8 }) }),
+    entry({ id: "酸奶", date: yesterday, type: "breakfast", name: "酸奶", amountLabel: "150 g", nutrition: nutrition({ calories: 93, protein: 4 }) }),
+  ]);
+
+  const copy = [...mealHead("breakfast").querySelectorAll("button")].find((item) => item.textContent?.includes("照搬"))!;
+  expect(copy).toBeTruthy();
+  expect(copy.textContent).toContain(yesterday.slice(5));
+  expect(copy.textContent).toContain("2 项");
+
+  await act(async () => copy.click());
+  const dialog = document.querySelector(".modal") as HTMLElement;
+  expect(dialog.textContent).toContain(`照搬 ${yesterday} 的早餐`);
+  expect(dialog.querySelectorAll(".copy-meal-list li")).toHaveLength(2);
+  expect(dialog.textContent).toContain("293 kcal");
+});
+
+it("copies the items into the empty meal and keeps the trace back", async () => {
+  await renderPage([
+    entry({ id: "燕麦", date: yesterday, type: "breakfast", name: "燕麦", amountLabel: "50 g", nutrition: nutrition({ calories: 200, protein: 8 }) }),
+  ]);
+  await act(async () => {
+    [...mealHead("breakfast").querySelectorAll("button")]
+      .find((item) => item.textContent?.includes("照搬"))!
+      .click();
+  });
+  const dialog = document.querySelector(".modal") as HTMLElement;
+  await act(async () => {
+    [...dialog.querySelectorAll("button")].find((item) => item.textContent?.includes("照搬 1 项"))!.click();
+  });
+
+  const created = useAppStore.getState().meals.filter((item) => item.date === day && item.type === "breakfast");
+  expect(created).toHaveLength(1);
+  expect(created[0].name).toBe("燕麦");
+  expect(created[0].copiedFromId).toBe("燕麦");
+  // 来源那天的记录原样保留。
+  expect(useAppStore.getState().meals.filter((item) => item.date === yesterday)).toHaveLength(1);
+  // 条目名在明细行里，不在餐次小计行。
+  expect(group("breakfast").textContent).toContain("燕麦");
+});
+
+it("hides the copy entry when the meal already has records or has no source", async () => {
+  await renderPage([
+    entry({ id: "今天的早餐", type: "breakfast", name: "今天的早餐", nutrition: full() }),
+    entry({ id: "昨天的午餐", date: yesterday, type: "lunch", name: "昨天的午餐", nutrition: full() }),
+  ]);
+
+  // 早餐已经有记录：不给照搬，避免重复计热量。
+  expect([...mealHead("breakfast").querySelectorAll("button")].some((item) => item.textContent?.includes("照搬"))).toBe(false);
+  // 午餐有来源：给。
+  expect([...mealHead("lunch").querySelectorAll("button")].some((item) => item.textContent?.includes("照搬"))).toBe(true);
+  // 加餐从来没记过：没有入口。
+  expect([...mealHead("snack").querySelectorAll("button")].some((item) => item.textContent?.includes("照搬"))).toBe(false);
+});

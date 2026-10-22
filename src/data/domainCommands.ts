@@ -17,6 +17,7 @@ export type DomainCommandKind =
   | "set_food_favorite"
   | "record_food_meal"
   | "add_meal"
+  | "copy_meal"
   | "add_weight"
   | "revise_weight"
   | "void_weight"
