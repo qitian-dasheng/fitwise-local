@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>轻衡 0.5 · 设计样张（今日 / 饮食 / 身体）</title>
+  <link rel="stylesheet" href="../../src/styles/tokens.css" />
+  <link rel="stylesheet" href="../../src/styles/fonts.css" />
+  <style>
+    *,*::before,*::after{box-sizing:border-box}
+    html,body{margin:0;padding:0}
+    body{font-family:var(--font-sans);background:var(--surface-sunken);color:var(--ink-700);
+         font-size:var(--fs-13);line-height:var(--lh-body);-webkit-font-smoothing:antialiased}
+    a{color:inherit}
+    ::selection{background:var(--accent);color:var(--accent-ink)}
+
+    .app{display:flex;min-height:100vh}
+    .nav{width:var(--nav-w);flex:0 0 auto;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;
+         padding:var(--sp-5) var(--sp-3);border-right:var(--stroke) solid var(--line);background:var(--surface)}
+    .brand{display:flex;align-items:center;gap:var(--sp-2);padding:0 var(--sp-2) var(--sp-5)}
+    .brand i{display:grid;place-items:center;width:28px;height:28px;border-radius:var(--r-sm);
+             background:var(--ink-900);color:var(--surface);font-style:normal;font-size:var(--fs-12);font-weight:var(--fw-strong)}
+    .brand b{font-size:var(--fs-15);font-weight:var(--fw-strong);color:var(--ink-900);letter-spacing:.02em}
+    .brand small{display:block;font-size:var(--fs-11);color:var(--ink-400);font-weight:var(--fw-regular);letter-spacing:var(--tracking-label)}
+
+    .nav-group{display:grid;gap:2px}
+    .nav-group+.nav-group{margin-top:var(--sp-5)}
+    .nav-label{padding:0 var(--sp-2) var(--sp-2);font-size:var(--fs-11);color:var(--ink-300);
+               letter-spacing:var(--tracking-label);font-weight:var(--fw-medium)}
+    .nav-item{display:flex;align-items:center;gap:var(--sp-3);height:36px;padding:0 var(--sp-2);
+              border:0;border-radius:var(--r-sm);background:transparent;color:var(--ink-600);
+              font:inherit;font-size:var(--fs-13);text-align:left;cursor:pointer;
+              transition:background var(--dur) var(--ease),color var(--dur) var(--ease)}
+    .nav-item:hover{background:var(--surface-sunken);color:var(--ink-900)}
+    .nav-item.active{background:var(--ink-900);color:var(--surface);font-weight:var(--fw-medium)}
+    .nav-item.active .dot{background:var(--accent)}
+    .nav-item[disabled]{color:var(--ink-300);cursor:default}
+    .nav-item[disabled]:hover{background:transparent;color:var(--ink-300)}
+    .dot{width:6px;height:6px;border-radius:50%;background:var(--ink-300);flex:0 0 auto}
+    .nav-foot{margin-top:auto;padding:0 var(--sp-2);font-size:var(--fs-11);color:var(--ink-300);line-height:var(--lh-body)}
+    kbd{font-family:var(--font-mono);font-size:var(--fs-11);padding:1px 5px;border:var(--stroke) solid var(--line);
+        border-radius:5px;background:var(--surface-sunken);color:var(--ink-500)}
+
+    .main{flex:1;min-width:0}
+    .page{max-width:var(--content-max);margin:0 auto;padding:var(--sp-6) var(--page-x) var(--sp-8)}
+    .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--sp-4);margin-bottom:var(--sp-5)}
+    .eyebrow{display:block;font-size:var(--fs-11);color:var(--ink-400);letter-spacing:var(--tracking-label);margin-bottom:var(--sp-1)}
+    h1{margin:0;font-size:var(--fs-20);line-height:var(--lh-tight);font-weight:var(--fw-strong);color:var(--ink-900)}
+    h2{margin:0;font-size:var(--fs-15);line-height:var(--lh-snug);font-weight:var(--fw-medium);color:var(--ink-900)}
+    h3{margin:0;font-size:var(--fs-13);line-height:var(--lh-snug);font-weight:var(--fw-medium);color:var(--ink-900)}
+    p{margin:0}
+    .muted{color:var(--ink-500)}
+    .hint{font-size:var(--fs-11);color:var(--ink-400);line-height:var(--lh-body)}
+
+    .card{background:var(--surface);border:var(--stroke) solid var(--line);border-radius:var(--r-md);padding:var(--card-p)}
+    .card-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);margin-bottom:var(--sp-4)}
+    .grid{display:grid;gap:var(--sp-4)}
+    .grid.two{grid-template-columns:minmax(0,1fr) 300px}
+    .stack{display:grid;gap:var(--sp-2)}
+
+    .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+    .hero-num{font-size:var(--fs-40);font-weight:var(--fw-medium);color:var(--ink-900);line-height:1;letter-spacing:-.02em}
+    .big-num{font-size:var(--fs-28);font-weight:var(--fw-medium);color:var(--ink-900);line-height:1;letter-spacing:-.01em}
+    .unit{font-size:var(--fs-12);color:var(--ink-400);font-weight:var(--fw-regular);margin-left:4px}
+
+    .bar{height:8px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;border:var(--stroke) solid var(--line-soft)}
+    .bar>i{display:block;height:100%;background:var(--accent);border-radius:var(--r-pill)}
+    .bar>i.ink{background:var(--ink-900)}
+    .bar.thin{height:4px}
+
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);height:36px;padding:0 var(--sp-4);
+         border-radius:var(--r-sm);border:var(--stroke) solid var(--line);background:var(--surface);color:var(--ink-700);
+         font:inherit;font-size:var(--fs-13);font-weight:var(--fw-medium);cursor:pointer;
+         transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease),color var(--dur) var(--ease)}
+    .btn:hover{background:var(--surface-sunken);border-color:var(--ink-300);color:var(--ink-900)}
+    .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+    .btn.primary:hover{filter:brightness(.97);border-color:var(--ink-900)}
+    .btn.ink{background:var(--ink-900);border-color:var(--ink-900);color:var(--surface)}
+    .btn.ink:hover{background:var(--ink-700)}
+    .btn.ghost{border-color:transparent;background:transparent;color:var(--ink-500);padding:0 var(--sp-2)}
+    .btn.ghost:hover{background:var(--surface-sunken);color:var(--ink-900)}
+    .btn.sm{height:30px;font-size:var(--fs-12);padding:0 var(--sp-3)}
+    .btn:focus-visible,.nav-item:focus-visible,td button:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+    .btn[disabled]{color:var(--ink-300);background:var(--surface-sunken);border-color:var(--line);cursor:not-allowed}
+
+    .quick{display:grid;gap:var(--sp-2)}
+    .quick button{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);height:52px;
+                  padding:0 var(--sp-4);border:var(--stroke) solid var(--line);border-radius:var(--r-md);
+                  background:var(--surface);font:inherit;font-size:var(--fs-13);font-weight:var(--fw-medium);
+                  color:var(--ink-900);cursor:pointer;transition:border-color var(--dur) var(--ease),background var(--dur) var(--ease)}
+    .quick button:hover{border-color:var(--ink-900);background:var(--surface-raise)}
+    .quick span{font-size:var(--fs-11);font-weight:var(--fw-regular);color:var(--ink-400)}
+    .quick .plus{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accent);
+                 color:var(--accent-ink);font-size:var(--fs-12);line-height:1}
+
+    .stat{display:grid;gap:2px}
+    .stat .k{font-size:var(--fs-11);color:var(--ink-400);letter-spacing:var(--tracking-label)}
+    .stat .v{font-size:var(--fs-15);font-weight:var(--fw-medium);color:var(--ink-900)}
+    .stat-row{display:flex;justify-content:space-between;align-items:baseline;gap:var(--sp-2)}
+
+    .pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 var(--sp-2);border-radius:var(--r-pill);
+          font-size:var(--fs-11);font-weight:var(--fw-medium);white-space:nowrap}
+    .pill.ok{background:var(--ok-soft);color:var(--ok)}
+    .pill.warn{background:var(--warn-soft);color:var(--warn)}
+    .pill.bad{background:var(--danger-soft);color:var(--danger)}
+    .pill.info{background:var(--info-soft);color:var(--info)}
+    .pill.flat{background:var(--surface-sunken);color:var(--ink-500)}
+
+    table{width:100%;border-collapse:collapse}
+    th{font-size:var(--fs-11);font-weight:var(--fw-medium);color:var(--ink-400);letter-spacing:var(--tracking-label);
+       text-align:right;padding:0 var(--sp-2) var(--sp-2);border-bottom:var(--stroke) solid var(--line)}
+    th:first-child,td:first-child{text-align:left;padding-left:0}
+    th:last-child,td:last-child{padding-right:0}
+    td{height:var(--row-h);padding:0 var(--sp-2);border-bottom:var(--stroke) solid var(--line-soft);
+       font-size:var(--fs-13);color:var(--ink-700);text-align:right;white-space:nowrap}
+    td.food{white-space:normal}
+    td.food b{display:block;font-weight:var(--fw-medium);color:var(--ink-900)}
+    td.food span{font-size:var(--fs-12);color:var(--ink-400)}
+    .meal-row td{background:var(--surface-sunken);font-weight:var(--fw-medium);color:var(--ink-900)}
+    .meal-row td:first-child{font-weight:var(--fw-medium)}
+    .meal-row .hint{font-weight:var(--fw-regular)}
+    tfoot td{border-bottom:0;font-weight:var(--fw-medium);color:var(--ink-900);height:52px}
+    .row-actions{display:flex;gap:var(--sp-1);justify-content:flex-end}
+    .link{border:0;background:transparent;font:inherit;font-size:var(--fs-12);color:var(--ink-500);
+          padding:4px 6px;border-radius:6px;cursor:pointer}
+    .link:hover{background:var(--surface-sunken);color:var(--ink-900)}
+    .link.danger{color:var(--danger)}
+
+    label.field{display:grid;gap:6px}
+    label.field>span{font-size:var(--fs-11);color:var(--ink-400);letter-spacing:var(--tracking-label)}
+    input,select{width:100%;height:40px;padding:0 var(--sp-3);border:var(--stroke) solid var(--line);border-radius:var(--r-sm);
+                 background:var(--surface);font:inherit;font-size:var(--fs-13);color:var(--ink-900);font-variant-numeric:tabular-nums}
+    input:focus-visible,select:focus-visible{outline:2px solid var(--focus-ring);outline-offset:1px;border-color:var(--ink-900)}
+    .field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-3)}
+    .field-grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+
+    .chart{width:100%;height:auto;display:block}
+    .axis{font-size:var(--fs-11);fill:var(--ink-400);font-variant-numeric:tabular-nums}
+    .gridline{stroke:var(--chart-grid);stroke-width:0.5}
+
+    .note{border-left:2px solid var(--accent);padding:var(--sp-2) 0 var(--sp-2) var(--sp-3);background:var(--surface-raise);
+          border-radius:0 var(--r-sm) var(--r-sm) 0}
+    .note b{color:var(--ink-900);font-weight:var(--fw-medium)}
+    .divider{height:var(--stroke);background:var(--line);margin:var(--sp-4) 0}
+
+    .screen{display:none}
+    .screen.active{display:block}
+    .banner{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);
+            padding:var(--sp-2) var(--sp-3);margin-bottom:var(--sp-4);border:var(--stroke) dashed var(--line);
+            border-radius:var(--r-sm);background:var(--surface-raise)}
+    .banner p{font-size:var(--fs-11);color:var(--ink-500)}
+    .banner b{color:var(--ink-900);font-weight:var(--fw-medium)}
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside class="nav">
+    <div class="brand">
+      <i>衡</i>
+      <b>轻衡<small>FITWISE 0.5</small></b>
+    </div>
+
+    <div class="nav-group">
+      <button class="nav-item active" data-screen="today"><span class="dot"></span>今日</button>
+      <button class="nav-item" data-screen="food"><span class="dot"></span>饮食</button>
+      <button class="nav-item" data-screen="body"><span class="dot"></span>身体</button>
+      <button class="nav-item" disabled title="样张只做了今日、饮食、身体三页"><span class="dot"></span>运动</button>
+      <button class="nav-item" disabled title="样张只做了今日、饮食、身体三页"><span class="dot"></span>计划</button>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">工具</div>
+      <button class="nav-item" disabled title="样张只做了今日、饮食、身体三页"><span class="dot"></span>收件箱</button>
+      <button class="nav-item" disabled title="样张只做了今日、饮食、身体三页"><span class="dot"></span>设置</button>
+    </div>
+
+    <div class="nav-foot">
+      按 <kbd>⌘</kbd><kbd>K</kbd> 随时记一餐、或者直接问
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- ══════════════ 今日 ══════════════ -->
+    <section class="screen active" id="screen-today">
+      <div class="page">
+        <div class="banner">
+          <p><b>样张说明</b> · 这是设计稿，不是运行中的应用；三个页面可互相切换。</p>
+          <span class="pill flat">1440 宽基准</span>
+        </div>
+
+        <div class="page-head">
+          <div>
+            <span class="eyebrow">2026-10-22 星期四</span>
+            <h1>今天还差 158 kcal，蛋白差 42 g</h1>
+          </div>
+          <button class="btn">完成今日</button>
+        </div>
+
+        <div class="grid two">
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <span class="eyebrow">今日摄入</span>
+                <div style="display:flex;align-items:baseline;gap:8px">
+                  <span class="hero-num num">1,842</span>
+                  <span class="unit num">/ 2,000 kcal</span>
+                </div>
+              </div>
+              <span class="pill ok">区间内</span>
+            </div>
+
+            <div class="stack" style="gap:14px">
+              <div>
+                <div class="stat-row" style="margin-bottom:6px">
+                  <span class="hint">热量</span>
+                  <span class="hint num">92%</span>
+                </div>
+                <div class="bar"><i style="width:92%"></i></div>
+              </div>
+              <div>
+                <div class="stat-row" style="margin-bottom:6px">
+                  <span class="hint">蛋白质 118 / 160 g</span>
+                  <span class="hint num">74%</span>
+                </div>
+                <div class="bar"><i class="ink" style="width:74%"></i></div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-4)">
+              <div class="stat"><span class="k">碳水</span><span class="v num">196 g</span></div>
+              <div class="stat"><span class="k">脂肪</span><span class="v num">58 g</span></div>
+              <div class="stat"><span class="k">纤维</span><span class="v num">21 g</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h2>补记一笔</h2>
+              <span class="hint">1 次点击</span>
+            </div>
+            <div class="quick">
+              <button>吃了什么 <span>照搬上次早餐</span><i class="plus">+</i></button>
+              <button>练了什么 <span>上次 22 分钟</span><i class="plus">+</i></button>
+              <button>称了多少 <span>今晨未称</span><i class="plus">+</i></button>
+            </div>
+            <p class="hint" style="margin-top:12px">三件事都在这一列，不用先想"该去哪个页面"。</p>
+          </div>
+        </div>
+
+        <div class="grid" style="grid-template-columns:minmax(0,1fr) 300px;margin-top:var(--sp-4)">
+          <div class="card">
+            <div class="card-head">
+              <h2>今天还没做</h2>
+              <span class="hint">2 / 4 完成</span>
+            </div>
+            <table>
+              <tbody>
+                <tr>
+                  <td class="food"><b>早餐</b><span>燕麦 50 g · 酸奶 150 g · 莓果 70 g · 全蛋 3 个</span></td>
+                  <td class="num">520 kcal</td>
+                  <td><span class="pill ok">已记</span></td>
+                </tr>
+                <tr>
+                  <td class="food"><b>午餐</b><span>标准锅 · 1 份</span></td>
+                  <td class="num">760 kcal</td>
+                  <td><span class="pill ok">已记</span></td>
+                </tr>
+                <tr>
+                  <td class="food"><b>晚餐</b><span>还没记；库里还有 400 g 里脊、300 g 北豆腐</span></td>
+                  <td class="num muted">—</td>
+                  <td><button class="link">照搬上次</button></td>
+                </tr>
+                <tr>
+                  <td class="food"><b>运动</b><span>上次是 10-21 的低冲击有氧 10 分钟</span></td>
+                  <td class="num muted">—</td>
+                  <td><button class="link">记一笔</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2>近 7 天</h2></div>
+            <svg class="chart" viewBox="0 0 260 120" role="img" aria-label="近七天热量柱状图">
+              <line class="gridline" x1="0" y1="30" x2="260" y2="30"></line>
+              <line class="gridline" x1="0" y1="70" x2="260" y2="70"></line>
+              <rect x="8"   y="46" width="24" height="60" rx="2" fill="var(--chart-4)"></rect>
+              <rect x="44"  y="38" width="24" height="68" rx="2" fill="var(--chart-3)"></rect>
+              <rect x="80"  y="52" width="24" height="54" rx="2" fill="var(--chart-4)"></rect>
+              <rect x="116" y="34" width="24" height="72" rx="2" fill="var(--chart-2)"></rect>
+              <rect x="152" y="28" width="24" height="78" rx="2" fill="var(--chart-2)"></rect>
+              <rect x="188" y="40" width="24" height="66" rx="2" fill="var(--chart-3)"></rect>
+              <rect x="224" y="22" width="24" height="84" rx="2" fill="var(--accent)"></rect>
+              <text class="axis" x="8" y="118">16</text>
+              <text class="axis" x="108" y="118">19</text>
+              <text class="axis" x="222" y="118">今天</text>
+            </svg>
+            <p class="hint" style="margin-top:8px">浅到深 = 越接近目标；亮块 = 今天。</p>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:var(--sp-4)">
+          <div class="card-head">
+            <div>
+              <span class="eyebrow">下一阶段主线 · 动态菜单</span>
+              <h2>明天吃什么</h2>
+            </div>
+            <div style="display:flex;gap:var(--sp-2);align-items:center">
+              <span class="pill info">按库存算的</span>
+              <button class="link">换一批</button>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>候选与理由</th>
+                <th>合计热量</th>
+                <th>蛋白</th>
+                <th>成本</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="food"><b>白菜豆腐炖里脊 · 2 份</b><span>补齐今天缺的 42 g 蛋白；用掉明早到货的里脊 400 g</span></td>
+                <td class="num">1,520 kcal</td>
+                <td class="num">124 g 蛋白</td>
+                <td class="num">¥ 12.4</td>
+                <td><button class="link">选它</button></td>
+              </tr>
+              <tr>
+                <td class="food"><b>豆腐蒸蛋 + 米饭 · 2 份</b><span>先消耗 18 枚鸡蛋里快到期的那批；蛋白高 8 g、成本低 ¥3</span></td>
+                <td class="num">1,380 kcal</td>
+                <td class="num">96 g 蛋白</td>
+                <td class="num">¥ 9.1</td>
+                <td><button class="link">选它</button></td>
+              </tr>
+              <tr>
+                <td class="food"><b>里脊炒洋葱 · 1 份</b><span>缺 洋葱 1 斤，补货 ¥2.5 后可做</span></td>
+                <td class="num">860 kcal</td>
+                <td class="num">78 g 蛋白</td>
+                <td class="num">¥ 11.8</td>
+                <td><button class="link">选它</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="divider"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3)">
+            <p class="hint">补货清单：洋葱 1 斤 · 北豆腐 2 盒（现有 300 g 只够 1 天）</p>
+            <button class="btn sm">生成采购草稿</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ 饮食 ══════════════ -->
+    <section class="screen" id="screen-food">
+      <div class="page">
+        <div class="page-head">
+          <div>
+            <span class="eyebrow">2026-10-22 星期四</span>
+            <h1>饮食日记</h1>
+          </div>
+          <div style="display:flex;gap:var(--sp-2)">
+            <button class="btn">昨天</button>
+            <button class="btn">今天</button>
+            <button class="btn primary">添加食物</button>
+          </div>
+        </div>
+
+        <div class="card" style="padding:0;overflow:hidden">
+          <table>
+            <thead>
+              <tr>
+                <th>食物 / 份量</th>
+                <th>热量 kcal</th>
+                <th>蛋白 g</th>
+                <th>碳水 g</th>
+                <th>脂肪 g</th>
+                <th>纤维 g</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="meal-row">
+                <td>早餐 <span class="hint">4 项</span></td>
+                <td class="num">520</td><td class="num">29</td><td class="num">58</td><td class="num">19</td><td class="num">7</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td class="food"><b>燕麦片</b><span>50 g</span></td>
+                <td class="num">209</td><td class="num">6</td><td class="num">37</td><td class="num">4</td><td class="num">5</td>
+                <td><div class="row-actions"><button class="link">编辑</button><button class="link danger">作废</button></div></td>
+              </tr>
+              <tr>
+                <td class="food"><b>悠纯减淳 0 蔗糖酸奶</b><span>150 g</span></td>
+                <td class="num">93</td><td class="num">4</td><td class="num">7</td><td class="num">5</td><td class="num">0</td>
+                <td><div class="row-actions"><button class="link">编辑</button><button class="link danger">作废</button></div></td>
+              </tr>
+              <tr>
+                <td class="food"><b>冷冻混合莓</b><span>70 g</span></td>
+                <td class="num">32</td><td class="num">1</td><td class="num">7</td><td class="num">0</td><td class="num">2</td>
+                <td><div class="row-actions"><button class="link">编辑</button><button class="link danger">作废</button></div></td>
+              </tr>
+              <tr>
+                <td class="food"><b>全蛋</b><span>3 枚 · 168 g</span></td>
+                <td class="num">234</td><td class="num">21</td><td class="num">2</td><td class="num">15</td><td class="num">0</td>
+                <td><div class="row-actions"><button class="link">编辑</button><button class="link danger">作废</button></div></td>
+              </tr>
+
+              <tr class="meal-row">
+                <td>午餐 <span class="hint">1 项 · 整锅 1 份</span></td>
+                <td class="num">760</td><td class="num">62</td><td class="num">78</td><td class="num">21</td><td class="num">9</td>
+                <td><div class="row-actions"><button class="link">照搬</button></div></td>
+              </tr>
+              <tr>
+                <td class="food"><b>标准锅 · 白菜豆腐炖里脊</b><span>1 份（半锅）</span></td>
+                <td class="num">760</td><td class="num">62</td><td class="num">78</td><td class="num">21</td><td class="num">9</td>
+                <td><div class="row-actions"><button class="link">编辑</button><button class="link danger">作废</button></div></td>
+              </tr>
+
+              <tr class="meal-row empty">
+                <td>晚餐 <span class="hint">还没有记录</span></td>
+                <td colspan="5" class="hint" style="text-align:left;padding-left:8px">库里有 400 g 里脊、300 g 北豆腐，够做一锅</td>
+                <td><div class="row-actions"><button class="link">照搬 10-21</button><button class="link">添加</button></div></td>
+              </tr>
+              <tr class="meal-row empty">
+                <td>加餐 <span class="hint">还没有记录</span></td>
+                <td colspan="5" class="hint" style="text-align:left;padding-left:8px">不饿就不用记</td>
+                <td><div class="row-actions"><button class="link">添加</button></div></td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>日合计 <span class="hint">5 条 · 热量覆盖率 100%</span></td>
+                <td class="num">1,842</td><td class="num">118</td><td class="num">196</td><td class="num">58</td><td class="num">21</td>
+                <td><span class="pill ok">数据完整</span></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:var(--sp-4)">
+          <div class="card">
+            <div class="card-head"><h2>库存</h2><button class="link">全部</button></div>
+            <table>
+              <tbody>
+                <tr><td class="food"><b>猪里脊</b><span>400 g · 明早到货</span></td><td><span class="pill warn">临期</span></td></tr>
+                <tr><td class="food"><b>北豆腐</b><span>300 g</span></td><td><span class="pill ok">够 1 天</span></td></tr>
+                <tr><td class="food"><b>鸡蛋</b><span>18 枚</span></td><td><span class="pill flat">6 天</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>今天做饭</h2><button class="link">菜谱</button></div>
+            <p class="hint" style="margin-bottom:12px">按库存能做的 3 个，第一个是标准锅。</p>
+            <div class="stack">
+              <button class="btn sm" style="justify-content:space-between">标准锅 <span class="hint">缺 0 项</span></button>
+              <button class="btn sm" style="justify-content:space-between">豆腐蒸蛋 <span class="hint">缺 0 项</span></button>
+              <button class="btn sm" style="justify-content:space-between">里脊炒洋葱 <span class="hint">缺 洋葱</span></button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>成本</h2></div>
+            <div style="display:flex;align-items:baseline;gap:6px">
+              <span class="big-num num">¥ 18.4</span>
+              <span class="unit">今天</span>
+            </div>
+            <p class="hint" style="margin-top:8px">本周日均 ¥19.2，预算 ¥20，还有 ¥6.4 余量。</p>
+            <div class="bar thin" style="margin-top:10px"><i style="width:96%"></i></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ 身体 ══════════════ -->
+    <section class="screen" id="screen-body">
+      <div class="page">
+        <div class="page-head">
+          <div>
+            <span class="eyebrow">录入与趋势同页</span>
+            <h1>身体</h1>
+          </div>
+          <span class="pill flat">最近更新 10-22 07:12</span>
+        </div>
+
+        <div class="grid" style="grid-template-columns:minmax(0,360px) minmax(0,1fr)">
+          <div class="card">
+            <div class="card-head"><h2>记录一次</h2><span class="hint">只有体重必填</span></div>
+            <div class="stack" style="gap:var(--sp-3)">
+              <label class="field">
+                <span>体重 KG</span>
+                <input value="92.5" inputmode="decimal" />
+              </label>
+              <div class="field-grid">
+                <label class="field"><span>体脂 %</span><input placeholder="可选" /></label>
+                <label class="field"><span>腰围 CM</span><input placeholder="可选" /></label>
+              </div>
+              <div class="field-grid">
+                <label class="field"><span>时间</span><input value="07:12" /></label>
+                <label class="field"><span>条件</span>
+                  <select><option>晨起排便后</option><option>运动后</option><option>随机</option></select>
+                </label>
+              </div>
+              <button class="btn primary" style="height:42px">保存这次记录</button>
+              <p class="hint">留空就是"不知道"，不会被当成 0 参与计算。</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <span class="eyebrow">近 30 天</span>
+                <div style="display:flex;align-items:baseline;gap:8px">
+                  <span class="big-num num">92.5</span><span class="unit">kg</span>
+                  <span class="pill ok" style="margin-left:6px">−1.4 kg</span>
+                </div>
+              </div>
+              <span class="hint">周均 −0.35 kg · 在安全区间</span>
+            </div>
+
+            <svg class="chart" viewBox="0 0 640 220" role="img" aria-label="近三十天体重趋势">
+              <line class="gridline" x1="36" y1="40"  x2="620" y2="40"></line>
+              <line class="gridline" x1="36" y1="90"  x2="620" y2="90"></line>
+              <line class="gridline" x1="36" y1="140" x2="620" y2="140"></line>
+              <line class="gridline" x1="36" y1="190" x2="620" y2="190"></line>
+              <text class="axis" x="4" y="44">94</text>
+              <text class="axis" x="4" y="94">93</text>
+              <text class="axis" x="4" y="144">92</text>
+              <text class="axis" x="4" y="194">91</text>
+              <polyline fill="none" stroke="var(--ink-900)" stroke-width="1.5" stroke-linejoin="round"
+                points="36,52 78,58 120,66 162,63 204,74 246,80 288,86 330,92 372,97 414,104 456,110 498,116 540,124 582,131 620,138"></polyline>
+              <polyline fill="none" stroke="var(--chart-4)" stroke-width="1.5" stroke-dasharray="4 4"
+                points="36,74 620,74"></polyline>
+              <circle cx="620" cy="138" r="3.5" fill="var(--accent)" stroke="var(--ink-900)" stroke-width="1.5"></circle>
+              <text class="axis" x="596" y="160">今天 92.5</text>
+            </svg>
+
+            <p class="hint" style="margin-top:6px">虚线是阶段目标线 93.0（10 月底）。每周 ≤ 0.8 kg 才算安全。</p>
+
+            <div class="divider"></div>
+
+            <div class="note">
+              <b>本周结论</b>
+              <p class="hint" style="margin-top:4px">
+                7 天里记了 5 天，蛋白有 2 天没到 160 g。体重在降，但降速偏快（−0.52 kg/周），
+                建议米饭每餐 +15 g，把降速拉回 0.4 kg/周。
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:var(--sp-4)">
+          <div class="card-head"><h2>历史记录</h2><span class="hint">同日多次会全部保留</span></div>
+          <table>
+            <thead>
+              <tr><th>日期</th><th>体重 kg</th><th>体脂 %</th><th>腰围 cm</th><th>时间</th><th>条件</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>10-22</td><td class="num">92.5</td><td class="num muted">—</td><td class="num muted">—</td><td class="num">07:12</td><td>晨起排便后</td></tr>
+              <tr><td>10-21</td><td class="num">92.7</td><td class="num muted">—</td><td class="num">103.5</td><td class="num">07:05</td><td>晨起排便后</td></tr>
+              <tr><td>10-20</td><td class="num">92.9</td><td class="num muted">—</td><td class="num muted">—</td><td class="num">07:20</td><td>晨起排便后</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+  const tabs = document.querySelectorAll("[data-screen]");
+  const screens = document.querySelectorAll(".screen");
+  function activate(id) {
+    screens.forEach((screen) => screen.classList.toggle("active", screen.id === id));
+    tabs.forEach((item) => item.classList.toggle("active", "screen-" + item.dataset.screen === id));
+    window.scrollTo({ top: 0 });
+  }
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const id = "screen-" + tab.dataset.screen;
+      activate(id);
+      history.replaceState(null, "", "#" + id);
+    });
+  });
+  window.addEventListener("load", () => {
+    const hash = location.hash.replace("#", "");
+    if (hash) activate(hash);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      screens.forEach((screen) => screen.classList.toggle("active", screen.id === "screen-today"));
+      tabs.forEach((item) => item.classList.toggle("active", item.dataset.screen === "today"));
+    }
+  });
+</script>
+</body>
+</html>
