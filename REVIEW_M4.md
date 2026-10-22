@@ -24,8 +24,8 @@
 ## 版本
 
 - package.json / tauri.conf.json / Cargo.toml：**0.7.0 → 0.8.0**。
-- MSI：`src-tauri/target/release/bundle/msi/轻衡_0.8.0_x64_zh-CN.msi`，**待回填体积与 SHA-256**。
-- 提交：代码与文档分开（commit 号以 git log 为准）。
+- MSI：`src-tauri/target/release/bundle/msi/轻衡_0.8.0_x64_zh-CN.msi`，**8,458,240 B（8.07 MiB）**，SHA-256 `4257EAF6F7BD17772B6CAAB980F5218D3324DAD11738FFB2D352E1959CC90084`。
+- 提交：代码 `fb9056d`（含 Cargo.lock 补交 `待查`）、文档 `d994eb8`；包信息回填 `本次`（commit 号以 git log 为准）。
 
 ## 学习记录
 
