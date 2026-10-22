@@ -10,7 +10,7 @@
     *,*::before,*::after{box-sizing:border-box}
     html,body{margin:0;padding:0}
     body{font-family:var(--font-sans);background:var(--surface-sunken);color:var(--ink-700);
-         font-size:var(--fs-13);line-height:var(--lh-body);-webkit-font-smoothing:antialiased}
+         font-size:var(--fs-14);line-height:var(--lh-body);-webkit-font-smoothing:antialiased}
     a{color:inherit}
     ::selection{background:var(--accent);color:var(--accent-ink)}
 
@@ -19,8 +19,8 @@
          padding:var(--sp-5) var(--sp-3);border-right:var(--stroke) solid var(--line);background:var(--surface)}
     .brand{display:flex;align-items:center;gap:var(--sp-2);padding:0 var(--sp-2) var(--sp-5)}
     .brand i{display:grid;place-items:center;width:28px;height:28px;border-radius:var(--r-sm);
-             background:var(--ink-900);color:var(--surface);font-style:normal;font-size:var(--fs-12);font-weight:var(--fw-strong)}
-    .brand b{font-size:var(--fs-15);font-weight:var(--fw-strong);color:var(--ink-900);letter-spacing:.02em}
+             background:var(--ink-900);color:var(--surface);font-style:normal;font-size:var(--fs-13);font-weight:var(--fw-strong)}
+    .brand b{font-size:var(--fs-16);font-weight:var(--fw-strong);color:var(--ink-900);letter-spacing:.02em}
     .brand small{display:block;font-size:var(--fs-11);color:var(--ink-400);font-weight:var(--fw-regular);letter-spacing:var(--tracking-label)}
 
     .nav-group{display:grid;gap:2px}
@@ -29,7 +29,7 @@
                letter-spacing:var(--tracking-label);font-weight:var(--fw-medium)}
     .nav-item{display:flex;align-items:center;gap:var(--sp-3);height:36px;padding:0 var(--sp-2);
               border:0;border-radius:var(--r-sm);background:transparent;color:var(--ink-600);
-              font:inherit;font-size:var(--fs-13);text-align:left;cursor:pointer;
+              font:inherit;font-size:var(--fs-14);text-align:left;cursor:pointer;
               transition:background var(--dur) var(--ease),color var(--dur) var(--ease)}
     .nav-item:hover{background:var(--surface-sunken);color:var(--ink-900)}
     .nav-item.active{background:var(--ink-900);color:var(--surface);font-weight:var(--fw-medium)}
@@ -46,8 +46,8 @@
     .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--sp-4);margin-bottom:var(--sp-5)}
     .eyebrow{display:block;font-size:var(--fs-11);color:var(--ink-400);letter-spacing:var(--tracking-label);margin-bottom:var(--sp-1)}
     h1{margin:0;font-size:var(--fs-20);line-height:var(--lh-tight);font-weight:var(--fw-strong);color:var(--ink-900)}
-    h2{margin:0;font-size:var(--fs-15);line-height:var(--lh-snug);font-weight:var(--fw-medium);color:var(--ink-900)}
-    h3{margin:0;font-size:var(--fs-13);line-height:var(--lh-snug);font-weight:var(--fw-medium);color:var(--ink-900)}
+    h2{margin:0;font-size:var(--fs-16);line-height:var(--lh-snug);font-weight:var(--fw-medium);color:var(--ink-900)}
+    h3{margin:0;font-size:var(--fs-14);line-height:var(--lh-snug);font-weight:var(--fw-medium);color:var(--ink-900)}
     p{margin:0}
     .muted{color:var(--ink-500)}
     .hint{font-size:var(--fs-11);color:var(--ink-400);line-height:var(--lh-body)}
@@ -61,7 +61,7 @@
     .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
     .hero-num{font-size:var(--fs-40);font-weight:var(--fw-medium);color:var(--ink-900);line-height:1;letter-spacing:-.02em}
     .big-num{font-size:var(--fs-28);font-weight:var(--fw-medium);color:var(--ink-900);line-height:1;letter-spacing:-.01em}
-    .unit{font-size:var(--fs-12);color:var(--ink-400);font-weight:var(--fw-regular);margin-left:4px}
+    .unit{font-size:var(--fs-13);color:var(--ink-400);font-weight:var(--fw-regular);margin-left:4px}
 
     .bar{height:8px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;border:var(--stroke) solid var(--line-soft)}
     .bar>i{display:block;height:100%;background:var(--accent);border-radius:var(--r-pill)}
@@ -70,7 +70,7 @@
 
     .btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);height:36px;padding:0 var(--sp-4);
          border-radius:var(--r-sm);border:var(--stroke) solid var(--line);background:var(--surface);color:var(--ink-700);
-         font:inherit;font-size:var(--fs-13);font-weight:var(--fw-medium);cursor:pointer;
+         font:inherit;font-size:var(--fs-14);font-weight:var(--fw-medium);cursor:pointer;
          transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease),color var(--dur) var(--ease)}
     .btn:hover{background:var(--surface-sunken);border-color:var(--ink-300);color:var(--ink-900)}
     .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
@@ -79,23 +79,23 @@
     .btn.ink:hover{background:var(--ink-700)}
     .btn.ghost{border-color:transparent;background:transparent;color:var(--ink-500);padding:0 var(--sp-2)}
     .btn.ghost:hover{background:var(--surface-sunken);color:var(--ink-900)}
-    .btn.sm{height:30px;font-size:var(--fs-12);padding:0 var(--sp-3)}
+    .btn.sm{height:34px;font-size:var(--fs-13);padding:0 var(--sp-3)}
     .btn:focus-visible,.nav-item:focus-visible,td button:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
     .btn[disabled]{color:var(--ink-300);background:var(--surface-sunken);border-color:var(--line);cursor:not-allowed}
 
     .quick{display:grid;gap:var(--sp-2)}
     .quick button{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);height:52px;
                   padding:0 var(--sp-4);border:var(--stroke) solid var(--line);border-radius:var(--r-md);
-                  background:var(--surface);font:inherit;font-size:var(--fs-13);font-weight:var(--fw-medium);
+                  background:var(--surface);font:inherit;font-size:var(--fs-14);font-weight:var(--fw-medium);
                   color:var(--ink-900);cursor:pointer;transition:border-color var(--dur) var(--ease),background var(--dur) var(--ease)}
     .quick button:hover{border-color:var(--ink-900);background:var(--surface-raise)}
     .quick span{font-size:var(--fs-11);font-weight:var(--fw-regular);color:var(--ink-400)}
     .quick .plus{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accent);
-                 color:var(--accent-ink);font-size:var(--fs-12);line-height:1}
+                 color:var(--accent-ink);font-size:var(--fs-13);line-height:1}
 
     .stat{display:grid;gap:2px}
     .stat .k{font-size:var(--fs-11);color:var(--ink-400);letter-spacing:var(--tracking-label)}
-    .stat .v{font-size:var(--fs-15);font-weight:var(--fw-medium);color:var(--ink-900)}
+    .stat .v{font-size:var(--fs-16);font-weight:var(--fw-medium);color:var(--ink-900)}
     .stat-row{display:flex;justify-content:space-between;align-items:baseline;gap:var(--sp-2)}
 
     .pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 var(--sp-2);border-radius:var(--r-pill);
@@ -111,25 +111,27 @@
        text-align:right;padding:0 var(--sp-2) var(--sp-2);border-bottom:var(--stroke) solid var(--line)}
     th:first-child,td:first-child{text-align:left;padding-left:0}
     th:last-child,td:last-child{padding-right:0}
-    td{height:var(--row-h);padding:0 var(--sp-2);border-bottom:var(--stroke) solid var(--line-soft);
-       font-size:var(--fs-13);color:var(--ink-700);text-align:right;white-space:nowrap}
+    td{height:var(--row-h);padding:12px var(--sp-3);border-bottom:var(--stroke) solid var(--line-soft);
+       font-size:var(--fs-14);color:var(--ink-700);text-align:right;white-space:nowrap;vertical-align:middle}
     td.food{white-space:normal}
-    td.food b{display:block;font-weight:var(--fw-medium);color:var(--ink-900)}
-    td.food span{font-size:var(--fs-12);color:var(--ink-400)}
-    .meal-row td{background:var(--surface-sunken);font-weight:var(--fw-medium);color:var(--ink-900)}
+    td.food b{display:block;font-size:var(--fs-14);font-weight:var(--fw-medium);color:var(--ink-900);line-height:1.35}
+    td.food span{display:block;margin-top:2px;font-size:var(--fs-13);color:var(--ink-400);line-height:1.35}
+    .meal-row td{background:var(--surface-sunken);font-weight:var(--fw-medium);color:var(--ink-900);
+                 padding-top:18px;padding-bottom:10px;border-bottom:var(--stroke) solid var(--line)}
+    .meal-row:first-child td{padding-top:12px}
     .meal-row td:first-child{font-weight:var(--fw-medium)}
     .meal-row .hint{font-weight:var(--fw-regular)}
-    tfoot td{border-bottom:0;font-weight:var(--fw-medium);color:var(--ink-900);height:52px}
+    tfoot td{border-bottom:0;font-weight:var(--fw-medium);color:var(--ink-900);height:58px;padding-top:16px}
     .row-actions{display:flex;gap:var(--sp-1);justify-content:flex-end}
-    .link{border:0;background:transparent;font:inherit;font-size:var(--fs-12);color:var(--ink-500);
-          padding:4px 6px;border-radius:6px;cursor:pointer}
+    .link{border:0;background:transparent;font:inherit;font-size:var(--fs-13);color:var(--ink-600);
+          padding:5px 7px;border-radius:6px;cursor:pointer}
     .link:hover{background:var(--surface-sunken);color:var(--ink-900)}
     .link.danger{color:var(--danger)}
 
     label.field{display:grid;gap:6px}
     label.field>span{font-size:var(--fs-11);color:var(--ink-400);letter-spacing:var(--tracking-label)}
     input,select{width:100%;height:40px;padding:0 var(--sp-3);border:var(--stroke) solid var(--line);border-radius:var(--r-sm);
-                 background:var(--surface);font:inherit;font-size:var(--fs-13);color:var(--ink-900);font-variant-numeric:tabular-nums}
+                 background:var(--surface);font:inherit;font-size:var(--fs-14);color:var(--ink-900);font-variant-numeric:tabular-nums}
     input:focus-visible,select:focus-visible{outline:2px solid var(--focus-ring);outline-offset:1px;border-color:var(--ink-900)}
     .field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-3)}
     .field-grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -298,6 +300,9 @@
               <text class="axis" x="222" y="118">今天</text>
             </svg>
             <p class="hint" style="margin-top:8px">浅到深 = 越接近目标；亮块 = 今天。</p>
+            <div class="divider"></div>
+            <div class="stat-row"><span class="hint">7 天平均</span><span class="num" style="font-size:var(--fs-14)">1,760 kcal</span></div>
+            <div class="stat-row" style="margin-top:8px"><span class="hint">记录了</span><span class="num" style="font-size:var(--fs-14)">5 / 7 天</span></div>
           </div>
         </div>
 
@@ -442,7 +447,7 @@
           </table>
         </div>
 
-        <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:var(--sp-4)">
+        <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-5);margin-top:var(--sp-5)">
           <div class="card">
             <div class="card-head"><h2>库存</h2><button class="link">全部</button></div>
             <table>
@@ -455,21 +460,28 @@
           </div>
           <div class="card">
             <div class="card-head"><h2>今天做饭</h2><button class="link">菜谱</button></div>
-            <p class="hint" style="margin-bottom:12px">按库存能做的 3 个，第一个是标准锅。</p>
+            <p class="hint" style="margin-bottom:14px">按库存能做的 3 个，第一个是标准锅。</p>
             <div class="stack">
               <button class="btn sm" style="justify-content:space-between">标准锅 <span class="hint">缺 0 项</span></button>
               <button class="btn sm" style="justify-content:space-between">豆腐蒸蛋 <span class="hint">缺 0 项</span></button>
               <button class="btn sm" style="justify-content:space-between">里脊炒洋葱 <span class="hint">缺 洋葱</span></button>
             </div>
+            <p class="hint" style="margin-top:14px">缺的料会进「计划」的补货清单，不会自己下单。</p>
           </div>
           <div class="card">
-            <div class="card-head"><h2>成本</h2></div>
+            <div class="card-head"><h2>成本</h2><span class="hint">按周看</span></div>
             <div style="display:flex;align-items:baseline;gap:6px">
               <span class="big-num num">¥ 18.4</span>
               <span class="unit">今天</span>
             </div>
-            <p class="hint" style="margin-top:8px">本周日均 ¥19.2，预算 ¥20，还有 ¥6.4 余量。</p>
-            <div class="bar thin" style="margin-top:10px"><i style="width:96%"></i></div>
+            <div class="divider"></div>
+            <div class="stack" style="gap:10px">
+              <div class="stat-row"><span class="hint">本周日均</span><span class="num" style="font-size:var(--fs-14)">¥ 19.2</span></div>
+              <div class="stat-row"><span class="hint">周预算</span><span class="num" style="font-size:var(--fs-14)">¥ 140</span></div>
+              <div class="stat-row"><span class="hint">本周末余量</span><span class="num" style="font-size:var(--fs-14);color:var(--ok)">¥ 6.4</span></div>
+            </div>
+            <div class="bar thin" style="margin-top:14px"><i style="width:96%"></i></div>
+            <p class="hint" style="margin-top:8px">单日高低不算数，看 7 天均值。</p>
           </div>
         </div>
       </div>
