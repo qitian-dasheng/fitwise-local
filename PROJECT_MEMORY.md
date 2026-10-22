@@ -15,7 +15,14 @@
 - **0.6.1 已由用户安装验收通过（2026-10-22）**；过程中沉淀两条自动化点验教训：①Esc 不被 WebView2 消费，点验脚本要点 × 关弹窗；②共用桌面自动化必须先断言前台窗口（固化进 `tools/acceptance_qh.py`）。
 - **0.6.2 已出包待验收（2026-10-22，提交 `65eb7e0`）**：①今日页「补记一笔」hint 真实状态化（`todayHints.ts` + `nextMealSlot`；food 直达按待记餐次开表单）；②标签交叉校验 `label_checks.rs`（能量上限 950 kcal/100g、Atwater 容差 25%、NRV% 容差 35%、规格量级守卫；接入 `preview_form`，返回新增 `declaredKcal`）；③点验脚本固化（前台断言 + 坐标范围校验）。前端 287 项（+12）+ Rust 138 项（+11）全过；clippy `-D warnings` 过。MSI 8,409,088 B，SHA-256 `536C42B6…AFA99ED`。评审与点验清单见 `REVIEW_0.6.2.md`。**无数据库迁移，schema 仍 v12。**
 - **M3 修正**：菜单来源 = 用户问 AI、AI 推荐。M3 = 授权摘要导出 + AI 菜单草稿导入通道（外部 Agent 只能建草稿、应用内确认），本地确定性算法后置；表格形态与来源胶囊（演示/AI 草稿/已选）两种来源通用。
-- **待排期（用户提出，优先级由用户定）**：①设置页能量单位显示开关（kcal/kJ，默认 kcal，复用 `label_checks::energy_to_kcal`）；②标签预览 UI 补 NRV% 输入位（校验接口已留：`run_all(..., nrv, ...)`，暂传空表跳过）。**完整排期（0.6.3 → M3，含判据）见 `design/PLAN_NEXT.md`（2026-10-22 起为唯一排期来源）。**
+- **待排期（用户提出，优先级由用户定）**：①设置页能量单位显示开关（kcal/kJ，默认 kcal，复用 `label_checks::energy_to_kcal`）；②标签预览 UI 补 NRV% 输入位（校验接口已留：`run_all(..., nrv, ...)`，暂传空表跳过）。**→ 两项已于 0.7.0（M3）完成。完整排期（0.6.3 → M3，含判据）见 `design/PLAN_NEXT.md`（2026-10-22 起为唯一排期来源）。**
+
+## 0.8 阶段管理规则与 0.7.0（M3，2026-10-22）
+
+- **阶段管理规则（用户确立，长期有效）**：严格按既定里程碑推进，不拆小版本方案；验收问题归档进下一阶段；调整计划须先说明原因/影响/必要性并经用户确认。此后版本号跟随里程碑（本轮 = 0.7.0）。
+- **0.6.2 安装版验收结果（用户执行）**：餐次默认早餐 ✅、练了什么/称了多少跳转 ✅、100 kJ → 23.9 kcal 归一化 ✅（用户实际操作验证）；Atwater 负面用例因营养素全未知被静默放行属正确行为，留作下版点验项；「补记一笔」贴边 ❌ → 归档 M3 修复。
+- **0.7.0（M3）交付**：①`.quick-actions` 补 padding（贴边修复）；②能量单位显示开关（localStorage `qingheng.display.energy-unit`，`KJ_PER_KCAL` 与 Rust 同源，录入表单保持 kcal、存储不变）；③标签草稿 NRV% 输入位（`LabelForm.nrv` serde(default)，`preview_form` 传入 `run_all`，0–500% 守卫）；④授权摘要导出（`domain/aiSummary.ts` + `AiSummaryPanel`，可编辑确认后复制/保存）；⑤AI 菜单草稿通道（`0013_menu_drafts.sql` + `menu_drafts.rs` 三命令，导入逐条跑三项校验，确认须全过，方案带 `origin:"ai-draft"` 进 plans）；⑥来源胶囊第三态 `AI 草稿（info）`。测试：前端 37 文件/310 项、Rust 148 项全绿。执行记录见 `REVIEW_M3.md`。
+- **下一阶段：M4（可选深色主题）或用户指定**；完整排期以 `design/PLAN_NEXT.md` 为准。
 
 ## 1. 项目身份与产品方向
 
