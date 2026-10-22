@@ -1,0 +1,185 @@
+/**
+ * 0.5 主题重映射层（过渡层）
+ *
+ * 旧 styles.css 几乎全部由变量驱动，本文件把旧变量接到新设计系统上，
+ * 使全部界面一次性换肤；组件层拆分（M2.5）完成后再退役本文件。
+ *
+ * 加载顺序：tokens.css → fonts.css → styles.css → theme.css → base.css（最后接管全局字体）。
+ *
+ * 守卫说明：本文件是「旧变量 → 新值」的桥，允许出现少量色值；
+ * 设计守卫的"色值唯一"检查范围 = 除 tokens.css 与本文件外的所有样式。
+ */
+
+:root {
+  /* 旧绿 → 墨色：按钮、链接、选中态、导航全部转近黑 */
+  --green: var(--ink-900);
+  --green-dark: var(--ink-900);
+  /* 旧浅绿 → 中性悬停灰（强调色只留给真正的 accent） */
+  --green-pale: #f1f4ef;
+  /* 语义色对齐设计系统 */
+  --coral: var(--danger);
+  --amber: var(--warn);
+  --blue: var(--info);
+  --muted: var(--ink-500);
+  --border: var(--line);
+  /* 去阴影 */
+  --shadow: none;
+}
+
+body {
+  background: var(--surface-sunken);
+}
+
+/* ── 强调色回到唯一彩色：主按钮 = 荧光黄绿填充 ────────────── */
+.button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: none;
+}
+.button.primary:hover {
+  filter: brightness(0.97);
+}
+
+/* ── 去阴影：扁平层级 ────────────────────────────────────── */
+.collapse-button,
+.metric-card,
+.mobile-upload-dialog img,
+.drawer,
+.range-tabs button.active,
+.modal,
+.assistant-overlay-card,
+.assistant-fab {
+  box-shadow: none;
+}
+.form input:focus,
+.form select:focus,
+.body-entry-form input:focus,
+.body-entry-form select:focus {
+  box-shadow: none;
+}
+
+/* ── 小标签：不再用绿色 + 大写字重，改为墨灰 500 ─────────── */
+.eyebrow {
+  color: var(--ink-400);
+  font-weight: 500;
+}
+
+/* ── 侧栏：深墨底、灰字 ─────────────────────────────────── */
+.sidebar {
+  background: var(--ink-900);
+  color: #9aa19b;
+}
+.sidebar nav button,
+.sidebar-bottom > button {
+  color: #9aa19b;
+}
+.sidebar nav button.active,
+.sidebar-bottom > button.active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+.brand-mark {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ── 溢出清扫：所有小标签/胶囊/徽标不允许顶破容器 ─────────── */
+.status-pill,
+.pill,
+.eyebrow,
+.selected-badge,
+.reason-chips span {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-heading,
+.page-header,
+.plan-title-row {
+  flex-wrap: wrap;
+}
+
+/* ── 计划页：紧凑表格（M3 换真数据零返工） ───────────────── */
+.plan-table-card {
+  padding: 0;
+  overflow: hidden;
+}
+.plan-table-card table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.plan-table-card th {
+  padding: 14px 16px;
+  border-bottom: 0.5px solid var(--line);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-align: right;
+  white-space: nowrap;
+}
+.plan-table-card th:first-child,
+.plan-table-card td:first-child {
+  text-align: left;
+  padding-left: 20px;
+}
+.plan-table-card th:last-child,
+.plan-table-card td:last-child {
+  padding-right: 20px;
+  text-align: right;
+}
+.plan-table-card td {
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--line-soft);
+  font-size: 14px;
+  color: var(--ink);
+  text-align: right;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+.plan-table-card td.candidate {
+  white-space: normal;
+}
+.plan-table-card td.candidate b {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: var(--ink-900);
+}
+.plan-table-card td.candidate > span {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.plan-table-card td.candidate .plan-missing {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--warn);
+}
+.plan-table-card tr.selected td {
+  background: var(--accent-soft);
+}
+.plan-restock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 0.5px solid var(--line);
+  background: var(--surface-sunken);
+}
+
+/* ── 窄屏 ───────────────────────────────────────────────── */
+@media (max-width: 620px) {
+  .plan-table-card th:nth-child(3),
+  .plan-table-card td:nth-child(3) {
+    display: none;
+  }
+}

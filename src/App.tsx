@@ -83,6 +83,18 @@ export default function App() {
   useLayoutEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [page]);
+  // 深链：#food/#body/... 直达对应页面（截图守卫与分享链接都用）。
+  useEffect(() => {
+    const applyHash = () => {
+      const hash = window.location.hash.replace("#", "");
+      if (!hash) return;
+      const known = [...navItems, ...toolItems].some((item) => item.id === hash);
+      if (known) setPage(legacyPageTargets[hash] ?? hash);
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
   // AI 助手不再是导航项：Ctrl/⌘+K 或右下角浮标唤起，Esc 关闭。
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
