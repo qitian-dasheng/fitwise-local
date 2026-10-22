@@ -102,7 +102,7 @@
 @media(max-width:600px) { .inventory-section,.purchase-order-card { padding: 16px; } .purchase-order-heading { flex-direction: column; } .purchase-facts { grid-template-columns: 1fr; } .purchase-order-footer .button-row { width: 100%; } }
 
 :root {
-  font-family: "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-sans);
   color: #19231f;
   background: #f1f3ee;
   font-synthesis: none;
