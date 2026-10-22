@@ -12,9 +12,10 @@
 - **M1**：`design/DESIGN_SYSTEM.md`（规则，不抄数值）、`design/ROADMAP_0.5.md`（M0–M4 与 M3 修正）、`design/prototype/`（模板 + 生成器 `npm run design:build`）。
 - **M1.5**：导航 9→5（今日/饮食/身体/运动/计划 + 工具组）；今日行动台（吃/练/称，food/workout 直达开表单）；库存归饮食、趋势归身体；AI 助手改 Ctrl+K 浮层；`src/domain/navigation.ts` + 守卫测试；移除 react-router-dom。
 - **M2**：`src/styles/theme.css` 旧变量重映射全量换肤（绿色退场转近黑、阴影清零、语义色对齐、侧栏深墨底）；字号下限 11px（移动端导航 10px 例外已登记）；溢出清扫（pill/eyebrow/badge nowrap+ellipsis）；计划页表格化（删三卡/幽灵数字/覆盖进度条/两张占位卡，来源胶囊 演示/已选）；深链 `#food` 等；scoped 设计守卫 4 条（`tests/designGuard.test.ts`，全局守卫随 M2.5 旧样式退役启用）。
-- **0.6.1 已出包待验收（2026-10-22，提交 `19d8a4a`）**：今日页「补记一笔」四点修法已实现——form-hint 移入页头 `.complete-day`、标题缩短为「补记一笔」、eyebrow 与「点了直接开表单」胶囊删除；前端 275 项（+1 回归）+ Rust 127 项全过，MSI 8,409,088 B（SHA-256 见 BUILD_REPORT）。挑刺与点验清单见 `REVIEW_0.6.1.md`。
+- **0.6.1 已由用户安装验收通过（2026-10-22）**；过程中沉淀两条自动化点验教训：①Esc 不被 WebView2 消费，点验脚本要点 × 关弹窗；②共用桌面自动化必须先断言前台窗口（固化进 `tools/acceptance_qh.py`）。
+- **0.6.2 已出包待验收（2026-10-22，提交 `65eb7e0`）**：①今日页「补记一笔」hint 真实状态化（`todayHints.ts` + `nextMealSlot`；food 直达按待记餐次开表单）；②标签交叉校验 `label_checks.rs`（能量上限 950 kcal/100g、Atwater 容差 25%、NRV% 容差 35%、规格量级守卫；接入 `preview_form`，返回新增 `declaredKcal`）；③点验脚本固化（前台断言 + 坐标范围校验）。前端 287 项（+12）+ Rust 138 项（+11）全过；clippy `-D warnings` 过。MSI 8,409,088 B，SHA-256 `536C42B6…AFA99ED`。评审与点验清单见 `REVIEW_0.6.2.md`。**无数据库迁移，schema 仍 v12。**
 - **M3 修正**：菜单来源 = 用户问 AI、AI 推荐。M3 = 授权摘要导出 + AI 菜单草稿导入通道（外部 Agent 只能建草稿、应用内确认），本地确定性算法后置；表格形态与来源胶囊（演示/AI 草稿/已选）两种来源通用。
-- **待排期（用户提出，优先级由用户定）**：①标签录入三项校验——**先补 `src-tauri/src/label_drafts.rs` 的 kJ→kcal 归一化（目前 0 处 ÷4.184，只有食材库建成）**，再做 Atwater 交叉校验、NRV% 反推、每份/每100g 规格守卫；②设置页能量单位显示开关（kcal/kJ，默认 kcal）。**完整排期（0.6.1 → 0.6.2 → 0.6.3 → M3，含判据）见 `design/PLAN_NEXT.md`（2026-10-22 起为唯一排期来源）。**
+- **待排期（用户提出，优先级由用户定）**：①设置页能量单位显示开关（kcal/kJ，默认 kcal，复用 `label_checks::energy_to_kcal`）；②标签预览 UI 补 NRV% 输入位（校验接口已留：`run_all(..., nrv, ...)`，暂传空表跳过）。**完整排期（0.6.3 → M3，含判据）见 `design/PLAN_NEXT.md`（2026-10-22 起为唯一排期来源）。**
 
 ## 1. 项目身份与产品方向
 
@@ -105,11 +106,11 @@ npm run tauri build
 - SQLite 事务、领域命令回执/请求指纹、升级前快照与对账、JSON 导出、现有加密备份/暂存恢复、Windows 凭据存储边界。
 - 源码中的 P0 保护：原生 JSON 另存/回读校验、只读运行诊断、桌面桥接失败不回退浏览器存储、hydration 错误显式呈现。
 
-截至 0.6.0 源码检查点：前端 **31 文件 274 项**、Rust **127 项**，共 **401 项** 通过；`tsc -b`、生产构建、fmt、Clippy 全目标 `-D warnings` 通过。证据见 `BUILD_REPORT.md`、`build-logs/visual/0.6.0-preview/` 与 `build-logs/*0.6.0*.log`。0.6.0 已由用户安装并验证通过（2026-10-22）。
+截至 0.6.2 源码检查点：前端 **33 文件 287 项**、Rust **138 项**，共 **425 项** 通过；`tsc -b`、生产构建、fmt、Clippy 全目标 `-D warnings` 通过。证据见 `BUILD_REPORT.md`、`build-logs/visual/0.6.0-preview/` 与 `build-logs/*0.6.0*.log`。0.6.0 已由用户安装并验证通过（2026-10-22）。
 
 ## 6. 当前安装与数据事实（非常重要）
 
-- 当前已安装版本为 **0.6.0**（2026-10-22 用户安装并验证）；**0.6.1 MSI 已出包、待用户覆盖安装**（今日页「补记一笔」修复，见 §0 与 REVIEW_0.6.1.md）。**无数据库迁移，schema 仍为 v12**。
+- 当前已安装版本为 **0.6.1**（2026-10-22 用户安装并验收通过）；**0.6.2 MSI 已出包、待用户覆盖安装**（hint 真实状态化 + 标签校验 + 点验脚本，见 §0 与 REVIEW_0.6.2.md）。**无数据库迁移，schema 仍为 v12**。
 - 用户真实数据已通过原生窗口导出和 Explorer 复制的数据库副本保全；副本完整性与导出逐项一致。
 - 用户从 Windows Explorer 正常打开 `C:\Program Files\轻衡\fitwise-local.exe` 后，重启前后的数据库来源导出除 `exportedAt` 外完全相同，既有记录持久化验收通过。
 - 电脑控制工具或命令行直接启动同一 exe/读取同名字面 AppData 路径时，会看到另一套较小数据库。这是运行上下文/文件视图差异，底层原因未完全确定。
