@@ -6,6 +6,7 @@ import { listen } from "@tauri-apps/api/event";
 import { notifyInputs, useInputReceipts } from "./data/artifacts";
 import { diaryToday } from "./domain/diary";
 import { getStorageFailure, subscribeStorageFailure } from "./data/storage";
+import type { MealType } from "./domain/types";
 
 const TodayPage = lazy(() => import("./pages/TodayPage").then((module) => ({ default: module.TodayPage })));
 const FoodPage = lazy(() => import("./pages/FoodPage").then((module) => ({ default: module.FoodPage })));
@@ -51,6 +52,8 @@ export default function App() {
   const [date, setDate] = useState(diaryToday);
   // 今日页「补记一笔」的直达意图：切到目标页后自动打开对应表单，用完即清。
   const [quick, setQuick] = useState<null | "food" | "workout">(null);
+  // 「吃了什么」带来的餐次：表单开在真正待记的那一餐，而不是固定早餐。
+  const [quickMeal, setQuickMeal] = useState<MealType>("breakfast");
   const [assistantOpen, setAssistantOpen] = useState(false);
   useEffect(() => {
     let previousToday = diaryToday();
@@ -116,8 +119,9 @@ export default function App() {
         goTo={setPage}
         date={date}
         onDateChange={setDate}
-        onQuickAction={(kind) => {
+        onQuickAction={(kind, mealType) => {
           if (kind === "body") { setPage("body"); return; }
+          if (mealType) setQuickMeal(mealType);
           setPage(kind);
           setQuick(kind);
         }}
@@ -129,6 +133,7 @@ export default function App() {
           date={date}
           onDateChange={setDate}
           autoOpenMeal={quick === "food"}
+          autoOpenMealType={quickMeal}
           onAutoOpenConsumed={() => setQuick(null)}
         />
         <InventoryPage />

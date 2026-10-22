@@ -132,15 +132,16 @@ pub(crate) fn preview_form(raw: &Value) -> Result<Value, String> {
         }
     }
     let input = json!({"name":f.name,"brand":f.brand,"measurementBasis":f.measurement_basis,"basis":{"quantity":basis,"unit":f.basis_unit},"energyUnit":f.energy_unit,"nutrients":nutrients,"conversions":conversions,"source":"label"});
+    // 标注能量先按同一口径折成 kcal，再交给三项校验；原始 kJ 值仍原样留在 input 里。
+    let declared = crate::label_checks::declared_kcal(
+        nutrients.get("calories").and_then(Value::as_f64),
+        &f.energy_unit,
+    );
     let preview = crate::food_library::preview_input(&json!({"input":input}))?;
-    // A suspicious kJ-as-kcal transcription must be resolved, not silently corrected.
-    if preview["per100g"]["calories"]["value"]
-        .as_f64()
-        .is_some_and(|n| n > 1000.0)
-    {
-        return Err("每 100 克能量超过 1000 千卡，请核对是否把千焦 kJ 当成千卡 kcal，或参考规格录错；不会自动改单位。".into());
-    }
-    Ok(json!({"input":input,"preview":preview}))
+    // 三项交叉校验：能量上限、Atwater 自洽、NRV% 反推、每份规格量级。
+    // 旧实现只查「每 100 克超过 1000 千卡」这一条，kJ 当 kcal、录错行都能溜过去。
+    crate::label_checks::run_all(&preview, &f.basis_unit, basis, &Value::Null, None)?;
+    Ok(json!({"input":input,"preview":preview,"declaredKcal":declared}))
 }
 
 fn get(connection: &Connection, id: &str) -> Result<Value, String> {

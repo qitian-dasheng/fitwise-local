@@ -7,6 +7,8 @@ import { useMemo } from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { activeMeals, summarizeMeals } from "../domain/calculations";
 import { dailyRepresentatives } from "../domain/body";
+import { bodyActionHint, mealActionHint, workoutActionHint } from "../domain/todayHints";
+import type { MealType } from "../domain/types";
 import { useAppStore } from "../store/appStore";
 import { Modal } from "../components/Modal";
 import { NutritionRing } from "../components/NutritionRing";
@@ -16,7 +18,11 @@ import { usePeriodSummary } from "../data/domainQueries";
 
 const mealLabels = { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", snack: "加餐" } as const;
 
-export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickAction }: { goTo: (page: string) => void; onQuickAction?: (kind: "food" | "workout" | "body") => void } & DiaryDateProps) {
+/** 今日页「补记一笔」的三个入口；food 额外带餐次，用来把表单开在真正待记的那一餐上。 */
+export type QuickActionKind = "food" | "workout" | "body";
+export type QuickActionHandler = (kind: QuickActionKind, mealType?: MealType) => void;
+
+export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickAction }: { goTo: (page: string) => void; onQuickAction?: QuickActionHandler } & DiaryDateProps) {
   const action = useConfirmedAction();
   const profile = useAppStore((state) => state.profile);
   const meals = useAppStore((state) => state.meals);
@@ -38,6 +44,10 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickActi
   const weightData = currentMeasurements.slice(-14).map((item) => ({ date: item.date.slice(5), weight: item.weightKg }));
   const latestWeight = period.data?.latestWeightKg ?? currentMeasurements.at(-1)?.weightKg ?? profile.startWeightKg;
   const expiringCount = useMemo(() => inventory.filter((item) => item.remainingAmount > 0 && item.expiresAt && new Date(item.expiresAt).getTime() - Date.now() < 3 * 864e5).length, [inventory]);
+  // 三个副标题全部由真实记录推导：写死文案在数据一变就会变成新的谎话。
+  const mealHint = mealActionHint(meals, today);
+  const workoutHint = workoutActionHint(workouts, today);
+  const bodyHint = bodyActionHint(measurements, today, diaryToday());
 
   if (period.loading || period.error) return <div className="page"><PageHeader eyebrow="今日" title="今日记录" description={period.error ? "读取记录失败，请重新打开此页面后重试。" : "正在读取本地记录…"}/>{period.error && <p className="form-error" role="alert">{period.error}</p>}</div>;
 
@@ -63,20 +73,20 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickActi
           <h2>补记一笔</h2>
         </div>
         <div className="quick-row">
-          <button className="quick-action" onClick={() => onQuickAction?.("food")}>
+          <button className="quick-action" onClick={() => onQuickAction?.("food", mealHint.slot ?? undefined)}>
             <Utensils size={16} />
             <b>吃了什么</b>
-            <span className="quick-hint">照搬上次早餐</span>
+            <span className="quick-hint">{mealHint.text}</span>
           </button>
           <button className="quick-action" onClick={() => onQuickAction?.("workout")}>
             <Dumbbell size={16} />
             <b>练了什么</b>
-            <span className="quick-hint">上次 22 分钟</span>
+            <span className="quick-hint">{workoutHint}</span>
           </button>
           <button className="quick-action" onClick={() => onQuickAction?.("body")}>
             <Scale size={16} />
             <b>称了多少</b>
-            <span className="quick-hint">今晨还没称</span>
+            <span className="quick-hint">{bodyHint}</span>
           </button>
         </div>
       </section>

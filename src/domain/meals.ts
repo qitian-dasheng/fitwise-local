@@ -11,6 +11,21 @@ export const mealLabels: Record<MealType, string> = {
   snack: "加餐",
 };
 
+/**
+ * 所选日第一个还没记录的餐次；四餐都记过时返回 null。
+ *
+ * 今日页「吃了什么」用它决定点开哪个餐次的表单——原来固定写死早餐，
+ * 早上已经记过还开早餐表单，等于逼用户每次手动改一次餐次。
+ */
+export function nextMealSlot(meals: MealEntry[], date: string): MealType | null {
+  const recorded = new Set(
+    activeMeals(meals)
+      .filter((entry) => entry.date === date)
+      .map((entry) => entry.type),
+  );
+  return mealTypes.find((type) => !recorded.has(type)) ?? null;
+}
+
 export interface MealCopySource {
   date: string;
   entries: MealEntry[];

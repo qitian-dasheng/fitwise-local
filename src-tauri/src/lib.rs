@@ -10,6 +10,7 @@ mod domain_store;
 mod domain_upgrade;
 mod food_library;
 mod inventory_ops;
+mod label_checks;
 mod label_drafts;
 mod meal_corrections;
 mod recipes;
