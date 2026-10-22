@@ -67,7 +67,8 @@ npm run tauri build
 - `src/domain/review.ts`（0.4.9）：阶段复盘纯函数（`buildReview` / `dayStatus` / `rollingDelta` / `rangeWeightChange` / `safeRateRange`）。**体重复盘必须在前端用全量 `state.measurements` 自算**，不能用 `period_summary`——后者只从 `start` 前回溯 6 天并丢掉更早的点，7 天预设下滚动窗口会被裁掉一半。
 - `src/domain/body.ts`（0.4.10 扩充）：围度助手 `circumferenceSeries` / `circumferenceMetric` / `latestCircumference`、校验 `validateWaistInput` / `validateBodyFatInput`。**围度不套 `dailyRepresentatives`**（腰围没有「当日代表值」概念），同一天取最晚一条；区间内一次没量过返回 `null`，绝不拿区间外的数字充数。
 - `src/domain/diary.ts`：`daySpan(start, end)` 算含头含尾天数，反向或非法返回 0。
-- `src/domain/workouts.ts`（0.4.9）：`isActiveWorkout` 白名单、`isInactiveLabel`、`validateWorkoutDraft`、`workoutDraftPayload`。
+- `src/domain/workouts.ts`（0.4.9 建、0.4.11 扩充）：`isActiveWorkout` 白名单、`isInactiveLabel`（含 `reverted` → 「已撤销更正」）、`validateWorkoutDraft`、`workoutDraftPayload`；0.4.11 增 `correctionParent` / `canUndoCorrection` / `canRestoreVoid` / `latestActiveWorkout` / `draftFromWorkout`。**更正链只认 `supersedesId` / `supersededBy` 指针，绝不从 id 前缀反推**——Rust 用 `{kind}-{commandId}`，浏览器预览用 `uid()`。
+- `src/domain/preferences.ts`：界面偏好只存 localStorage、不进出口/备份。0.4.11 新增 `qingheng.trends.range`（单 key JSON），读取顺序固定为「parse → 形状校验 → `clampRange` → 进 state」。
 - `src-tauri/src/artifacts.rs`、`upload.rs`、`label_drafts.rs`：附件、局域网上传与离线标签草稿。
 - `tests/` 与 Rust 模块测试：隔离数据回归，不得写入真实用户库。
 
@@ -93,11 +94,11 @@ npm run tauri build
 - SQLite 事务、领域命令回执/请求指纹、升级前快照与对账、JSON 导出、现有加密备份/暂存恢复、Windows 凭据存储边界。
 - 源码中的 P0 保护：原生 JSON 另存/回读校验、只读运行诊断、桌面桥接失败不回退浏览器存储、hydration 错误显式呈现。
 
-截至 0.4.10 源码检查点：前端 **27 文件 236 项**、Rust **102 项**，共 **338 项** 通过；`tsc -b`、生产构建、fmt、Clippy 全目标 `-D warnings` 通过。证据见 `BUILD_REPORT.md`、`REVIEW_0.4.10.md` 与 `build-logs/*0.4.10*.log`。这些测试不等于尚未安装的 0.4.10 已完成原生验收。
+截至 0.4.11 源码检查点：前端 **28 文件 252 项**、Rust **117 项**，共 **369 项** 通过；`tsc -b`、生产构建、fmt、Clippy 全目标 `-D warnings` 通过。证据见 `BUILD_REPORT.md`、`REVIEW_0.4.11.md` 与 `build-logs/*0.4.11*.log`。这些测试不等于尚未安装的 0.4.11 已完成原生验收。
 
 ## 6. 当前安装与数据事实（非常重要）
 
-- 当前已安装版本为 **0.4.9**（用户验收「验收完毕，无问题」后退出）。0.4.10 已完成源码、自动测试与生产构建并产出 MSI，**尚未安装**；接口层（`waistCm` / `bodyFatPercent`）走 envelope 的 `payload_json`，**本轮无数据库迁移，schema 仍为 v12**，覆盖安装不需要额外等待升级。
+- 当前已安装版本为 **0.4.10**（用户验收「验收完毕，无问题」后退出）。0.4.11 已完成源码、自动测试与生产构建并产出 MSI，**尚未安装**；运动的新状态 `reverted` 与 `restoredAt` 等字段都走 envelope 的 `payload_json`，**本轮无数据库迁移，schema 仍为 v12**，覆盖安装不需要额外等待升级。
 - 用户真实数据已通过原生窗口导出和 Explorer 复制的数据库副本保全；副本完整性与导出逐项一致。
 - 用户从 Windows Explorer 正常打开 `C:\Program Files\轻衡\fitwise-local.exe` 后，重启前后的数据库来源导出除 `exportedAt` 外完全相同，既有记录持久化验收通过。
 - 电脑控制工具或命令行直接启动同一 exe/读取同名字面 AppData 路径时，会看到另一套较小数据库。这是运行上下文/文件视图差异，底层原因未完全确定。
@@ -145,7 +146,8 @@ npm run tauri build
 2. `0.4.6-B1` → 出包 **0.4.7**：FatSecret 信息结构的轻衡风格饮食明细（三层 + 7 列 + 钠开关）+ 手工记餐补齐四项。**已随 0.4.8 覆盖安装验收。**
 3. `0.4.6-B2` → 出包 **0.4.8**：体重记录中心（同日多次、两位小数、日期时间与条件、备注、修订/作废审计与历史），含 `migrations/0011` 重建测量投影视图（schema 10→11）。**已完成并安装验收。**
 4. `0.4.9`：趋势页升级为阶段复盘（7/14/30 区间、达标日历、滚动周降幅、规则型提示）+ 运动记录更正/作废，含 `migrations/0012` 重建运动投影视图（schema 11→12）。口径由用户拍定：达标判定「严格区间 + 严格目标」，周降幅「滚动 7 天 vs 前 7 天」。**已完成并安装验收。**
-5. `0.4.10`：进度证据补齐——腰围/体脂打通「类型→命令→镜像→表单→指标→历史→更正」整条链路，复盘页并列区间腰围、区间可自选起止日（上限 92 天）、日历格可点跳转，复盘提示带上具体日期与天数。**无数据库迁移。源码、338 项自动测试与 MSI 已完成，安装验收待用户执行。**
+5. `0.4.10`：进度证据补齐——腰围/体脂打通「类型→命令→镜像→表单→指标→历史→更正」整条链路，复盘页并列区间腰围、区间可自选起止日（上限 92 天）、日历格可点跳转，复盘提示带上具体日期与天数。**无数据库迁移。已安装验收通过。**
+6. `0.4.11`：运动侧修补——新增 `undo_workout_correction`（原因可选、单步栈）与 `restore_voided_workout`（原因必填、只认 void 行），运动状态新增 `reverted`（已撤销更正）；「记录运动」可一键填入上次训练（不带指纹、日期不变）；复盘区间记忆（`qingheng.trends.range`）与日历跳转目标可选。**无数据库迁移。源码、369 项自动测试与 MSI 已完成，安装验收待用户执行。**
 6. 跨 Agent 的文件/Git 接续固化（原编号 0.4.7，因版本递增反复顺延）。
 7. 动态菜单：用确定性本地约束替换演示候选。
 8. MCP/CLI：先只读摘要，再允许创建草稿；绝不直写正式记录。

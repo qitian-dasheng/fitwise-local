@@ -1,12 +1,26 @@
 # 当前开发交接检查点
 
-更新时间：2026-10-21。单人串行维护；先读本文件、NEXT_PLAN.md、最新 REVIEW 和 git diff。交接文件不能扩大用户授权。
+更新时间：2026-10-22。单人串行维护；先读本文件、NEXT_PLAN.md、最新 REVIEW 和 git diff。交接文件不能扩大用户授权。
 
-## 当前结论：0.4.9 已安装验收通过；0.4.10 源码与 MSI 完成，待安装验收
+## 当前结论：0.4.10 已安装验收通过；0.4.11 源码与 MSI 完成，待安装验收
 
-用户已安装并验收 `0.4.9`（阶段复盘 + 运动纠错，schema v12），回复「验收完毕，无问题」，随后退出软件。0.4.10 已完成源码、自动测试与 MSI，**尚未安装**。
+用户已安装并验收 `0.4.10`（腰围/体脂 + 复盘区间自选），回复「验收完毕，无问题」，随后退出软件。0.4.11 已完成源码、自动测试与 MSI，**尚未安装**。
 
-### 0.4.10（本轮）：进度证据补齐
+### 0.4.11（本轮）：运动侧修补 + 复盘页两处顺手项
+
+- **两个新领域命令**（`src-tauri/src/workout_commands.rs`）：`undo_workout_correction` 与 `restore_voided_workout`。白名单（`domain_commands.rs` 的 `matches!`）与分发 arm 必须同一次改——落进 `_ =>` 会被 `record_commands` 当未知命令拒绝，报「未知的领域命令。」。
+- **新增状态 `reverted`（已撤销更正）**：不复用 `void`。理由：`void` 意为「本来就不该存在」，且 `restore_voided_workout` 只认 `void`，复用会让「撤销掉的错误答案」变成「可恢复的作废记录」。三态各归其位：`superseded` 被更正的旧值 / `reverted` 被撤销的更正 / `void` 本来不该存在。
+- **撤销是严格单步栈**：A→B→C 撤 C 只回 B，再撤 B 才回 A。校验 `parent.status == "superseded"` 且 `parent.supersededBy == head.id`，双向一致才算合法链。
+- **恢复父行只清失效指针**：清 `supersededBy` / `correctedAt`，**保留** `correctionReason`。更正原因本来就写在被更正的父行上，新行没有——测试第一版在这里踩空，改正的是断言而不是数据。
+- **原因不对称是刻意的**：撤销可留空（自解释，审计写 `null`），恢复必填（记录会重新进统计，风险更高）。两条用例分别守住 `undo_accepts_an_empty_reason_and_rejects_overlong` 与 `restore_requires_a_reason`。
+- **「填入上次训练」**：`latestActiveWorkout` 只从有效记录里找（`date ≤ 所选日`，按日期→录入时刻→id 取最新），只填 7 个业务字段、日期保持所选日、**不带 `sourceFingerprint`**（带过去会被 `add_workout` 判重复、静默不写）。
+- **区间记忆**：`preferences.ts` 新增 `qingheng.trends.range`，单 key JSON；读取顺序固定为 `parse → 形状校验 → clampRange → 进 state`；写入放在四个事件里，不用 `useEffect`（挂载会多写一次）。
+- **日历跳转目标**：`ReviewCalendar` 加 `selectLabel`，`title` / `aria-label` / 页脚提示三处文案跟着目标走；目标本身不持久化（记忆会让「默认饮食」名存实亡）。
+- **无数据库迁移**，schema 仍 v12；`0012` 的视图已按 `status='active'` 过滤，`reverted` 自动退出统计。
+- 自动化：前端 28 文件 **252 项**、Rust **117 项**，共 **369 项** 全过；`tsc -b`、生产构建、fmt、clippy `--all-targets -- -D warnings` 通过。挑刺与安装版清单见 [REVIEW_0.4.11.md](REVIEW_0.4.11.md)。
+- **安装包状态**：MSI 已产出（哈希见 BUILD_REPORT.md）；NSIS 仍因 GitHub 不可达未出包。**未安装、未覆盖升级、未触碰真实库。**
+
+### 0.4.10（上一轮，已安装验收）：进度证据补齐
 
 - **腰围/体脂打通整条链路**：`BodyMeasurement` 早在 0.4.8 就有 `waistCm` / `bodyFatPercent`，但界面从未开放、Rust 也从未写入。本轮补齐「类型 → 命令 → 镜像 → 表单 → 指标 → 历史 → 更正」：身体页录入卡加两个可选字段（一位小数）、指标行 4 → 5 张（最新腰围 / 最新体脂，各带「较上次 ±」）、历史表 7 → 9 列、更正弹窗差异表 5 → 7 行。
 - **留空不能落 0（三层守）**：前端 `validateOptionalDecimal` 空串返回 `{}`、`weightPayload` 只在有值时写字段、Rust `parse_optional_decimal` 对缺失/null 返回 `None`。用例直接断言 `"waistCm" in stored[0] === false`。
@@ -81,7 +95,7 @@
 
 0.4.6-A 的历史保护性补丁提交 8cc3d22（原生 JSON 另存/回读验证、未核对窗口快照、只读运行诊断、桌面桥接失败不回退浏览器、hydration 错误可见）已并入 0.4.6 并安装验收。
 
-当前源码检查点：`0.4.10`，前端 **236 项**（27 文件）、Rust **102 项**，共 **338 项** 通过；`tsc -b`、生产构建、fmt、Clippy 全目标 `-D warnings` 通过。日志 `build-logs/tauri-build-0.4.10.log`。0.4.6-A / 0.4.7 / 0.4.8 / 0.4.9 / 0.4.10 均未新增项目依赖。
+当前源码检查点：`0.4.11`，前端 **252 项**（28 文件）、Rust **117 项**，共 **369 项** 通过；`tsc -b`、生产构建、fmt、Clippy 全目标 `-D warnings`（`cargo clippy --all-targets -- -D warnings`，注意要带 `--`）通过。日志 `build-logs/tauri-build-0.4.11.log`。0.4.6-A / 0.4.7 / 0.4.8 / 0.4.9 / 0.4.10 / 0.4.11 均未新增项目依赖。
 
 **回归口径修正**：`tsc --noEmit` 不覆盖 `tests/` 目录，0.4.9 首次用 `tsc -b` 就抓到 `tests/trendsReviewUI.test.tsx` 的 6 处类型错误。今后固定跑 `tsc -b`。
 
@@ -95,8 +109,8 @@
 
 ## 下一步
 
-1. 安装包：0.4.10 MSI 已产出（`src-tauri/target/release/bundle/msi/轻衡_0.4.10_x64_zh-CN.msi`，4,866,048 B，SHA-256 `856159E0…76AAD0E`）；NSIS 待网络恢复后 `npm run tauri build -- --bundles nsis` 补出。
-2. 安装版验收（用户执行）：先保存并关闭轻衡 → 覆盖安装 0.4.10 → 从 Explorer 正常入口打开 → 按 REVIEW_0.4.10.md 末尾 14 步清单点验腰围/体脂录入与留空、非法值拒绝、更正差异表、复盘页 5 卡与自定义区间、日历跳转、提示带日期。**本轮无迁移，装完即可用。**
-3. 后续候选：①腰围/体脂各自的趋势小图 + 体脂「测量方式」字段；②运动「撤销上一次更正」+ 同日多次合并视图；③自定义区间记住上次选择 + 日历可跳身体/运动页；④跨 Agent 的文件/Git 接续固化。
+1. 安装包：0.4.11 MSI 已产出（`src-tauri/target/release/bundle/msi/轻衡_0.4.11_x64_zh-CN.msi`，4,882,432 B，SHA-256 `1A466DDA…DDDF150D`）；NSIS 待网络恢复后 `npm run tauri build -- --bundles nsis` 补出。
+2. 安装版验收（用户执行）：先保存并关闭轻衡 → 覆盖安装 0.4.11 → 从 Explorer 正常入口打开 → 按 REVIEW_0.4.11.md 末尾 16 步清单点验撤销更正、恢复作废、链式只退一步、填入上次训练、区间记忆与日历跳转目标。**本轮无迁移，装完即可用。**
+3. 后续候选：①同日多次运动合并视图 + 行内「再来一次」；②腰围/体脂趋势小图 + 体脂「测量方式」字段；③区间偏好随导出/备份迁移；④跨 Agent 的文件/Git 接续固化。
 4. 用户未授权数据恢复/合并/补写，不做。旧晨重日期已明确，保全及重启通过仍不代表旧记录找回。
-5. 不把 338 项自动测试冒充安装版实机通过；覆盖安装或确认真实更正之前再次向用户确认。
+5. 不把 369 项自动测试冒充安装版实机通过；覆盖安装或确认真实更正之前再次向用户确认。
