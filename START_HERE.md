@@ -4,7 +4,7 @@
 
 **路径变更**：仓库已从 `C:\Users\21904\Documents\Obsidian\A\ai-fitness-platform` 迁到 **`C:\Users\21904\Projects\ai-fitness-platform`**（原目录被误建成了 Obsidian 库，已删除并注销）。旧路径的引用一律作废。
 
-**0.5 设计阶段已启动**，先读 `design/ROADMAP_0.5.md`（M0–M4）与 `design/DESIGN_SYSTEM.md`（视觉规则）；可点击样张在 `design/prototype/index.html`。设计令牌唯一真源是 `src/styles/tokens.css`。
+**0.6.0 已发布**（全量换肤 + 计划页表格化 + 信息架构 9→5 + scoped 设计守卫），先读 `design/ROADMAP_0.5.md`（M0–M4 与 M3 修正）与 `design/DESIGN_SYSTEM.md`（视觉规则）。设计令牌唯一真源是 `src/styles/tokens.css`。
 
 这是新 AI 助手接手项目时的唯一入口。聊天摘要可能过时，源码、Git、测试和以下权威文件优先。
 
@@ -18,15 +18,40 @@
 
 若旧文档与上述两份权威文件冲突，以 `PROJECT_MEMORY.md` 和 `FINAL_PRODUCT_PLAN.md` 中标注的最新结论为准，再以代码和测试复核。
 
-## 可直接交给其他 AI 的接手提示词
+## 可直接交给其他 AI 的接手提示词（2026-10-22 定稿）
 
-> 你正在接手 Windows 本地应用“轻衡”的源码仓库。先完整阅读根目录 `START_HERE.md`、`PROJECT_MEMORY.md`、`FINAL_PRODUCT_PLAN.md`，再检查 Git 状态、最近提交和实际代码。不要只依赖聊天摘要，也不要把计划写成已完成。不要读取、提交、上传或修改 `build-logs/data-rescue`、用户 AppData 数据库、JSON 导出、健康记录、订单截图或凭据。开始工作前，先用中文报告：当前版本、已完成、未完成、已知风险、你准备执行的最小阶段及验证方法。任何真实数据恢复、合并、补写、删除、覆盖安装、新依赖或外部网络服务都须先取得用户明确同意。每阶段必须按“实现 → 挑刺 → 修复/回归 → 安装版验收 → 下一步计划”收口。
+> 你正在接手 Windows 本地应用"轻衡"（Fitwise Local）的开发。仓库：C:/Users/21904/Projects/ai-fitness-platform。
+> 本工作空间注入的 memory 已包含截至 2026-10-22 的开发日志；另请完整读工作空间文件 C:/Users/21904/WorkBuddy/减脂/.workbuddy/memory/2026-10-22.md（0.4.9→0.6.0 六个版本的完整记录）。聊天摘要不可信；一切以仓库文件和 Git 为准。
+>
+> 第一步（只读，不准写入）：
+> 1. 读 START_HERE.md、PROJECT_MEMORY.md、design/ROADMAP_0.5.md、design/DESIGN_SYSTEM.md、HANDOFF.md、NEXT_PLAN.md；
+> 2. git log -8 --oneline、git status --short（HEAD 应为 cb71053 之后，工作区干净）；
+> 3. 确认产物存在：src-tauri/target/release/bundle/msi/轻衡_0.6.0_x64_zh-CN.msi（8,409,088 B）。
+> 然后用中文报告：当前版本、已完成、未完成、已知风险、你准备执行的最小阶段及验证方法。报告完等我确认再动手。
+>
+> 当前状态（2026-10-22，我已安装并验证 0.6.0）：
+> - 0.6.0 = 全量换肤（theme.css 变量重映射）+ 计划页表格化 + 深链 + scoped 设计守卫；预览截图在 build-logs/visual/0.6.0-preview/。
+> - 下一里程碑 0.6.1：今日页「补记一笔」区域文字问题（同一意思三遍重复 + 小字叠放），修法已记录在今日 memory 日志。
+> - 待排期（优先级由我定）：①标签录入三项校验——注意 src-tauri/src/label_drafts.rs 尚无 kJ→kcal 归一化（÷4.184 只建在食材库），先补归一化再做 Atwater 交叉校验、NRV% 反推、每份/每100g 规格守卫；②设置页能量单位显示开关（kcal/kJ，默认 kcal）。
+> - M3：AI 菜单草稿导入通道（授权摘要导出 + 草稿确认），本地算法后置；来源胶囊已预留。
+>
+> 工作纪律：
+> - 每阶段按"实现 → 挑刺 → 修复/回归 → 安装版验收 → 下一步"收口，代码与文档分开提交；
+> - 设计规则见 design/DESIGN_SYSTEM.md：色值只在 src/styles/tokens.css（theme.css 是旧变量桥，允许清单内色值）；无阴影；字号下限 11px（移动端导航 10px 例外）；新层改动跑 tests/designGuard.test.ts；
+> - 守卫/预览截图用真实应用：vite dev 端口 5199 + headless Chrome → build-logs/visual/，用绝对 Windows 路径；样式预览一律用系统浏览器打开，不走对话内预览面板；
+> - tauri build 前在构建 shell 里 unset NODE_OPTIONS；
+> - 不要读取、提交、上传或修改 build-logs/data-rescue、用户 AppData 数据库、JSON 导出、健康记录、订单截图或凭据；安装版验收不从 shell 启动应用——由我双击 MSI，你在我的正常窗口里点验；
+> - 任何真实数据恢复/合并/补写/删除、覆盖安装、新依赖、外部网络服务，须先取得我明确同意；
+> - 没跑的测试、构建、安装，不许声称通过；计划不许写成已完成。
+>
+> 边界：本任务只负责仓库与软件开发。我的饮食数据、饮食方案在本工作空间的 markdown 文件里，不碰、不问、不写入。
 
 ## 最短当前状态
 
-- Git 分支：`main`；0.4.11 检查点提交组见 `git log`（上一检查点 `a0fcb50` 为 0.4.10 收尾，更早 `31dccd4` 是 0.4.9），**最新提交以 `git log` 为准**。
-- package/Cargo/Tauri 版本：`0.4.13`。
-- 已安装版本：**0.4.12**（AI 在其窗口完成 10 步点验，全部通过）。0.4.13（照搬上次这一餐）源码与 **393 项**自动测试完成、MSI 已产出，**安装与点验待执行**。**无数据库迁移**，schema 仍 v12。
+- Git 分支：`main`；HEAD = `cb71053`（0.6.0 发布提交），**最新提交以 `git log` 为准**。
+- package/Cargo/Tauri 版本：`0.6.0`。
+- 已安装版本：**0.5.1**；**0.6.0 已由用户安装并验证通过**（2026-10-22：全量换肤 + 计划页表格化 + 信息架构 9→5 + 深链 + scoped 设计守卫）。**无数据库迁移**，schema 仍 v12。
+- 设计令牌唯一真源：`src/styles/tokens.css`；`theme.css` 是旧变量桥（允许清单内色值）；字体 Noto Sans SC 三档子集随包（安装包 8 MiB 量级，预期内）。
 - P0 数据保全与用户正常入口重启对账已完成；不得把工具启动上下文中的另一份 8 实体库恢复进真实库。
-- 下一产品阶段候选：①整日照搬 / 常吃组合模板；②照搬后可一键撤销整批；③同日多次运动合并视图；④腰围/体脂趋势小图。0.4.13 的安装与点验按 0.4.12 的分工执行（用户装、AI 点）。
+- 下一阶段：**0.6.1 修复轮**（今日页「补记一笔」区域文字问题，修法已记录在减脂工作空间 memory 日志）→ 标签录入三项校验（先补 label_drafts 归一化）→ 设置页能量单位开关 → M3 AI 菜单草稿导入。
 - 内置 AI 不再是当前主线。跨 Codex、WorkBuddy、DeepSeek Harness 的连续开发先依靠同一 Git 仓库和这些文件；应用 MCP/CLI 后置为只读摘要和创建草稿接口。

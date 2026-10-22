@@ -6,14 +6,15 @@
 
 隐私等级：可提交的项目记忆；不包含用户数据库、导出正文、订单号、API Key 或具体健康明细。
 
-## 0. 0.5 设计阶段（2026-10-22 起）
+## 0. 0.5 设计阶段（2026-10-22，M0–M2 已完成）
 
-- 交付物在 `design/`：`DESIGN_SYSTEM.md`（规则，不抄数值）、`ROADMAP_0.5.md`（M0–M4）、`prototype/index.html`（今日/饮食/身体三页可点样张）。
-- **设计令牌唯一真源是 `src/styles/tokens.css`**；文档里不复制色值，`design/prototype` 用 `<link>` 直引它，保证"文档=样张=代码"不漂移。
-- 视觉方向已定：**A 冷静数据感**（中性近黑 + 单一强调色只作填充、无阴影、等宽数字、最小字号 11px）；浅色优先，深色留 M4。
-- 字体：Noto Sans SC（SIL OFL）中英分开子集，三档字重 400/500/600，随仓库提交（约 3.5 MB）。
-- IA 已定为 5 入口：今日 / 饮食 / 身体 / 运动 / 计划；库存并入饮食、趋势并入身体、收件箱与设置进侧栏工具、AI 助手改 `⌘K` 浮层。
-- 写入禁区：除 `tokens.css` 外不得出现色值；不得 < 11px；不得 `box-shadow`；不得再写 `.xxx-page` 前缀选择器（M2 起由设计守卫强制）。
+- **M0**：仓库迁至 `C://Users//21904//Projects//ai-fitness-platform`；误建的 Obsidian 库 `A\` 已删除并从 obsidian.json 注销。
+- **M1**：`design/DESIGN_SYSTEM.md`（规则，不抄数值）、`design/ROADMAP_0.5.md`（M0–M4 与 M3 修正）、`design/prototype/`（模板 + 生成器 `npm run design:build`）。
+- **M1.5**：导航 9→5（今日/饮食/身体/运动/计划 + 工具组）；今日行动台（吃/练/称，food/workout 直达开表单）；库存归饮食、趋势归身体；AI 助手改 Ctrl+K 浮层；`src/domain/navigation.ts` + 守卫测试；移除 react-router-dom。
+- **M2**：`src/styles/theme.css` 旧变量重映射全量换肤（绿色退场转近黑、阴影清零、语义色对齐、侧栏深墨底）；字号下限 11px（移动端导航 10px 例外已登记）；溢出清扫（pill/eyebrow/badge nowrap+ellipsis）；计划页表格化（删三卡/幽灵数字/覆盖进度条/两张占位卡，来源胶囊 演示/已选）；深链 `#food` 等；scoped 设计守卫 4 条（`tests/designGuard.test.ts`，全局守卫随 M2.5 旧样式退役启用）。
+- **0.6.0 已由用户安装并验证通过**（2026-10-22「我已经验证完了」）。0.6.1 修复轮候选：今日页「补记一笔」区域文字问题（同一意思三遍重复 + 小字叠放），修法已记录在减脂工作空间 memory 日志。
+- **M3 修正**：菜单来源 = 用户问 AI、AI 推荐。M3 = 授权摘要导出 + AI 菜单草稿导入通道（外部 Agent 只能建草稿、应用内确认），本地确定性算法后置；表格形态与来源胶囊（演示/AI 草稿/已选）两种来源通用。
+- **待排期（用户提出，优先级由用户定）**：①标签录入三项校验——**先补 `src-tauri/src/label_drafts.rs` 的 kJ→kcal 归一化（目前 0 处 ÷4.184，只有食材库建成）**，再做 Atwater 交叉校验、NRV% 反推、每份/每100g 规格守卫；②设置页能量单位显示开关（kcal/kJ，默认 kcal）。
 
 ## 1. 项目身份与产品方向
 
@@ -41,8 +42,8 @@
 
 - 仓库：`C:\Users\21904\Projects\ai-fitness-platform`（2026-10-22 从 `Documents\Obsidian\A\` 迁出：那个目录被误建成了 Obsidian 库，Obsidian 若以父目录做索引会去扫 `node_modules` 与 `target` 的几十万文件）
 - 当前分支：`main`。
-- 最新检查点提交：`3c788fc feat: add the body page and restructure the food page`（0.4.8）；上一个检查点 `6012403 feat: show the food diary as daily summary, meal subtotals and item rows`（0.4.7）。
-- 版本号：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 均为 `0.4.13`。
+- 最新检查点提交：`cb71053 chore: release 0.6.0 with the new skin, plan table and design guards`（0.6.0）；此前 `41c5ccc design: reskin every surface via a legacy variable bridge`、`8ec6a20 fix: keep quick-action labels inside their buttons`（0.5.1）。
+- 版本号：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 均为 `0.6.0`。
 - 数据库 schema **v12**（`migrations/0011_measurement_conditions.sql` + `migrations/0012_workout_corrections.sql`，`domain_upgrade.rs` 硬编码 `version = 12`）；领域 envelope 持久化格式仍为 **4**。0011 只 `DROP VIEW IF EXISTS` + 重建 `domain_measurement_projection`（暴露 `measured_at` / `condition` / `day_representative`，过滤改 `COALESCE(status,'active')='active'`）；0012 用同样的 `DROP VIEW IF EXISTS` + 重建处理 `domain_workout_projection`（暴露 `status`，只留 `active`），让已更正/作废的运动退出所有查询。两份迁移都**不回填任何 payload**，否则升级对账会因 `before != after` 失败。
 - Node：`C:\Program Files\nodejs\npm.cmd`
 - Rust/Cargo：`C:\Users\21904\.cargo\bin\cargo.exe`，stable x86_64-pc-windows-msvc。
@@ -104,11 +105,11 @@ npm run tauri build
 - SQLite 事务、领域命令回执/请求指纹、升级前快照与对账、JSON 导出、现有加密备份/暂存恢复、Windows 凭据存储边界。
 - 源码中的 P0 保护：原生 JSON 另存/回读校验、只读运行诊断、桌面桥接失败不回退浏览器存储、hydration 错误显式呈现。
 
-截至 0.4.13 源码检查点：前端 **29 文件 266 项**、Rust **127 项**，共 **393 项** 通过；`tsc -b`、生产构建、fmt、Clippy 全目标 `-D warnings` 通过。证据见 `BUILD_REPORT.md`、`REVIEW_0.4.13.md` 与 `build-logs/*0.4.13*.log`。这些测试不等于尚未安装的 0.4.13 已完成原生验收。
+截至 0.6.0 源码检查点：前端 **31 文件 274 项**、Rust **127 项**，共 **401 项** 通过；`tsc -b`、生产构建、fmt、Clippy 全目标 `-D warnings` 通过。证据见 `BUILD_REPORT.md`、`build-logs/visual/0.6.0-preview/` 与 `build-logs/*0.6.0*.log`。0.6.0 已由用户安装并验证通过（2026-10-22）。
 
 ## 6. 当前安装与数据事实（非常重要）
 
-- 当前已安装版本为 **0.4.12**（AI 在用户窗口完成点验）。0.4.13 是记餐提速（`copy_meal` 照搬同餐次最近一天），已完成源码与 MSI，**安装与点验待执行**；**无数据库迁移，schema 仍为 v12**。
+- 当前已安装版本为 **0.6.0**（2026-10-22 用户安装并验证：全量换肤 + 计划页表格化 + 信息架构 9→5 + scoped 设计守卫）。0.6.1 修复轮候选：今日页「补记一笔」区域文字问题（见 §0）。**无数据库迁移，schema 仍为 v12**。
 - 用户真实数据已通过原生窗口导出和 Explorer 复制的数据库副本保全；副本完整性与导出逐项一致。
 - 用户从 Windows Explorer 正常打开 `C:\Program Files\轻衡\fitwise-local.exe` 后，重启前后的数据库来源导出除 `exportedAt` 外完全相同，既有记录持久化验收通过。
 - 电脑控制工具或命令行直接启动同一 exe/读取同名字面 AppData 路径时，会看到另一套较小数据库。这是运行上下文/文件视图差异，底层原因未完全确定。
@@ -158,8 +159,8 @@ npm run tauri build
 4. `0.4.9`：趋势页升级为阶段复盘（7/14/30 区间、达标日历、滚动周降幅、规则型提示）+ 运动记录更正/作废，含 `migrations/0012` 重建运动投影视图（schema 11→12）。口径由用户拍定：达标判定「严格区间 + 严格目标」，周降幅「滚动 7 天 vs 前 7 天」。**已完成并安装验收。**
 5. `0.4.10`：进度证据补齐——腰围/体脂打通「类型→命令→镜像→表单→指标→历史→更正」整条链路，复盘页并列区间腰围、区间可自选起止日（上限 92 天）、日历格可点跳转，复盘提示带上具体日期与天数。**无数据库迁移。已安装验收通过。**
 6. `0.4.11`：运动侧修补——新增 `undo_workout_correction`（原因可选、单步栈）与 `restore_voided_workout`（原因必填、只认 void 行），运动状态新增 `reverted`（已撤销更正）；「记录运动」可一键填入上次训练（不带指纹、日期不变）；复盘区间记忆（`qingheng.trends.range`）与日历跳转目标可选。**无数据库迁移。源码、369 项自动测试与 MSI 已完成，安装验收待用户执行。**
-7. `0.4.12`：可用性修补——旧行也给「撤销更正」入口（`undoHeadFor`），更正/作废原因标签写明必填并加 4 个常用原因快选与灰按钮解释。**纯前端改动，无迁移。源码、374 项自动测试与 MSI 已完成，安装与点验待执行。**
-8. `0.4.13`：记餐提速——新增 `copy_meal` 照搬同餐次最近一天，饮食页空餐次给「照搬 MM-DD · N 项」入口与确认弹窗；**纯新增命令，无迁移**。源码、393 项自动测试与 MSI 已完成，安装与点验待执行。
+7. `0.4.12`：可用性修补——旧行也给「撤销更正」入口（`undoHeadFor`），更正/作废原因标签写明必填并加 4 个常用原因快选与灰按钮解释。**纯前端改动，无迁移。已安装验收通过。**
+8. `0.4.13`：记餐提速——新增 `copy_meal` 照搬同餐次最近一天，饮食页空餐次给「照搬 MM-DD · N 项」入口与确认弹窗；**纯新增命令，无迁移。已安装验收通过。**
 6. 跨 Agent 的文件/Git 接续固化（原编号 0.4.7，因版本递增反复顺延）。
 7. 动态菜单：用确定性本地约束替换演示候选。
 8. MCP/CLI：先只读摘要，再允许创建草稿；绝不直写正式记录。
