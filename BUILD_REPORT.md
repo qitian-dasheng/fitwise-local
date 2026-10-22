@@ -1,6 +1,20 @@
 # 轻衡 Windows 构建与验证报告
 
-## 最新：0.5.0 构建证据（M1 设计交付 + M1.5 信息架构）
+## 最新：0.5.1 热修（行动台文字溢出）
+
+日期：2026-10-22。0.5.0 安装后用户反馈「文字超出框架」。根因：行动台样式在**样张**里设计（Noto 字体、1120px 内容宽），移植进真实应用后未重新验证——旧皮肤字重 700 更宽，且 `.quick-hint` 无溢出处理。**教训已写进流程：守卫截图一律截真实应用，不截样张。**
+
+修复：`.quick-action` 加 `min-width:0`、字重 700→600；`b` 加 `nowrap`；`.quick-hint` 加 `nowrap`+省略号+`min-width:0`；≤1200px 隐藏提示。截图证据：`build-logs/visual/0.5.1-today-1366.png` 与 `0.5.1-today-1440.png`（1366 下提示完整、有余量）。
+
+### 安装包
+
+| 产物 | 字节 | SHA-256 |
+| --- | ---: | --- |
+| `src-tauri/target/release/bundle/msi/轻衡_0.5.1_x64_zh-CN.msi` | 4894720 | `0F1DCA1213238A24656861886EE1CFCCDE92CB5985E3CF8EAA5E059CD3479610` |
+
+日志 `build-logs/tauri-build-0.5.1.log`。
+
+## 0.5.0 构建证据（M1 设计交付 + M1.5 信息架构）
 
 日期：2026-10-22。内容：①**M1 设计交付**——`design/DESIGN_SYSTEM.md`、`design/ROADMAP_0.5.md`、三页可点样张（生成物，`npm run design:build`）、`src/styles/tokens.css` 令牌真源、Noto Sans SC 三档字重子集（3.4 MB）；②**M0 清理**——仓库迁到 `C://Users//21904//Projects//ai-fitness-platform`，删除误建的 Obsidian 库 `A\` 并从 obsidian.json 注销；③**M1.5 信息架构**——导航 9 → 5（今日/饮食/身体/运动/计划），库存并入饮食、趋势并入身体，今日改行动台（吃/练/称直达表单），AI 助手改 Ctrl+K 浮层，移除未使用的 `react-router-dom`。**无数据库迁移。**
 
