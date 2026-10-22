@@ -9,8 +9,10 @@
 
 export interface MenuDraftItemPayload {
   name: string;
-  basisQuantity: number;
-  basisUnit: string;
+  /** 以下营养规格全部可选（0.8.1 简化）：只给 name 的菜目跳过三项校验；
+   *  一旦提供 nutrients（非空），就必须同时给 basisQuantity / basisUnit。 */
+  basisQuantity?: number;
+  basisUnit?: string;
   energyUnit?: "kcal" | "kJ";
   /** 键 = 营养项目（calories/protein/carbohydrates/fat/fiber/sugar/sodium），值 = 每「参考数量」的含量。 */
   nutrients?: Record<string, number>;
@@ -51,7 +53,7 @@ const UNIT_ALIASES: Record<string, (typeof BASIS_UNITS)[number]> = {
   "盒": "package", "瓶": "package", "罐": "package", "箱": "package",
 };
 
-/** 给用户复制给外部 AI 的格式说明：草稿长什么样、营养用什么口径。 */
+/** 给用户复制给外部 AI 的格式说明：菜单骨架为主，营养表可选（0.8.1 瘦身）。保持纯 JSON——用户可能整段粘贴，注释会让示例本身解析失败。 */
 export const menuDraftFormatExample = `{
   "date": "2026-10-23",
   "title": "标准锅日",
@@ -65,14 +67,8 @@ export const menuDraftFormatExample = `{
   "missingIngredients": ["白菜"],
   "reasons": ["为什么推荐这套"],
   "items": [
-    {
-      "name": "白菜豆腐炖里脊",
-      "basisQuantity": 100,
-      "basisUnit": "g",
-      "energyUnit": "kcal",
-      "nutrients": { "calories": 120, "protein": 15, "carbohydrates": 5, "fat": 4, "fiber": 1.2, "sugar": 1, "sodium": 300 },
-      "nrv": { "protein": 25 }
-    }
+    { "name": "早餐：燕麦鸡蛋粥配苹果" },
+    { "name": "午餐：白菜豆腐炖里脊配糙米饭" }
   ]
 }`;
 
@@ -85,31 +81,39 @@ function checkItem(item: unknown, index: number): MenuDraftItemPayload {
   const raw = item as Record<string, unknown>;
   const name = raw.name;
   if (typeof name !== "string" || !name.trim()) throw new Error(`第 ${index + 1} 条菜目缺少名称。`);
-  if (!isFiniteNumber(raw.basisQuantity) || raw.basisQuantity <= 0) {
-    throw new Error(`菜目「${name}」的 basisQuantity 须为正数（每多少克/毫升/份）。`);
-  }
+  const hasNutrients =
+    raw.nutrients !== undefined &&
+    typeof raw.nutrients === "object" &&
+    raw.nutrients !== null &&
+    Object.keys(raw.nutrients as Record<string, unknown>).length > 0;
+  // 营养规格只在真的给了营养表时才要求（0.8.1 简化：只给名字的菜目跳过三项校验）。
   // 归一化必须在白名单校验之前，并且必须回写 raw.basisUnit——否则前端放行、
   // 原样的「份」传到 Rust 白名单照样被拒，等于假修复。「100g」这类数字粘连
   // 不做剥离：替 AI 猜语义会穿透 Rust 防御纵深，直接报错让上游改格式。
-  if (typeof raw.basisUnit !== "string") {
-    throw new Error(`菜目「${name}」的 basisUnit 须为 ${BASIS_UNITS.join(" / ")} 之一（格式示例见「查看草稿格式」）。`);
-  }
-  const unitRaw = raw.basisUnit.replace(/\u3000/g, " ").trim();
-  const unitLower = unitRaw.toLowerCase();
-  const mapped = (BASIS_UNITS as readonly string[]).includes(unitLower)
-    ? (unitLower as (typeof BASIS_UNITS)[number])
-    : UNIT_ALIASES[unitLower];
-  if (!mapped) {
-    const digitStuck = /\d/.test(unitRaw);
-    throw new Error(
-      `菜目「${name}」的 basisUnit「${unitRaw}」未能识别，请改为 ${BASIS_UNITS.join(" / ")} 之一` +
-        (digitStuck ? "：数字请写进 basisQuantity，单位单独写进 basisUnit" : "") +
-        "（格式示例见上方「查看草稿格式」）。",
-    );
-  }
-  raw.basisUnit = mapped;
-  if (raw.energyUnit !== undefined && !["kcal", "kJ"].includes(raw.energyUnit as string)) {
-    throw new Error(`菜目「${name}」的 energyUnit 须为 kcal 或 kJ。`);
+  if (hasNutrients) {
+    if (!isFiniteNumber(raw.basisQuantity) || raw.basisQuantity <= 0) {
+      throw new Error(`菜目「${name}」的 basisQuantity 须为正数（每多少克/毫升/份）。`);
+    }
+    if (typeof raw.basisUnit !== "string") {
+      throw new Error(`菜目「${name}」的 basisUnit 须为 ${BASIS_UNITS.join(" / ")} 之一（格式示例见「查看草稿格式」）。`);
+    }
+    const unitRaw = raw.basisUnit.replace(/\u3000/g, " ").trim();
+    const unitLower = unitRaw.toLowerCase();
+    const mapped = (BASIS_UNITS as readonly string[]).includes(unitLower)
+      ? (unitLower as (typeof BASIS_UNITS)[number])
+      : UNIT_ALIASES[unitLower];
+    if (!mapped) {
+      const digitStuck = /\d/.test(unitRaw);
+      throw new Error(
+        `菜目「${name}」的 basisUnit「${unitRaw}」未能识别，请改为 ${BASIS_UNITS.join(" / ")} 之一` +
+          (digitStuck ? "：数字请写进 basisQuantity，单位单独写进 basisUnit" : "") +
+          "（格式示例见上方「查看草稿格式」）。",
+      );
+    }
+    raw.basisUnit = mapped;
+    if (raw.energyUnit !== undefined && !["kcal", "kJ"].includes(raw.energyUnit as string)) {
+      throw new Error(`菜目「${name}」的 energyUnit 须为 kcal 或 kJ。`);
+    }
   }
   if (raw.nutrients !== undefined) {
     if (typeof raw.nutrients !== "object" || raw.nutrients === null) {

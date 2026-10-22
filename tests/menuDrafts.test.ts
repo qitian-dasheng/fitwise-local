@@ -97,3 +97,29 @@ describe("中文/变体单位自动映射（M4 归档项①）", () => {
     expect(() => validateMenuDraftPayload(draftWithUnit("100g"))).toThrow(/basisQuantity/);
   });
 });
+
+describe("0.8.1 草稿契约简化：营养表可选", () => {
+  const draftWithItems = (items: unknown[]) =>
+    JSON.stringify({ date: "2026-10-23", title: "瘦身契约", caloriesKcal: 500, proteinG: 30, items });
+
+  it("只给 name 的菜目合法，不要求规格与营养", () => {
+    const draft = validateMenuDraftPayload(draftWithItems([{ name: "早餐：燕麦鸡蛋粥配苹果" }]));
+    expect(draft.items[0].basisUnit).toBeUndefined();
+  });
+
+  it("整数 nrv（数字）通过——0.8.0 契约回归", () => {
+    const draft = validateMenuDraftPayload(draftWithItems([
+      { name: "燕麦粥", basisQuantity: 100, basisUnit: "g", energyUnit: "kcal",
+        nutrients: { calories: 120, protein: 6 }, nrv: { protein: 40 } },
+    ]));
+    expect(draft.items[0].nrv).toEqual({ protein: 40 });
+  });
+
+  it("给了营养表但缺规格仍拒绝（与 Rust 同口径）", () => {
+    expect(() => validateMenuDraftPayload(draftWithItems([{ name: "燕麦粥", nutrients: { calories: 120 } }]))).toThrow(/basisQuantity/);
+  });
+
+  it("瘦身后的格式示例自解析", () => {
+    expect(() => validateMenuDraftPayload(menuDraftFormatExample)).not.toThrow();
+  });
+});

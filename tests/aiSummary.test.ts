@@ -38,7 +38,9 @@ describe("buildAiSummary", () => {
     expect(text).toContain("每日热量");
     expect(text).toContain(`蛋白质 ≥ ${state.profile.proteinTargetG} g`);
     expect(text).toContain("阶段体重");
-    expect(text).toContain('"basisQuantity"');
+    // 0.8.1 瘦身：示例为菜单骨架（items 只需 name），营养规格可选但单位约束仍须声明。
+    expect(text).toContain('"items"');
+    expect(text).toContain("basisUnit 只能是 g / ml / piece / serving / package");
     // 授权摘要只含「读」的最小事实：模型名、接口地址、审计事件一概不出现。
     expect(text).not.toContain("secret-model");
     expect(text).not.toContain("secret.example");
