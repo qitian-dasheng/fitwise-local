@@ -49,4 +49,6 @@
 ## 版本
 
 - package.json / tauri.conf.json / Cargo.toml：**0.6.2 → 0.7.0**（对应里程碑 M3；此后按里程碑编号，不再拆 0.6.x 小版本）。
-- MSI：见构建产物表（构建完成后回填大小与 SHA-256）。
+- MSI：`src-tauri/target/release/bundle/msi/轻衡_0.7.0_x64_zh-CN.msi`，**8,458,240 B（8.07 MiB）**，SHA-256 `3BEDE2F8DC29174849ABD522290B2FFE0B2484CD928921827E38667FDA435D5F`。
+- 构建门槛实测有效：首次构建被 `tsc -b` 拦下（aiSummary 测试夹具类型错），修复后重跑通过——未跑过的构建不会假装通过。
+- 提交：代码 `e10f32b` + 夹具修复 `c2639c3`，文档 `3c2975c`（分开提交）。
