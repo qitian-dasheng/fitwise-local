@@ -90,6 +90,7 @@ export function buildAiSummary(state: AppState, today = diaryToday()): string {
   lines.push("```json");
   lines.push(menuDraftFormatExample);
   lines.push("```");
+  lines.push("- 硬性约束：items[].basisUnit 只能是 g / ml / piece / serving / package 之一（不要写「份」「克」等中文或「100g」这类粘连写法；数字一律放 basisQuantity）。");
   lines.push("- 忌口与偏好：（请在此补充，例如：不吃鱼类、不吃青椒、尽量不放番茄）");
   return lines.join("\n");
 }

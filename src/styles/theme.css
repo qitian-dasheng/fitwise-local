@@ -66,16 +66,15 @@ body {
 }
 
 /* ── 侧栏：深墨底、灰字 ─────────────────────────────────── */
+/* M4：sidebar-bottom 旧设置按钮已删除（设置入口唯一保留在工具组），相应死规则一并移除。 */
 .sidebar {
   background: var(--ink-900);
   color: #9aa19b;
 }
-.sidebar nav button,
-.sidebar-bottom > button {
+.sidebar nav button {
   color: #9aa19b;
 }
-.sidebar nav button.active,
-.sidebar-bottom > button.active {
+.sidebar nav button.active {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.1);
 }

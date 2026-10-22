@@ -37,6 +37,20 @@ const NUTRIENT_KEYS = ["calories", "protein", "carbohydrates", "fat", "fiber", "
 const BASIS_UNITS = ["g", "ml", "piece", "serving", "package"] as const;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * 外部 AI 常见的单位写法 → 五个合法 basisUnit。键一律小写比较（中文不受影响）。
+ * 「碗→serving」是唯一的语义映射（一碗饭≈一份），点验时保留「碗」用例。
+ */
+const UNIT_ALIASES: Record<string, (typeof BASIS_UNITS)[number]> = {
+  "g": "g", "克": "g", "公克": "g", "gr": "g", "gram": "g", "grams": "g",
+  "ml": "ml", "毫升": "ml", "cc": "ml",
+  "piece": "piece", "pieces": "piece", "个": "piece", "片": "piece", "只": "piece",
+  "枚": "piece", "颗": "piece", "粒": "piece", "块": "piece", "根": "piece", "条": "piece",
+  "serving": "serving", "servings": "serving", "份": "serving", "餐": "serving", "碗": "serving",
+  "package": "package", "pkg": "package", "包": "package", "袋": "package",
+  "盒": "package", "瓶": "package", "罐": "package", "箱": "package",
+};
+
 /** 给用户复制给外部 AI 的格式说明：草稿长什么样、营养用什么口径。 */
 export const menuDraftFormatExample = `{
   "date": "2026-10-23",
@@ -74,9 +88,26 @@ function checkItem(item: unknown, index: number): MenuDraftItemPayload {
   if (!isFiniteNumber(raw.basisQuantity) || raw.basisQuantity <= 0) {
     throw new Error(`菜目「${name}」的 basisQuantity 须为正数（每多少克/毫升/份）。`);
   }
-  if (typeof raw.basisUnit !== "string" || !BASIS_UNITS.includes(raw.basisUnit as (typeof BASIS_UNITS)[number])) {
-    throw new Error(`菜目「${name}」的 basisUnit 须为 ${BASIS_UNITS.join(" / ")} 之一。`);
+  // 归一化必须在白名单校验之前，并且必须回写 raw.basisUnit——否则前端放行、
+  // 原样的「份」传到 Rust 白名单照样被拒，等于假修复。「100g」这类数字粘连
+  // 不做剥离：替 AI 猜语义会穿透 Rust 防御纵深，直接报错让上游改格式。
+  if (typeof raw.basisUnit !== "string") {
+    throw new Error(`菜目「${name}」的 basisUnit 须为 ${BASIS_UNITS.join(" / ")} 之一（格式示例见「查看草稿格式」）。`);
   }
+  const unitRaw = raw.basisUnit.replace(/\u3000/g, " ").trim();
+  const unitLower = unitRaw.toLowerCase();
+  const mapped = (BASIS_UNITS as readonly string[]).includes(unitLower)
+    ? (unitLower as (typeof BASIS_UNITS)[number])
+    : UNIT_ALIASES[unitLower];
+  if (!mapped) {
+    const digitStuck = /\d/.test(unitRaw);
+    throw new Error(
+      `菜目「${name}」的 basisUnit「${unitRaw}」未能识别，请改为 ${BASIS_UNITS.join(" / ")} 之一` +
+        (digitStuck ? "：数字请写进 basisQuantity，单位单独写进 basisUnit" : "") +
+        "（格式示例见上方「查看草稿格式」）。",
+    );
+  }
+  raw.basisUnit = mapped;
   if (raw.energyUnit !== undefined && !["kcal", "kJ"].includes(raw.energyUnit as string)) {
     throw new Error(`菜目「${name}」的 energyUnit 须为 kcal 或 kJ。`);
   }
