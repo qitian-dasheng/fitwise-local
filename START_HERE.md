@@ -1,6 +1,10 @@
 # 轻衡项目接手入口
 
-更新时间：2026-10-21（Asia/Shanghai）。
+更新时间：2026-10-22（Asia/Shanghai）。
+
+**路径变更**：仓库已从 `C:\Users\21904\Documents\Obsidian\A\ai-fitness-platform` 迁到 **`C:\Users\21904\Projects\ai-fitness-platform`**（原目录被误建成了 Obsidian 库，已删除并注销）。旧路径的引用一律作废。
+
+**0.5 设计阶段已启动**，先读 `design/ROADMAP_0.5.md`（M0–M4）与 `design/DESIGN_SYSTEM.md`（视觉规则）；可点击样张在 `design/prototype/index.html`。设计令牌唯一真源是 `src/styles/tokens.css`。
 
 这是新 AI 助手接手项目时的唯一入口。聊天摘要可能过时，源码、Git、测试和以下权威文件优先。
 

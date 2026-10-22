@@ -1,10 +1,19 @@
 # 轻衡项目记忆（权威交接）
 
-更新时间：2026-10-21（Asia/Shanghai）
+更新时间：2026-10-22（Asia/Shanghai）
 
 适用对象：Codex、WorkBuddy、DeepSeek Harness 及其他后续开发助手。
 
 隐私等级：可提交的项目记忆；不包含用户数据库、导出正文、订单号、API Key 或具体健康明细。
+
+## 0. 0.5 设计阶段（2026-10-22 起）
+
+- 交付物在 `design/`：`DESIGN_SYSTEM.md`（规则，不抄数值）、`ROADMAP_0.5.md`（M0–M4）、`prototype/index.html`（今日/饮食/身体三页可点样张）。
+- **设计令牌唯一真源是 `src/styles/tokens.css`**；文档里不复制色值，`design/prototype` 用 `<link>` 直引它，保证"文档=样张=代码"不漂移。
+- 视觉方向已定：**A 冷静数据感**（中性近黑 + 单一强调色只作填充、无阴影、等宽数字、最小字号 11px）；浅色优先，深色留 M4。
+- 字体：Noto Sans SC（SIL OFL）中英分开子集，三档字重 400/500/600，随仓库提交（约 3.5 MB）。
+- IA 已定为 5 入口：今日 / 饮食 / 身体 / 运动 / 计划；库存并入饮食、趋势并入身体、收件箱与设置进侧栏工具、AI 助手改 `⌘K` 浮层。
+- 写入禁区：除 `tokens.css` 外不得出现色值；不得 < 11px；不得 `box-shadow`；不得再写 `.xxx-page` 前缀选择器（M2 起由设计守卫强制）。
 
 ## 1. 项目身份与产品方向
 
@@ -30,10 +39,10 @@
 
 ## 3. 权威源码与环境
 
-- 仓库：`C:\Users\21904\Documents\Obsidian\A\ai-fitness-platform`
+- 仓库：`C:\Users\21904\Projects\ai-fitness-platform`（2026-10-22 从 `Documents\Obsidian\A\` 迁出：那个目录被误建成了 Obsidian 库，Obsidian 若以父目录做索引会去扫 `node_modules` 与 `target` 的几十万文件）
 - 当前分支：`main`。
 - 最新检查点提交：`3c788fc feat: add the body page and restructure the food page`（0.4.8）；上一个检查点 `6012403 feat: show the food diary as daily summary, meal subtotals and item rows`（0.4.7）。
-- 版本号：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 均为 `0.4.8`。
+- 版本号：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 均为 `0.4.13`。
 - 数据库 schema **v12**（`migrations/0011_measurement_conditions.sql` + `migrations/0012_workout_corrections.sql`，`domain_upgrade.rs` 硬编码 `version = 12`）；领域 envelope 持久化格式仍为 **4**。0011 只 `DROP VIEW IF EXISTS` + 重建 `domain_measurement_projection`（暴露 `measured_at` / `condition` / `day_representative`，过滤改 `COALESCE(status,'active')='active'`）；0012 用同样的 `DROP VIEW IF EXISTS` + 重建处理 `domain_workout_projection`（暴露 `status`，只留 `active`），让已更正/作废的运动退出所有查询。两份迁移都**不回填任何 payload**，否则升级对账会因 `before != after` 失败。
 - Node：`C:\Program Files\nodejs\npm.cmd`
 - Rust/Cargo：`C:\Users\21904\.cargo\bin\cargo.exe`，stable x86_64-pc-windows-msvc。
