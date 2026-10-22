@@ -2,9 +2,19 @@
 
 更新时间：2026-10-22（傍晚）。单人串行维护；先读本文件、NEXT_PLAN.md、最新 REVIEW 和 git diff。交接文件不能扩大用户授权。
 
-## 当前结论：0.4.12 已安装并由 AI 完成点验；0.4.13 源码与 MSI 完成，待安装与点验
+## 当前结论：0.5.1 已装、0.6.0（M2 全量换肤）源码与 MSI 完成，待安装验收
 
 用户已自行安装 `0.4.11` 并截图反馈两点：「没看到撤销更正」「修改记录时还是需要填原因」。核实结果：`C://Program Files\轻衡\fitwise-local.exe` 与注册表均为 0.4.11（安装时间 10:09），**不是版本没生效**；两点也都不是 bug，而是可用性缺陷。0.4.12 按用户选定方案修掉。
+
+### 0.5.x → 0.6.0（本轮）：设计交付、搬家、信息架构、全量换肤
+
+- **M0**：仓库迁到 `C://Users//21904//Projects//ai-fitness-platform`；误建的 Obsidian 库 `A\` 已删除并从 obsidian.json 注销。
+- **M1**：`design/`（DESIGN_SYSTEM + ROADMAP_0.5 + 样张生成器 `npm run design:build`）；令牌唯一真源 `src/styles/tokens.css`；Noto Sans SC 三档子集（3.4 MB）随仓库与安装包。
+- **M1.5**：导航 9→5（今日/饮食/身体/运动/计划 + 工具组）；今日改行动台（吃/练/称，food/workout 直达开表单）；库存归饮食、趋势归身体；AI 助手改 Ctrl+K 浮层 + 右下浮标；`src/domain/navigation.ts` + 4 条守卫测试；移除未使用的 react-router-dom。
+- **M2**：`src/styles/theme.css` 旧变量重映射全量换肤（绿色退场转近黑、阴影清零、语义色对齐、侧栏深墨底）；字号下限 11px（47 处提升，移动端导航 10px 例外已登记）；溢出清扫（pill/eyebrow/badge nowrap+ellipsis）；计划页表格化（删三卡/幽灵数字/覆盖进度条/两张占位卡，来源胶囊 演示/已选，M3 预留 AI 草稿）；深链 `#food` 等；scoped 设计守卫 4 条（`tests/designGuard.test.ts`）。
+- **M3 修正**：菜单来源 = 用户问 AI、AI 推荐；M3 = 授权摘要导出 + AI 草稿导入通道，本地确定性算法后置（`design/ROADMAP_0.5.md` 顶部已记录）。
+- 自动化：前端 **31 文件 274 项**、Rust **127 项**，共 **401 项** 通过；0.5.1 热修（行动台溢出）+ 0.6.0 均已出包。
+- **待验收**：0.6.0 安装由用户执行；预览截图在 `build-logs/visual/0.6.0-preview/`（7 页 × 1440/1080）。
 
 ### 0.4.13（本轮）：照搬上次这一餐
 
