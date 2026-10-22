@@ -69,6 +69,16 @@ it("can render an empty recipe/plan store and does not offer an empty day as com
   expect(button("确认该日饮食完整").disabled).toBe(true);
 });
 
+it("keeps the quick-action card free of duplicate copy and moves the completion hint into the header", async () => {
+  await act(async () => root.render(<TodayPage goTo={() => undefined}/>));
+  expect(container.textContent).not.toContain("三件事都在这里");
+  expect(container.textContent).not.toContain("点了直接开表单");
+  expect(container.querySelector(".quick-actions h2")?.textContent).toBe("补记一笔");
+  expect(container.querySelector(".quick-actions .eyebrow")).toBeNull();
+  expect(container.querySelector(".complete-day .form-hint")?.textContent).toContain("确认前请核对所有餐次");
+  expect(container.querySelector(".page > .form-hint")).toBeNull();
+});
+
 it("marks seed menus as demonstration and blocks selecting them even with stock", async () => {
   await act(async () => root.render(<PlanPage/>));
   expect(container.textContent).toContain("当前为演示菜单");

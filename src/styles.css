@@ -153,6 +153,8 @@ button { color: inherit; }
 .sidebar-collapsed .main-content { margin-left: 78px; }
 .page { width: min(1420px, 100%); margin: 0 auto; padding: 44px clamp(24px, 4vw, 64px) 72px; }
 .page-header { display: flex; align-items: end; justify-content: space-between; gap: 30px; margin-bottom: 30px; }
+.complete-day { display: flex; flex-direction: column; align-items: end; gap: 6px; }
+.complete-day .form-hint { margin: 0; max-width: 460px; text-align: right; }
 .eyebrow { margin: 0 0 7px; color: var(--green); font-size: 11px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
 h1, h2, h3, p { margin-top: 0; }
 h1 { margin-bottom: 8px; font-size: clamp(27px, 3vw, 38px); letter-spacing: -.035em; }

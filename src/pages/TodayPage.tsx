@@ -48,21 +48,19 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickActi
         title={date === diaryToday() ? `你好，${profile.name}` : "历史日报"}
         description="先记录事实，再让趋势说话。今天的建议不会因为一次波动而改变。"
         action={
-          <button className={todayCheck?.complete ? "button success" : "button primary"} disabled={action.busy || (!todayCheck?.complete && !todayMeals.length)} onClick={() => { void action.run(`complete:${today}:${!todayCheck?.complete}`, (id) => setDayComplete(date, !todayCheck?.complete, id)); }}>
-            <Check size={17} /> {todayCheck?.complete ? "已完成 · 点击重新核对" : "确认该日饮食完整"}
-          </button>
+          <div className="complete-day">
+            <button className={todayCheck?.complete ? "button success" : "button primary"} disabled={action.busy || (!todayCheck?.complete && !todayMeals.length)} onClick={() => { void action.run(`complete:${today}:${!todayCheck?.complete}`, (id) => setDayComplete(date, !todayCheck?.complete, id)); }}>
+              <Check size={17} /> {todayCheck?.complete ? "已完成 · 点击重新核对" : "确认该日饮食完整"}
+            </button>
+            <p className="form-hint">确认前请核对所有餐次、饮料及调味料；新增餐食后需重新确认。未知热量日不进入完整日均值。</p>
+          </div>
         }
       />
       <DiaryDateControl date={date} onChange={onDateChange}/>
-      <p className="form-hint">确认前请核对所有餐次、饮料及调味料；新增餐食后需重新确认。未知热量日不进入完整日均值。</p>
 
       <section className="card quick-actions">
         <div className="card-heading">
-          <div>
-            <p className="eyebrow">补记一笔</p>
-            <h2>三件事都在这里，不用先想该去哪个页面</h2>
-          </div>
-          <span className="status-pill neutral">点了直接开表单</span>
+          <h2>补记一笔</h2>
         </div>
         <div className="quick-row">
           <button className="quick-action" onClick={() => onQuickAction?.("food")}>
