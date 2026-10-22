@@ -18,7 +18,7 @@
 
 ## 0. 0.5 设计阶段（2026-10-22，M0–M2 已完成）
 
-- **M0**：仓库迁至 `C://Users//21904//Projects//ai-fitness-platform`；误建的 Obsidian 库 `A\` 已删除并从 obsidian.json 注销。
+- **M0**：仓库迁至 `%USERPROFILE%/Projects/ai-fitness-platform`；误建的 Obsidian 库 `A\` 已删除并从 obsidian.json 注销。
 - **M1**：`design/DESIGN_SYSTEM.md`（规则，不抄数值）、`design/ROADMAP_0.5.md`（M0–M4 与 M3 修正）、`design/prototype/`（模板 + 生成器 `npm run design:build`）。
 - **M1.5**：导航 9→5（今日/饮食/身体/运动/计划 + 工具组）；今日行动台（吃/练/称，food/workout 直达开表单）；库存归饮食、趋势归身体；AI 助手改 Ctrl+K 浮层；`src/domain/navigation.ts` + 守卫测试；移除 react-router-dom。
 - **M2**：`src/styles/theme.css` 旧变量重映射全量换肤（绿色退场转近黑、阴影清零、语义色对齐、侧栏深墨底）；字号下限 11px（移动端导航 10px 例外已登记）；溢出清扫（pill/eyebrow/badge nowrap+ellipsis）；计划页表格化（删三卡/幽灵数字/覆盖进度条/两张占位卡，来源胶囊 演示/已选）；深链 `#food` 等；scoped 设计守卫 4 条（`tests/designGuard.test.ts`，全局守卫随 M2.5 旧样式退役启用）。
@@ -61,13 +61,13 @@
 
 ## 3. 权威源码与环境
 
-- 仓库：`C:\Users\21904\Projects\ai-fitness-platform`（2026-10-22 从 `Documents\Obsidian\A\` 迁出：那个目录被误建成了 Obsidian 库，Obsidian 若以父目录做索引会去扫 `node_modules` 与 `target` 的几十万文件）
+- 仓库：`%USERPROFILE%\Projects\ai-fitness-platform`（2026-10-22 从 Obsidian 库内误建目录迁出：那个目录被误建成了 Obsidian 库，Obsidian 若以父目录做索引会去扫 `node_modules` 与 `target` 的几十万文件）
 - 当前分支：`main`。
 - 最新检查点提交：`cb71053 chore: release 0.6.0 with the new skin, plan table and design guards`（0.6.0）；此前 `41c5ccc design: reskin every surface via a legacy variable bridge`、`8ec6a20 fix: keep quick-action labels inside their buttons`（0.5.1）。
 - 版本号：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 均为 `0.6.0`。
 - 数据库 schema **v12**（`migrations/0011_measurement_conditions.sql` + `migrations/0012_workout_corrections.sql`，`domain_upgrade.rs` 硬编码 `version = 12`）；领域 envelope 持久化格式仍为 **4**。0011 只 `DROP VIEW IF EXISTS` + 重建 `domain_measurement_projection`（暴露 `measured_at` / `condition` / `day_representative`，过滤改 `COALESCE(status,'active')='active'`）；0012 用同样的 `DROP VIEW IF EXISTS` + 重建处理 `domain_workout_projection`（暴露 `status`，只留 `active`），让已更正/作废的运动退出所有查询。两份迁移都**不回填任何 payload**，否则升级对账会因 `before != after` 失败。
 - Node：`C:\Program Files\nodejs\npm.cmd`
-- Rust/Cargo：`C:\Users\21904\.cargo\bin\cargo.exe`，stable x86_64-pc-windows-msvc。
+- Rust/Cargo：`%USERPROFILE%\.cargo\bin\cargo.exe`，stable x86_64-pc-windows-msvc。
 - 已安装：VS Code、Visual Studio 2022 Build Tools 的 VCTools 工作负载、Windows SDK、WebView2。不要安装完整 Visual Studio IDE。
 - 构建目标：MSI 与 NSIS。安装包尚无代码签名证书。
 

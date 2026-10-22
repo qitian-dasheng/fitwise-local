@@ -85,7 +85,7 @@
 
 | 里程碑 | 内容 | 判据 | 预估 |
 | --- | --- | --- | --- |
-| **M0 清理** | 关程序 → 整仓移到 `C:\Users\21904\Projects\ai-fitness-platform` → 删 `A\.obsidian`、`欢迎.md`、空目录 `A` → 从 obsidian.json 注销 → 新位置重建 | 项目不在 Obsidian 目录下；`obsidian.json` 只剩 MainVault；`cargo test` / `vitest` 全绿；MSI 可装 | 半天 |
+| **M0 清理** | 关程序 → 整仓移到 `%USERPROFILE%\Projects\ai-fitness-platform` → 删 `A\.obsidian`、`欢迎.md`、空目录 `A` → 从 obsidian.json 注销 → 新位置重建 | 项目不在 Obsidian 目录下；`obsidian.json` 只剩 MainVault；`cargo test` / `vitest` 全绿；MSI 可装 | 半天 |
 | **M1 设计交付** | 本文档 + `DESIGN_SYSTEM.md` + `tokens.css` + 字体 + 三页样张 | 你在样张里点完三页并认可 | 本次已完成 |
 | **M1.5 IA 重构** | 导航 9 → 5；今日改行动台（吃/练/称）；库存归饮食；趋势归身体；助手改 `⌘K` 浮层；移除未使用的 `react-router-dom` | 5 个入口都到达正确内容，无死链；393 项测试全绿 | 1–2 天 |
 | **M2 视觉迁移** | `styles.css` 拆成 tokens/base/components；逐页套用；上线设计守卫 | 守卫 5 条全过；每页 1440 与 1366 截图对比通过 | 3–5 天 |

@@ -67,7 +67,7 @@ release 编译 2 分 00 秒。日志 `build-logs/tauri-build-0.6.1.log`。**安�
 
 ## 0.5.0 构建证据（M1 设计交付 + M1.5 信息架构）
 
-日期：2026-10-22。内容：①**M1 设计交付**——`design/DESIGN_SYSTEM.md`、`design/ROADMAP_0.5.md`、三页可点样张（生成物，`npm run design:build`）、`src/styles/tokens.css` 令牌真源、Noto Sans SC 三档字重子集（3.4 MB）；②**M0 清理**——仓库迁到 `C://Users//21904//Projects//ai-fitness-platform`，删除误建的 Obsidian 库 `A\` 并从 obsidian.json 注销；③**M1.5 信息架构**——导航 9 → 5（今日/饮食/身体/运动/计划），库存并入饮食、趋势并入身体，今日改行动台（吃/练/称直达表单），AI 助手改 Ctrl+K 浮层，移除未使用的 `react-router-dom`。**无数据库迁移。**
+日期：2026-10-22。内容：①**M1 设计交付**——`design/DESIGN_SYSTEM.md`、`design/ROADMAP_0.5.md`、三页可点样张（生成物，`npm run design:build`）、`src/styles/tokens.css` 令牌真源、Noto Sans SC 三档字重子集（3.4 MB）；②**M0 清理**——仓库迁到 `%USERPROFILE%/Projects/ai-fitness-platform`，删除误建的 Obsidian 库 `A\` 并从 obsidian.json 注销；③**M1.5 信息架构**——导航 9 → 5（今日/饮食/身体/运动/计划），库存并入饮食、趋势并入身体，今日改行动台（吃/练/称直达表单），AI 助手改 Ctrl+K 浮层，移除未使用的 `react-router-dom`。**无数据库迁移。**
 
 ### 自动化
 
@@ -604,7 +604,7 @@ MSI 与 NSIS 未签名。此次实际验证 MSI 覆盖升级，未重复卸载�
 - 升级前后原领域仓库：8 实体（审计 2、旧收件箱 1、计划 3、采购 1、菜谱 1）。
 - 排序后的 collection/entity_id/payload_json 集合哈希前后均为 `2381065304dcd4d0054dce26fea2838304c31d1f17ab1336d359753b69a2ff35`。
 - `PRAGMA integrity_check=ok`；schema v8 升级报告 `reconciled=true`，记录、营养、库存和状态哈希一致。
-- 按既有机制保留明文升级安全副本：`C:\Users\21904\AppData\Roaming\cn.fitwise.local\upgrade-backups\before-schema-8-20261020T145249742798000.db`。这不是本轮新增的备份扩展功能。
+- 按既有机制保留明文升级安全副本：`%APPDATA%\cn.fitwise.local\upgrade-backups\before-schema-8-20261020T145249742798000.db`。这不是本轮新增的备份扩展功能。
 - 用户自己已修订的酸奶订单仍显示拼多多、2 袋/每袋 1 千克、订单金额 18.78 元，未被开发测试修改。
 - 当前真实附件表为 0 条；本轮只读/打开未提交表单，没有向真实资料库添加测试图片、文字或健康记录。
 

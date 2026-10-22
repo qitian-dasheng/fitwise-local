@@ -80,6 +80,10 @@ npm run tauri build
 
 最新的安装包、哈希、内存口径和安装/卸载验证见 [BUILD_REPORT.md](./BUILD_REPORT.md)。
 
+## 第三方许可
+
+本仓库内置 Noto Sans SC 字体子集（`src/assets/fonts/`），其版权、许可与来源声明见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
+
 ## 数据安全
 
 - 正式数据只由用户确认写入。

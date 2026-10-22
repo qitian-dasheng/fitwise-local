@@ -8,7 +8,7 @@
 
 ### 0.5.x → 0.6.0（本轮）：设计交付、搬家、信息架构、全量换肤
 
-- **M0**：仓库迁到 `C://Users//21904//Projects//ai-fitness-platform`；误建的 Obsidian 库 `A\` 已删除并从 obsidian.json 注销。
+- **M0**：仓库迁到 `%USERPROFILE%/Projects/ai-fitness-platform`；误建的 Obsidian 库 `A\` 已删除并从 obsidian.json 注销。
 - **M1**：`design/`（DESIGN_SYSTEM + ROADMAP_0.5 + 样张生成器 `npm run design:build`）；令牌唯一真源 `src/styles/tokens.css`；Noto Sans SC 三档子集（3.4 MB）随仓库与安装包。
 - **M1.5**：导航 9→5（今日/饮食/身体/运动/计划 + 工具组）；今日改行动台（吃/练/称，food/workout 直达开表单）；库存归饮食、趋势归身体；AI 助手改 Ctrl+K 浮层 + 右下浮标；`src/domain/navigation.ts` + 4 条守卫测试；移除未使用的 react-router-dom。
 - **M2**：`src/styles/theme.css` 旧变量重映射全量换肤（绿色退场转近黑、阴影清零、语义色对齐、侧栏深墨底）；字号下限 11px（47 处提升，移动端导航 10px 例外已登记）；溢出清扫（pill/eyebrow/badge nowrap+ellipsis）；计划页表格化（删三卡/幽灵数字/覆盖进度条/两张占位卡，来源胶囊 演示/已选，M3 预留 AI 草稿）；深链 `#food` 等；scoped 设计守卫 4 条（`tests/designGuard.test.ts`）。
@@ -135,7 +135,7 @@
 - 原生资料保全成功后，核对60020启动器/50876子进程归属，使用官方 /Terminate 退出；后续进程查询已无Procmon实例，未检测到PROCMON驱动。不要无理由重启监测。
 - 官方单实例插件仍待单独批准，未添加。共享记忆服务、备份扩展仍不安装。
 - 不使用浏览器缓存/CDP绕过已阻止的 localhost 浏览器访问；不使用其他 Windows UI 自动化绕过控制工具限制。
-- 打包环境事实：bash 的 PATH 不含 cargo，需先 `export PATH="/c/Users/21904/.cargo/bin:$PATH"`；`tauri build` 的 `beforeBuildCommand` 会执行 `npm run build`，vite 会清空 `dist/assets`。**本机 `NODE_OPTIONS` 预置了 safe-delete shim（`node-language-shim.cjs` / `node-safe-delete-shim.cjs`）**，vite 的 `emptyDir` 内部走 `rmSync`，会被改写成回收站操作并随机失败（`Some operations were aborted`），报错出现在 `beforeBuildCommand failed`。**0.4.9 起的最省事解法：构建 shell 里 `unset NODE_OPTIONS` 再跑 `npx tauri build --bundles msi`，一次成功，不需要手工清 `dist`。** 出网代理放行 npm/jsdelivr，但对 GitHub 返回 502。
+- 打包环境事实：bash 的 PATH 不含 cargo，需先 `export PATH="$HOME/.cargo/bin:$PATH"`；`tauri build` 的 `beforeBuildCommand` 会执行 `npm run build`，vite 会清空 `dist/assets`。**本机 `NODE_OPTIONS` 预置了 safe-delete shim（`node-language-shim.cjs` / `node-safe-delete-shim.cjs`）**，vite 的 `emptyDir` 内部走 `rmSync`，会被改写成回收站操作并随机失败（`Some operations were aborted`），报错出现在 `beforeBuildCommand failed`。**0.4.9 起的最省事解法：构建 shell 里 `unset NODE_OPTIONS` 再跑 `npx tauri build --bundles msi`，一次成功，不需要手工清 `dist`。** 出网代理放行 npm/jsdelivr，但对 GitHub 返回 502。
 
 ## 下一步
 
