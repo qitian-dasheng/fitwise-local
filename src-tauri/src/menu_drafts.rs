@@ -32,18 +32,24 @@ const ITEM_SODIUM_MAX_MG: f64 = 50000.0;
 /// NRV% 的可信上限，与标签草稿（label_drafts.rs）同一口径。
 const NRV_PERCENT_MAX: f64 = 500.0;
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct MenuItem {
     name: String,
-    basis_quantity: f64,
-    basis_unit: String,
+    /// 营养规格可选（0.8.1 简化）：给 nutrients 才要求规格并跑三项校验；
+    /// 只给名字的菜目跳过校验（check_items 记「无营养数据，未校验」）。
+    #[serde(default)]
+    basis_quantity: Option<f64>,
+    #[serde(default)]
+    basis_unit: Option<String>,
     #[serde(default = "default_energy_unit")]
     energy_unit: String,
     #[serde(default)]
     nutrients: BTreeMap<String, f64>,
+    /// NRV% 数字表。0.8.1 起与前端轻校验、格式示例同口径（数字）；0.7.0 误用
+    /// 字符串表，导致 `{"protein": 40}` 这类合法输入被「expected a string」拒收。
     #[serde(default)]
-    nrv: BTreeMap<String, String>,
+    nrv: BTreeMap<String, f64>,
 }
 
 fn default_energy_unit() -> String {
@@ -52,7 +58,7 @@ fn default_energy_unit() -> String {
 
 /// 外部 Agent 产出的菜单草稿。故意**不**用 deny_unknown_fields：
 /// 草稿由外部模型生成，多余的说明字段应当被忽略而不是拒绝整个导入。
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct MenuDraft {
     date: String,
@@ -143,13 +149,26 @@ fn validate_item(item: &MenuItem) -> Result<(), String> {
     if item.name.trim().is_empty() || item.name.chars().count() > 120 {
         return Err("菜目名称须为 1–120 字。".into());
     }
-    if !BASIS_UNITS.contains(&item.basis_unit.as_str()) {
+    // 只给名字的菜目（无营养表）跳过规格与营养校验——三项校验依赖营养数据。
+    if item.nutrients.is_empty() {
+        return Ok(());
+    }
+    let basis_unit = item.basis_unit.as_deref().ok_or_else(|| {
+        format!(
+            "菜目「{}」提供了营养数据，须同时给出参考规格（basisQuantity + basisUnit）。",
+            item.name
+        )
+    })?;
+    if !BASIS_UNITS.contains(&basis_unit) {
         return Err(format!("菜目「{}」的参考单位无效。", item.name));
     }
-    if !item.basis_quantity.is_finite()
-        || item.basis_quantity <= 0.0
-        || item.basis_quantity > 5000.0
-    {
+    let basis_quantity = item.basis_quantity.ok_or_else(|| {
+        format!(
+            "菜目「{}」提供了营养数据，须同时给出参考规格（basisQuantity + basisUnit）。",
+            item.name
+        )
+    })?;
+    if !basis_quantity.is_finite() || basis_quantity <= 0.0 || basis_quantity > 5000.0 {
         return Err(format!(
             "菜目「{}」的参考数量须在 (0, 5000] 内。",
             item.name
@@ -181,21 +200,11 @@ fn validate_item(item: &MenuItem) -> Result<(), String> {
             ));
         }
     }
-    for (key, raw) in &item.nrv {
+    for (key, percent) in &item.nrv {
         if !ITEM_KEYS.contains(&key.as_str()) {
             return Err(format!("菜目「{}」的 NRV% 项目 {key} 无效。", item.name));
         }
-        if raw.len() > 16 {
-            return Err(format!("菜目「{}」的 NRV% 数值过长。", item.name));
-        }
-        if raw.trim().is_empty() {
-            continue;
-        }
-        let percent: f64 = raw
-            .trim()
-            .parse()
-            .map_err(|_| format!("菜目「{}」的 NRV%（{key}）不是有效数字。", item.name))?;
-        if !percent.is_finite() || percent < 0.0 || percent > NRV_PERCENT_MAX {
+        if !percent.is_finite() || *percent < 0.0 || *percent > NRV_PERCENT_MAX {
             return Err(format!(
                 "菜目「{}」的 NRV%（{key}）超出可信范围（≤{NRV_PERCENT_MAX:.0}%）。",
                 item.name
@@ -218,33 +227,26 @@ fn check_items(draft: &MenuDraft) -> Value {
         for (key, value) in &item.nutrients {
             nutrients.insert(key.clone(), json!(value));
         }
+        // 走到这里的菜目都提供了营养表，规格字段在 validate_item 已强制存在；
+        // unwrap_or 只是防御默认，正常路径不会用到。
+        let basis_unit = item.basis_unit.as_deref().unwrap_or("g");
+        let basis_quantity = item.basis_quantity.unwrap_or(100.0);
         let input = json!({
             "name": item.name, "brand": "", "measurementBasis": "packaged",
-            "basis": {"quantity": item.basis_quantity, "unit": item.basis_unit},
+            "basis": {"quantity": basis_quantity, "unit": basis_unit},
             "energyUnit": item.energy_unit, "nutrients": nutrients,
             "conversions": [], "source": "label"
         });
         let nrv = Value::Object(
             item.nrv
                 .iter()
-                .filter(|(_, raw)| !raw.trim().is_empty())
-                .filter_map(|(key, raw)| {
-                    raw.trim()
-                        .parse::<f64>()
-                        .ok()
-                        .map(|p| (key.clone(), json!(p)))
-                })
+                .filter(|(_, percent)| percent.is_finite())
+                .map(|(key, percent)| (key.clone(), json!(percent)))
                 .collect::<Map<String, Value>>(),
         );
         let outcome =
             crate::food_library::preview_input(&json!({"input": input})).and_then(|preview| {
-                crate::label_checks::run_all(
-                    &preview,
-                    &item.basis_unit,
-                    item.basis_quantity,
-                    &nrv,
-                    None,
-                )
+                crate::label_checks::run_all(&preview, basis_unit, basis_quantity, &nrv, None)
             });
         match outcome {
             Ok(()) => results.push(json!({"name": item.name, "ok": true})),
@@ -615,5 +617,47 @@ mod tests {
         let mut lenient = draft_json();
         lenient["generatedBy"] = json!("外部 AI");
         assert!(parse_draft(&lenient).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod slim_contract_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn integer_nrv_values_are_accepted_matching_the_frontend_contract() {
+        // 0.8.0 回归：前端与格式示例用数字（{"protein":40}），Rust 误用字符串表导致
+        // 「expected a string」拒收。0.8.1 起同口径。
+        let draft = json!({
+            "date": "2026-10-23", "title": "整数NRV", "caloriesKcal": 500, "proteinG": 30,
+            "items": [{"name": "燕麦粥", "basisQuantity": 100, "basisUnit": "g",
+                       "nutrients": {"calories": 120, "protein": 6}, "nrv": {"protein": 40}}]
+        });
+        let parsed = parse_draft(&draft).unwrap();
+        assert_eq!(parsed.items[0].nrv["protein"], json!(40.0));
+    }
+
+    #[test]
+    fn name_only_items_skip_spec_and_checks() {
+        let draft = json!({
+            "date": "2026-10-23", "title": "骨架菜单", "caloriesKcal": 1800, "proteinG": 125,
+            "items": [{"name": "早餐：燕麦鸡蛋粥配苹果"}, {"name": "午餐：白菜豆腐炖里脊"}]
+        });
+        let parsed = parse_draft(&draft).unwrap();
+        assert!(parsed.items[0].basis_unit.is_none());
+        let checks = check_items(&parsed);
+        assert_eq!(checks[0]["ok"], json!(true));
+        assert_eq!(checks[0]["note"], json!("无营养数据，未校验"));
+    }
+
+    #[test]
+    fn nutrients_without_basis_spec_is_rejected_with_a_pointed_error() {
+        let draft = json!({
+            "date": "2026-10-23", "title": "缺规格", "caloriesKcal": 500, "proteinG": 30,
+            "items": [{"name": "燕麦粥", "nutrients": {"calories": 120}}]
+        });
+        let err = parse_draft(&draft).unwrap_err();
+        assert!(err.contains("参考规格"), "{err}");
     }
 }
