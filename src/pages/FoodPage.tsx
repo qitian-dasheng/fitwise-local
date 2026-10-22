@@ -1,7 +1,7 @@
 import { diaryToday, ratioPercent, type DiaryDateProps } from "../domain/diary";
 import { DiaryDateControl } from "../components/DiaryDateControl";
 import { AlertTriangle, BookOpen, ChefHat, Plus, ShieldCheck, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { MealEntry, RecipeVersion, MealType } from "../domain/types";
 import { useAppStore } from "../store/appStore";
 import { Modal } from "../components/Modal";
@@ -19,7 +19,7 @@ import { CopyMealModal } from "../components/CopyMealModal";
 import { mealCopySource, mealLabels, mealTypes, type MealCopySource } from "../domain/meals";
 import { readDiaryShowSodium, writeDiaryShowSodium } from "../domain/preferences";
 
-export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps = {}) {
+export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, onAutoOpenConsumed }: DiaryDateProps & { autoOpenMeal?: boolean; onAutoOpenConsumed?: () => void } = {}) {
   const [correction,setCorrection]=useState<{meal:MealEntry;mode:"edit"|"void"}|null>(null);
   const [recipeEditor,setRecipeEditor]=useState<RecipeVersion|"new"|null>(null);
   const [selectedRecipeId,setSelectedRecipeId]=useState("");
@@ -32,6 +32,12 @@ export function FoodPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   const [manualMeal, setManualMeal] = useState(false);
   const [initialMealType, setInitialMealType] = useState<MealType>("breakfast");
   function openMeal(type: MealType = "breakfast") { setManualMeal(false); setInitialMealType(type); setMealOpen(true); }
+  // 今日页「吃了什么」直达：打开食材库表单后立刻回报，避免重复触发。
+  useEffect(() => {
+    if (!autoOpenMeal) return;
+    setMealOpen(true);
+    onAutoOpenConsumed?.();
+  }, [autoOpenMeal, onAutoOpenConsumed]);
   function toggleSodium(visible: boolean) { setShowSodium(visible); writeDiaryShowSodium(visible); }
   const [cookOpen, setCookOpen] = useState(false);
   const [batchOpen, setBatchOpen] = useState<string | null>(null);

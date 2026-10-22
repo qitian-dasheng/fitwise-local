@@ -16,7 +16,7 @@ import { usePeriodSummary } from "../data/domainQueries";
 
 const mealLabels = { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", snack: "加餐" } as const;
 
-export function TodayPage({ goTo, date = diaryToday(), onDateChange }: { goTo: (page: string) => void } & DiaryDateProps) {
+export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickAction }: { goTo: (page: string) => void; onQuickAction?: (kind: "food" | "workout" | "body") => void } & DiaryDateProps) {
   const action = useConfirmedAction();
   const profile = useAppStore((state) => state.profile);
   const meals = useAppStore((state) => state.meals);
@@ -55,6 +55,34 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange }: { goTo: (
       />
       <DiaryDateControl date={date} onChange={onDateChange}/>
       <p className="form-hint">确认前请核对所有餐次、饮料及调味料；新增餐食后需重新确认。未知热量日不进入完整日均值。</p>
+
+      <section className="card quick-actions">
+        <div className="card-heading">
+          <div>
+            <p className="eyebrow">补记一笔</p>
+            <h2>三件事都在这里，不用先想该去哪个页面</h2>
+          </div>
+          <span className="status-pill neutral">点了直接开表单</span>
+        </div>
+        <div className="quick-row">
+          <button className="quick-action" onClick={() => onQuickAction?.("food")}>
+            <Utensils size={16} />
+            <b>吃了什么</b>
+            <span className="quick-hint">照搬上次早餐</span>
+          </button>
+          <button className="quick-action" onClick={() => onQuickAction?.("workout")}>
+            <Dumbbell size={16} />
+            <b>练了什么</b>
+            <span className="quick-hint">上次 22 分钟</span>
+          </button>
+          <button className="quick-action" onClick={() => onQuickAction?.("body")}>
+            <Scale size={16} />
+            <b>称了多少</b>
+            <span className="quick-hint">今晨还没称</span>
+          </button>
+        </div>
+      </section>
+
       {action.message && <div className="settings-notice card" role="alert">{action.message}</div>}
 
       <section className="hero-grid">

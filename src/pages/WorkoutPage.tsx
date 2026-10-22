@@ -1,7 +1,7 @@
 import { diaryToday, type DiaryDateProps } from "../domain/diary";
 import { DiaryDateControl } from "../components/DiaryDateControl";
 import { Activity, Clock3, Dumbbell, Flame, HeartPulse, Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { useAppStore } from "../store/appStore";
@@ -21,8 +21,14 @@ import {
   undoHeadFor,
 } from "../domain/workouts";
 
-export function WorkoutPage({ date = diaryToday(), onDateChange }: DiaryDateProps = {}) {
+export function WorkoutPage({ date = diaryToday(), onDateChange, autoOpen, onAutoOpenConsumed }: DiaryDateProps & { autoOpen?: boolean; onAutoOpenConsumed?: () => void } = {}) {
   const [open, setOpen] = useState(false);
+  // 今日页「练了什么」直达：打开记录表单后立刻回报。
+  useEffect(() => {
+    if (!autoOpen) return;
+    setOpen(true);
+    onAutoOpenConsumed?.();
+  }, [autoOpen, onAutoOpenConsumed]);
   const [correction, setCorrection] = useState<{ workout: WorkoutSession; mode: "edit" | "void" } | null>(null);
   const [revert, setRevert] = useState<{ workout: WorkoutSession; mode: "undo" | "restore" } | null>(null);
   const allWorkouts = useAppStore((state) => state.workouts);

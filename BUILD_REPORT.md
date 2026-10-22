@@ -1,6 +1,23 @@
 # 轻衡 Windows 构建与验证报告
 
-## 最新：0.4.13 构建证据（MSI 已产出，安装与点验待执行）
+## 最新：0.5.0 构建证据（M1 设计交付 + M1.5 信息架构）
+
+日期：2026-10-22。内容：①**M1 设计交付**——`design/DESIGN_SYSTEM.md`、`design/ROADMAP_0.5.md`、三页可点样张（生成物，`npm run design:build`）、`src/styles/tokens.css` 令牌真源、Noto Sans SC 三档字重子集（3.4 MB）；②**M0 清理**——仓库迁到 `C://Users//21904//Projects//ai-fitness-platform`，删除误建的 Obsidian 库 `A\` 并从 obsidian.json 注销；③**M1.5 信息架构**——导航 9 → 5（今日/饮食/身体/运动/计划），库存并入饮食、趋势并入身体，今日改行动台（吃/练/称直达表单），AI 助手改 Ctrl+K 浮层，移除未使用的 `react-router-dom`。**无数据库迁移。**
+
+### 自动化
+
+- 前端 **30 文件 270 项**（新增 `navigation.test.ts` 4 项）、Rust **127 项**，合计 **397 项** 通过；`tsc -b`、生产构建、fmt、clippy 通过。
+- 视觉验证：vite dev + Chrome headless 截图核对 5 入口侧栏、今日行动台、助手浮标。
+
+### 安装包
+
+| 产物 | 字节 | SHA-256 |
+| --- | ---: | --- |
+| `src-tauri/target/release/bundle/msi/轻衡_0.5.0_x64_zh-CN.msi` | 4,894,720 | `78CFD430C73122F005D9203D0307EFC4E18A0BCDCD873227297C8CB37EEB4065` |
+
+日志 `build-logs/tauri-build-0.5.0.log`。设计样张自包含版（4.6 MB，含内联字体）为生成物，不入库：`npm run design:build` 重新生成。
+
+## 0.4.13 构建证据（已安装，AI 完成点验）
 
 日期：2026-10-22（Asia/Shanghai）。范围：**记餐提速**——新增领域命令 `copy_meal`（照搬同餐次最近一天），饮食页空餐次加「照搬 MM-DD · N 项」入口与确认弹窗。**无数据库迁移**：新条目仍在 envelope 的 `payload_json` 里，schema 仍 **v12**。无新依赖、无 OCR/云端。
 

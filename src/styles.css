@@ -651,3 +651,26 @@ button.calendar-cell:focus-visible { outline: 2px solid var(--green); outline-of
 .copy-meal-list li strong { font-weight: 600; }
 .copy-meal-list li span { color: var(--muted); font-size: 12px; }
 .copy-meal-list li b { color: var(--green-dark); font-variant-numeric: tabular-nums; }
+
+/* ===== 0.5 M1.5 信息架构：行动台、工具分组、助手浮层 ===== */
+.page-stack { display: grid; }
+.page-stack > .page { padding-bottom: 28px; }
+.quick-actions .quick-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 4px; }
+.quick-action { display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font: inherit; font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer; transition: border-color .12s, background .12s; }
+.quick-action:hover { border-color: var(--green); background: var(--green-pale); }
+.quick-action .quick-hint { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 400; }
+.nav-tool-label { margin-top: 14px; padding: 0 13px 5px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; }
+.assistant-fab { position: fixed; right: 24px; bottom: 24px; z-index: 90; display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 18px; border: 1px solid var(--green-dark); border-radius: 999px; background: var(--green-dark); color: #fff; font: inherit; font-size: 13px; cursor: pointer; box-shadow: var(--shadow); }
+.assistant-fab:hover { background: var(--green); }
+.assistant-overlay { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 24px; background: rgba(17, 31, 25, 0.52); backdrop-filter: blur(5px); }
+.assistant-overlay-card { width: min(880px, 100%); max-height: calc(100vh - 48px); overflow: auto; border-radius: 19px; background: #fff; box-shadow: var(--shadow); }
+.assistant-overlay-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 12px; padding: 16px 22px; border-bottom: 1px solid var(--line-soft); background: #fff; }
+.assistant-overlay-head strong { font-size: 16px; }
+.assistant-overlay-head .hint { margin-left: auto; color: var(--muted); font-size: 12px; }
+.assistant-close { border: 0; background: transparent; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; padding: 6px 10px; border-radius: 8px; }
+.assistant-close:hover { background: var(--surface-soft); color: var(--ink); }
+.assistant-overlay-body { padding: 4px 22px 22px; }
+@media (max-width: 620px) {
+  .nav-tool-label { display: none; }
+  .quick-actions .quick-row { grid-template-columns: 1fr; }
+}

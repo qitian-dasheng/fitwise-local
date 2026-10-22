@@ -1,4 +1,5 @@
 import { Archive, Bot, ChartNoAxesCombined, ChevronLeft, ChevronRight, ClipboardList, CookingPot, Dumbbell, Inbox, LayoutDashboard, Scale, Settings, Wheat } from "lucide-react";
+import { navItems, toolItems, legacyPageTargets } from "./domain/navigation";
 import { Component, lazy, Suspense, useEffect, useLayoutEffect, useState, useSyncExternalStore, type ErrorInfo, type ReactNode } from "react";
 import { useAppStore } from "./store/appStore";
 import { listen } from "@tauri-apps/api/event";
@@ -17,17 +18,7 @@ const InboxPage = lazy(() => import("./pages/InboxPage").then((module) => ({ def
 const AssistantPage = lazy(() => import("./pages/AssistantPage").then((module) => ({ default: module.AssistantPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
 
-const navItems = [
-  { id: "today", label: "今日", icon: LayoutDashboard },
-  { id: "food", label: "饮食", icon: CookingPot },
-  { id: "body", label: "身体", icon: Scale },
-  { id: "workout", label: "运动", icon: Dumbbell },
-  { id: "inventory", label: "库存", icon: Archive },
-  { id: "plan", label: "计划", icon: ClipboardList },
-  { id: "trends", label: "趋势", icon: ChartNoAxesCombined },
-  { id: "inbox", label: "收件箱", icon: Inbox },
-  { id: "assistant", label: "AI 助手", icon: Bot },
-] as const;
+
 
 class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
@@ -58,6 +49,9 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
 export default function App() {
   const [page, setPage] = useState("today");
   const [date, setDate] = useState(diaryToday);
+  // 今日页「补记一笔」的直达意图：切到目标页后自动打开对应表单，用完即清。
+  const [quick, setQuick] = useState<null | "food" | "workout">(null);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   useEffect(() => {
     let previousToday = diaryToday();
     const tick = () => {
@@ -89,19 +83,63 @@ export default function App() {
   useLayoutEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [page]);
+  // AI 助手不再是导航项：Ctrl/⌘+K 或右下角浮标唤起，Esc 关闭。
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setAssistantOpen(value => !value);
+      }
+      if (event.key === "Escape") setAssistantOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
+  // 兜底：万一还有旧代码往 inventory/trends/assistant 跳，先落到它现在所属的页面。
+  const active = legacyPageTargets[page] ?? page;
   const content = {
-    today: <TodayPage goTo={setPage} date={date} onDateChange={setDate} />,
-    food: <FoodPage date={date} onDateChange={setDate} />,
-    body: <BodyPage date={date} onDateChange={setDate} />,
-    workout: <WorkoutPage date={date} onDateChange={setDate} />,
-    inventory: <InventoryPage />,
+    today: (
+      <TodayPage
+        goTo={setPage}
+        date={date}
+        onDateChange={setDate}
+        onQuickAction={(kind) => {
+          if (kind === "body") { setPage("body"); return; }
+          setPage(kind);
+          setQuick(kind);
+        }}
+      />
+    ),
+    food: (
+      <div className="page-stack">
+        <FoodPage
+          date={date}
+          onDateChange={setDate}
+          autoOpenMeal={quick === "food"}
+          onAutoOpenConsumed={() => setQuick(null)}
+        />
+        <InventoryPage />
+      </div>
+    ),
+    body: (
+      <div className="page-stack">
+        <BodyPage date={date} onDateChange={setDate} />
+        <TrendsPage date={date} onDateChange={setDate} goTo={setPage} embedded />
+      </div>
+    ),
+    workout: (
+      <WorkoutPage
+        date={date}
+        onDateChange={setDate}
+        autoOpen={quick === "workout"}
+        onAutoOpenConsumed={() => setQuick(null)}
+      />
+    ),
     plan: <PlanPage />,
-    trends: <TrendsPage date={date} onDateChange={setDate} goTo={setPage} />,
     inbox: <InboxPage />,
-    assistant: <AssistantPage />,
     settings: <SettingsPage />,
-  }[page] ?? <TodayPage goTo={setPage} />;
+  }[active] ?? <TodayPage goTo={setPage} />;
 
   if (!hydrated) return <div className="loading-screen"><Wheat size={34}/><strong>{storageFailure ? "本地记录未能安全打开" : "正在打开轻衡…"}</strong>{storageFailure && <><p role="alert">{storageFailure}</p><p>未改用演示数据。请保留当前窗口，不要重置或清理应用数据。</p></>}</div>;
 
@@ -109,11 +147,28 @@ export default function App() {
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="sidebar">
         <div className="brand"><div className="brand-mark"><Wheat size={22}/></div><div><strong>轻衡</strong><span>Fitwise Local</span></div></div>
-        <nav>{navItems.map((item) => <button key={item.id} className={page === item.id ? "active" : ""} onClick={() => setPage(item.id)} title={item.label}><item.icon size={19}/><span>{item.label}</span>{item.id === "inbox" && inboxCount > 0 && <b className="nav-badge">{inboxCount}</b>}</button>)}</nav>
+        <nav>
+          {navItems.map((item) => <button key={item.id} className={page === item.id ? "active" : ""} onClick={() => setPage(item.id)} title={item.label}><item.icon size={19}/><span>{item.label}</span></button>)}
+          <div className="nav-tool-label">工具</div>
+          {toolItems.map((item) => <button key={item.id} className={page === item.id ? "active" : ""} onClick={() => setPage(item.id)} title={item.label}><item.icon size={19}/><span>{item.label}</span>{item.id === "inbox" && inboxCount > 0 && <b className="nav-badge">{inboxCount}</b>}</button>)}
+        </nav>
         <div className="sidebar-bottom"><button className={page === "settings" ? "active" : ""} onClick={() => setPage("settings")}><Settings size={19}/><span>设置</span></button><div className="profile-mini"><div>{profile.name.slice(0, 1)}</div><span><strong>{profile.name}</strong><small>本地账户</small></span></div></div>
         <button className="collapse-button" onClick={() => setCollapsed((value) => !value)}>{collapsed ? <ChevronRight size={16}/> : <ChevronLeft size={16}/>}</button>
       </aside>
       <main className="main-content">{storageFailure && <div className="settings-notice card" role="alert">保存状态异常：{storageFailure}。请保留输入，不要重置数据。</div>}<PageErrorBoundary><Suspense fallback={<div className="page page-loading"><Wheat size={28}/><span>正在加载页面…</span></div>}><PageScrollReset key={page}/>{content}</Suspense></PageErrorBoundary></main>
+      {!assistantOpen && <button className="assistant-fab" onClick={() => setAssistantOpen(true)} title="AI 助手 (Ctrl+K)"><Bot size={20}/><span>助手</span></button>}
+      {assistantOpen && (
+        <div className="assistant-overlay" role="dialog" aria-modal="true" aria-label="AI 助手">
+          <div className="assistant-overlay-card">
+            <div className="assistant-overlay-head">
+              <strong>AI 助手</strong>
+              <span className="hint">Ctrl+K 唤起 · Esc 关闭</span>
+              <button className="assistant-close" onClick={() => setAssistantOpen(false)}>关闭</button>
+            </div>
+            <div className="assistant-overlay-body"><AssistantPage /></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

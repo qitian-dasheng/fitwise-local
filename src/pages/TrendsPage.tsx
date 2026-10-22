@@ -61,7 +61,8 @@ export function TrendsPage({
   date = diaryToday(),
   onDateChange,
   goTo,
-}: DiaryDateProps & { goTo?: (page: string) => void } = {}) {
+  embedded,
+}: DiaryDateProps & { goTo?: (page: string) => void; /** 嵌进身体页时为 true：跳身体记录的按钮没有意义，不再渲染 */ embedded?: boolean } = {}) {
   // 偏好只在挂载时读一次；存下的 end 可能晚于今天、start 可能早于 92 天，所以先过 clampRange。
   const [initialRange] = useState(readTrendsRange);
   const [rangeDays, setRangeDays] = useState<RangePreset>(
@@ -142,7 +143,7 @@ export function TrendsPage({
         eyebrow="只看确认过的事实"
         title="阶段复盘"
         description="把一段时间的热量、蛋白与体重均值放在一起看。所有判断都由本地规则算出，不接云端模型，也不构成健康评估。"
-        action={goTo ? <button className="button secondary" onClick={() => goTo("body")}><Scale size={15}/> 查看身体记录</button> : undefined}
+        action={goTo && !embedded ? <button className="button secondary" onClick={() => goTo("body")}><Scale size={15}/> 查看身体记录</button> : undefined}
       />
 
       <div className="review-controls">
