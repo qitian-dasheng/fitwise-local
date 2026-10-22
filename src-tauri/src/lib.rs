@@ -13,6 +13,7 @@ mod inventory_ops;
 mod label_checks;
 mod label_drafts;
 mod meal_corrections;
+mod menu_drafts;
 mod recipes;
 mod record_commands;
 mod upload;
@@ -29,6 +30,8 @@ pub fn run() {
             data_diagnostics::write_json_export,
             label_drafts::list_label_drafts,
             label_drafts::get_label_draft,
+            menu_drafts::list_menu_drafts,
+            menu_drafts::get_menu_draft,
             artifacts::import_local_input,
             artifacts::list_input_receipts,
             artifacts::read_artifact_preview,

@@ -3,6 +3,7 @@ import type { MealEntry, MealType, NutrientKey } from "../domain/types";
 import { activeMeals, groupMealsByType, missingNutrientKeys, summarizeMeals } from "../domain/calculations";
 import { mealLabels, type MealCopySource } from "../domain/meals";
 import {
+  columnUnit,
   columns,
   entryNutrient,
   mealBrand,
@@ -10,6 +11,7 @@ import {
   type NutrientColumn,
   type NutrientDisplay,
 } from "../domain/nutritionDisplay";
+import { useEnergyUnit } from "../hooks/useEnergyUnit";
 
 interface MealDiaryTableProps {
   date: string;
@@ -58,6 +60,8 @@ export function MealDiaryTable({
   const summary = summarizeMeals(active);
   const missing = missingNutrientKeys(active);
   const cols = columns(showSodium);
+  const [energyUnit] = useEnergyUnit();
+  const unitOf = (column: NutrientColumn) => columnUnit(column.key, energyUnit, column.unit);
   const tableClass = `diary-table${showSodium ? " with-sodium" : ""}`;
   const summaryClass = `diary-summary${showSodium ? " with-sodium" : ""}`;
   const isEmpty = active.length === 0;
@@ -94,7 +98,7 @@ export function MealDiaryTable({
           {!isEmpty && <span className={`status-pill ${status.tone}`}>{status.label}</span>}
         </div>
         {cols.map((column) => {
-          const display = totalNutrient(summary, column.key, { entryCount: active.length, missing: missing.includes(column.key) });
+          const display = totalNutrient(summary, column.key, { entryCount: active.length, missing: missing.includes(column.key) }, energyUnit);
           return (
             <div className="diary-summary-cell" key={column.key} data-nutrient={column.key}>
               <span>{column.label}</span>
@@ -102,7 +106,7 @@ export function MealDiaryTable({
                 {display.text}
               </b>
               <small>
-                {column.unit}
+                {unitOf(column)}
                 {notes?.[column.key] ? ` · ${notes[column.key]}` : ""}
               </small>
             </div>
@@ -116,7 +120,7 @@ export function MealDiaryTable({
             <span className="diary-cell-food">食物 / 份量</span>
             {cols.map((column) => (
               <span className="diary-cell-num" key={column.key}>
-                {column.label} {column.unit}
+                {column.label} {unitOf(column)}
               </span>
             ))}
             <span className="diary-cell-actions">操作</span>
@@ -155,7 +159,7 @@ export function MealDiaryTable({
                         const display = totalNutrient(group.summary, column.key, {
                           entryCount: group.entries.length,
                           missing: groupMissing.includes(column.key),
-                        });
+                        }, energyUnit);
                         return <NumberCell column={column} display={display} key={column.key} />;
                       })}
                       <div className="diary-cell-actions">
@@ -185,7 +189,7 @@ export function MealDiaryTable({
                         </small>
                       </div>
                       {cols.map((column) => (
-                        <NumberCell column={column} display={entryNutrient(entry, column.key)} key={column.key} />
+                        <NumberCell column={column} display={entryNutrient(entry, column.key, energyUnit)} key={column.key} />
                       ))}
                       <div className="diary-cell-actions">
                         <button className="text-button" onClick={() => onEdit(entry)}>

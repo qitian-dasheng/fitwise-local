@@ -1,4 +1,5 @@
 import { nutrition } from "./calculations";
+import { KJ_PER_KCAL } from "./energyDisplay";
 import { nutrientKeys, type AppState, type FoodDefinitionInput, type FoodDefinitionVersion, type FoodLibraryItem, type FoodMealInput, type FoodMealPreview, type FoodUnit, type NutritionFacts } from "./types";
 
 export const foodUnitLabels: Record<FoodUnit, string> = { g: "克", ml: "毫升", piece: "个", serving: "份", package: "包装" };
@@ -104,6 +105,14 @@ export function findFoodItem(state: AppState, foodId: string): FoodLibraryItem |
   return item;
 }
 
-export function nutrientLabel(facts: NutritionFacts, key: typeof nutrientKeys[number], digits = 1) {
-  return facts[key].state === "unknown" ? "未知" : String(Number((facts[key].value ?? 0).toFixed(digits)));
+export function nutrientLabel(
+  facts: NutritionFacts,
+  key: typeof nutrientKeys[number],
+  digits = 1,
+  energyUnit: "kcal" | "kJ" = "kcal",
+) {
+  if (facts[key].state === "unknown") return "未知";
+  let value = facts[key].value ?? 0;
+  if (key === "calories" && energyUnit === "kJ") value *= KJ_PER_KCAL;
+  return String(Number(value.toFixed(digits)));
 }

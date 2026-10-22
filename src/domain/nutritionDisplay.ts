@@ -1,6 +1,8 @@
 import type { DataSource, MealEntry, NutrientKey } from "./types";
 import type { NutritionSummary } from "./calculations";
 import { entryRatio } from "./calculations";
+import { KJ_PER_KCAL, energyUnitLabels } from "./energyDisplay";
+import type { EnergyUnitPref } from "./preferences";
 
 export interface NutrientColumn {
   key: NutrientKey;
@@ -47,6 +49,17 @@ export interface NutrientDisplay {
 
 const digitsOf = (key: NutrientKey): 0 | 1 => (key === "calories" || key === "sodium" ? 0 : 1);
 
+/** 显示层单位换算：只有热量受能量单位开关影响，其余营养一律原样。 */
+function displayValue(value: number, key: NutrientKey, unit: EnergyUnitPref): number {
+  if (key !== "calories" || unit === "kcal") return value;
+  return value * KJ_PER_KCAL;
+}
+
+/** 热量列在 kJ 模式下表头/单位后缀跟随开关，其余列单位不变。 */
+export function columnUnit(key: NutrientKey, unit: EnergyUnitPref, fallback: string): string {
+  return key === "calories" ? energyUnitLabels[unit] : fallback;
+}
+
 /** 统一数字口径：按位数取整并去掉无意义的尾零，不做四舍五入以外的加工。 */
 export function formatNutrientValue(value: number, key: NutrientKey): string {
   if (!Number.isFinite(value)) return "未知";
@@ -55,13 +68,13 @@ export function formatNutrientValue(value: number, key: NutrientKey): string {
   return digits === 0 ? rounded : String(Number(rounded));
 }
 
-/** 单条记录的营养：一律乘进食比例；未知永不显示为 0。 */
-export function entryNutrient(entry: MealEntry, key: NutrientKey): NutrientDisplay {
+/** 单条记录的营养：一律乘进食比例；未知永不显示为 0。unit 只影响热量列的显示单位。 */
+export function entryNutrient(entry: MealEntry, key: NutrientKey, unit: EnergyUnitPref = "kcal"): NutrientDisplay {
   const metric = entry.nutrition[key];
   if (metric.state === "unknown") {
     return { state: "unknown", text: "未知", title: "这条记录没有提供该营养，不能当作 0" };
   }
-  const value = (metric.value ?? 0) * entryRatio(entry);
+  const value = displayValue((metric.value ?? 0) * entryRatio(entry), key, unit);
   const title = entryRatio(entry) < 1 ? `按进食比例 ${Math.round(entryRatio(entry) * 100)}% 折算` : undefined;
   return { state: "known", text: formatNutrientValue(value, key), title };
 }
@@ -77,12 +90,13 @@ export function totalNutrient(
   summary: NutritionSummary,
   key: NutrientKey,
   options: { entryCount: number; missing: boolean },
+  unit: EnergyUnitPref = "kcal",
 ): NutrientDisplay {
   if (options.entryCount === 0) return { state: "none", text: "—", title: "这个范围还没有记录" };
   if (summary.coverage[key] === 0) {
     return { state: "unknown", text: "未知", title: "所有记录都没有提供该营养，不能当作 0" };
   }
-  const text = formatNutrientValue(summary.totals[key], key);
+  const text = formatNutrientValue(displayValue(summary.totals[key], key, unit), key);
   if (options.missing) {
     return {
       state: "partial",

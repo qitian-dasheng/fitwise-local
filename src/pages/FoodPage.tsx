@@ -18,6 +18,8 @@ import { MealDiaryTable } from "../components/MealDiaryTable";
 import { CopyMealModal } from "../components/CopyMealModal";
 import { mealCopySource, mealLabels, mealTypes, type MealCopySource } from "../domain/meals";
 import { readDiaryShowSodium, writeDiaryShowSodium } from "../domain/preferences";
+import { useEnergyUnit } from "../hooks/useEnergyUnit";
+import { energyUnitLabels, toDisplayEnergyMaybe } from "../domain/energyDisplay";
 
 export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, autoOpenMealType, onAutoOpenConsumed }: DiaryDateProps & { autoOpenMeal?: boolean; autoOpenMealType?: MealType; onAutoOpenConsumed?: () => void } = {}) {
   const [correction,setCorrection]=useState<{meal:MealEntry;mode:"edit"|"void"}|null>(null);
@@ -50,6 +52,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
   const [cookCommandId, setCookCommandId] = useState("");
   const [consumeCommandId, setConsumeCommandId] = useState("");
   const [discardCommandIds, setDiscardCommandIds] = useState<Record<string, string>>({});
+  const [energyUnit] = useEnergyUnit();
   const meals = useAppStore((state) => state.meals);
   const recipes = useAppStore((state) => state.recipes);
   const batches = useAppStore((state) => state.batches);
@@ -119,7 +122,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
                 </div>
               </div>
               {!latest.some(r=>r.id===recipe.id)&&<p className="library-notice">正在复用历史 v{recipe.version}：制作沿用原版本的原料和营养，不会替换为最新版。</p>}
-              <div className="recipe-macros"><span><b>{recipe.nutrition.calories.value ?? "未知"}</b> kcal</span><span><b>{recipe.nutrition.protein.value ?? "未知"}</b> g 蛋白质</span><span><b>{recipe.totalMinutes}</b> 分钟</span></div>
+              <div className="recipe-macros"><span><b>{toDisplayEnergyMaybe(recipe.nutrition.calories.value, energyUnit) ?? "未知"}</b> {energyUnitLabels[energyUnit]}</span><span><b>{recipe.nutrition.protein.value ?? "未知"}</b> g 蛋白质</span><span><b>{recipe.totalMinutes}</b> 分钟</span></div>
               <ul className="ingredient-list">{recipe.ingredients.map((item) => <li key={item.foodId}><span>{item.name}</span><b>{item.amount} {item.unit}</b></li>)}</ul>
               <button className="button primary wide" disabled={busyAction || date !== diaryToday()} onClick={() => { setMessage(""); setCookCommandId(crypto.randomUUID()); setCookOpen(true); }}>{date === diaryToday() ? "确认今日制作" : "回到今天后确认实际制作"}</button>
             </div>

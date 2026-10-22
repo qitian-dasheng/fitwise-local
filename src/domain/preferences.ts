@@ -71,3 +71,31 @@ export function writeTrendsRange(value: TrendsRangePref): void {
     // 写不进去也要让本次会话的区间照常生效。
   }
 }
+
+/**
+ * 能量单位显示偏好：只影响界面显示层的换算（kcal ↔ kJ），数据库存储口径永远是 kcal。
+ * 换算系数与 Rust 侧 label_checks::KCAL_PER_KJ 同源，避免出现两套口径。
+ */
+export const ENERGY_UNIT_KEY = "qingheng.display.energy-unit";
+
+export type EnergyUnitPref = "kcal" | "kJ";
+
+const ENERGY_UNIT_PREFS: readonly EnergyUnitPref[] = ["kcal", "kJ"];
+
+export function readEnergyUnit(): EnergyUnitPref {
+  try {
+    const raw = window.localStorage.getItem(ENERGY_UNIT_KEY);
+    // 白名单外（含 null）一律回落默认 kcal；手改过的值不能接管换算。
+    return ENERGY_UNIT_PREFS.includes(raw as EnergyUnitPref) ? (raw as EnergyUnitPref) : "kcal";
+  } catch {
+    return "kcal";
+  }
+}
+
+export function writeEnergyUnit(unit: EnergyUnitPref): void {
+  try {
+    window.localStorage.setItem(ENERGY_UNIT_KEY, unit);
+  } catch {
+    // 写不进去也要让本次会话的单位照常生效。
+  }
+}

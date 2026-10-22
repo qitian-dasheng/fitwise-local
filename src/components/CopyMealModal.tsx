@@ -4,6 +4,8 @@ import { useAppStore } from "../store/appStore";
 import { entryRatio } from "../domain/calculations";
 import { mealLabels, type MealCopySource } from "../domain/meals";
 import type { MealType } from "../domain/types";
+import { useEnergyUnit } from "../hooks/useEnergyUnit";
+import { energyUnitLabels, toDisplayEnergyMaybe } from "../domain/energyDisplay";
 
 /** 照搬前的确认：把要复制哪几项、多少热量摆出来，避免一次误点抄进一堆数据。 */
 export function CopyMealModal({
@@ -19,6 +21,7 @@ export function CopyMealModal({
 }) {
   const action = useConfirmedAction();
   const copyMeal = useAppStore((state) => state.copyMeal);
+  const [energyUnit] = useEnergyUnit();
   const label = mealLabels[type];
 
   return (
@@ -38,7 +41,7 @@ export function CopyMealModal({
           <div className="ratio-summary">
             <div>
               <strong>
-                {source.entries.length} 项 · {source.calories === null ? "热量未知" : `${source.calories} kcal`}
+                {source.entries.length} 项 · {source.calories === null ? "热量未知" : `${Math.round(toDisplayEnergyMaybe(source.calories, energyUnit) ?? 0)} ${energyUnitLabels[energyUnit]}`}
               </strong>
               <span>来自 {source.date} 的{label}，复制到 {date}</span>
             </div>
@@ -48,7 +51,7 @@ export function CopyMealModal({
               const calories = entry.nutrition.calories;
               const text =
                 calories.state === "known" && calories.value !== undefined
-                  ? `${Math.round(calories.value * entryRatio(entry))} kcal`
+                  ? `${Math.round(toDisplayEnergyMaybe(calories.value * entryRatio(entry), energyUnit) ?? 0)} ${energyUnitLabels[energyUnit]}`
                   : "热量未知";
               return (
                 <li key={entry.id}>

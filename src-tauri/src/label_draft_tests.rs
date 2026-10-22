@@ -1,5 +1,5 @@
 fn label_form() -> Value {
-    json!({"name":"离线酸奶","brand":"测试品牌","measurementBasis":"packaged","basisQuantity":"100","basisUnit":"g","energyUnit":"kJ","sodiumUnit":"g","nutrients":{"calories":"418.4","protein":"0","sodium":"0.12","fat":"","carbohydrates":"","fiber":"","sugar":""},"conversions":[],"netQuantity":"1","netUnit":"kg","drainedQuantity":"800","drainedUnit":"g","sourceNote":"人工核对包装标签"})
+    json!({"name":"离线酸奶","brand":"测试品牌","measurementBasis":"packaged","basisQuantity":"100","basisUnit":"g","energyUnit":"kJ","sodiumUnit":"g","nutrients":{"calories":"418.4","protein":"0","sodium":"0.12","fat":"","carbohydrates":"","fiber":"","sugar":""},"nrv":{},"conversions":[],"netQuantity":"1","netUnit":"kg","drainedQuantity":"800","drainedUnit":"g","sourceNote":"人工核对包装标签"})
 }
 
 #[test]

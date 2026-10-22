@@ -383,6 +383,9 @@ export interface PlanCandidate {
   reasons: string[];
   missingIngredients: string[];
   status: "candidate" | "selected" | "dismissed";
+  /** 来源：ai-draft = 经草稿通道确认进入；演示方案仍按 ID 正则判定，不走本字段。 */
+  origin?: "ai-draft";
+  menuDraftId?: string;
 }
 
 export interface AiSettings {

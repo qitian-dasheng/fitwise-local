@@ -34,6 +34,8 @@ import { WeeklyDeltaGauge } from "../components/WeeklyDeltaGauge";
 import { isActiveWorkout } from "../domain/workouts";
 import { formatCm, formatPercent, formatWeight, girthDeltaText } from "../domain/body";
 import { readTrendsRange, writeTrendsRange } from "../domain/preferences";
+import { useEnergyUnit } from "../hooks/useEnergyUnit";
+import { energyUnitLabels, toDisplayEnergy } from "../domain/energyDisplay";
 
 /** 自定义区间上限：再长就不是「阶段复盘」了；也顺带挡住误输入的天文数字。 */
 export const MAX_CUSTOM_DAYS = 92;
@@ -117,11 +119,14 @@ export function TrendsPage({
     [days, measurements, profile, start, end],
   );
   const { metrics } = review;
+  const [energyUnit] = useEnergyUnit();
 
   const chartData = days.map((day) => ({
     date: day.date.slice(5),
     calories:
-      day.mealCount > 0 && (day.coverage.calories ?? 0) >= 100 ? Math.round(day.totals.calories ?? 0) : null,
+      day.mealCount > 0 && (day.coverage.calories ?? 0) >= 100
+        ? Math.round(toDisplayEnergy(day.totals.calories ?? 0, energyUnit))
+        : null,
   }));
 
   if (period.loading || period.error) {
@@ -230,7 +235,7 @@ export function TrendsPage({
         <Metric
           icon={<Flame />}
           label="日均热量"
-          value={metrics.averageCalories === null ? "数据不足" : `${Math.round(metrics.averageCalories)} kcal`}
+          value={metrics.averageCalories === null ? "数据不足" : `${Math.round(toDisplayEnergy(metrics.averageCalories, energyUnit))} ${energyUnitLabels[energyUnit]}`}
           note={metrics.averageCalories === null ? "还没有完整记录日" : `完整日 ${metrics.completeDays} 天`}
         />
         <Metric
@@ -297,6 +302,7 @@ export function TrendsPage({
 
       <ReviewCalendar
         cells={review.calendar}
+        energyUnit={energyUnit}
         selectLabel={CALENDAR_TARGETS.find((item) => item.value === calendarTarget)!.selectLabel}
         headerAction={
           goTo ? (
@@ -338,7 +344,7 @@ export function TrendsPage({
                 <XAxis dataKey="date" axisLine={false} tickLine={false} />
                 <YAxis axisLine={false} tickLine={false} />
                 <Tooltip />
-                <Bar dataKey="calories" name="热量 kcal" fill="#d9a441" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="calories" name={`热量 ${energyUnitLabels[energyUnit]}`} fill="#d9a441" radius={[8, 8, 0, 0]} />
               </BarChart>
             ) : (
               // 30 天用柱会挤成一片，改折线，缺口（未知热量）自然断开。
@@ -350,7 +356,7 @@ export function TrendsPage({
                 <Line
                   type="monotone"
                   dataKey="calories"
-                  name="热量 kcal"
+                  name={`热量 ${energyUnitLabels[energyUnit]}`}
                   stroke="#d9a441"
                   strokeWidth={2.5}
                   dot={{ r: 2.5 }}

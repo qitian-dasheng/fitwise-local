@@ -7,6 +7,8 @@ import { foodBasisLabels, foodUnitLabels, nutrientLabel } from "../domain/foodLi
 import { nutrientKeys, type FoodUnit } from "../domain/types";
 import { notifyLabelDrafts, readLabelDraft, useLabelDrafts } from "../data/labelDrafts";
 import { useArtifactImage, type InputReceipt } from "../data/artifacts";
+import { useEnergyUnit } from "../hooks/useEnergyUnit";
+import { energyUnitLabels } from "../domain/energyDisplay";
 
 const nutrientNames = { calories: "能量", protein: "蛋白质", carbohydrates: "碳水化合物", fat: "脂肪", fiber: "膳食纤维", sugar: "糖", sodium: "钠" };
 const statuses = { draft: "待核对", confirmed: "已建档", discarded: "已忽略" };
@@ -31,6 +33,7 @@ export function LabelDraftModal({ draft, source, onClose }: { draft?: LabelDraft
   const [status, setStatus] = useState(draft?.status ?? "draft");
   const [review, setReview] = useState(emptyLabelReview), [allowDuplicate, setAllowDuplicate] = useState(false), [message, setMessage] = useState("");
   const [closing, setClosing] = useState(false), [reason, setReason] = useState(""), [showSource, setShowSource] = useState(false);
+  const [displayUnit] = useEnergyUnit();
   const action = useConfirmedAction(), command = useAppStore(s => s.labelDraftCommand);
   const sourceId = draft?.sourceReceiptId ?? source?.id ?? null;
   const artifactId = draft?.sourceArtifactId ?? source?.artifactId ?? null;
@@ -62,6 +65,8 @@ export function LabelDraftModal({ draft, source, onClose }: { draft?: LabelDraft
         <div className="form-grid"><label>标签参考数量<input inputMode="decimal" value={form.basisQuantity} onChange={e => update({ basisQuantity: e.target.value })}/></label><label>参考单位<select value={form.basisUnit} onChange={e => update({ basisUnit: e.target.value as FoodUnit })}>{units()}</select></label></div>
         <div className="form-grid"><label>标签能量单位<select value={form.energyUnit} onChange={e => update({ energyUnit: e.target.value as "kcal" | "kJ" })}><option value="kJ">千焦 kJ</option><option value="kcal">千卡 kcal</option></select></label><label>标签钠单位<select value={form.sodiumUnit} onChange={e => update({ sodiumUnit: e.target.value as "g" | "mg" })}><option value="mg">毫克 mg</option><option value="g">克 g</option></select></label></div>
         <div className="form-grid">{nutrientKeys.map(key => <label key={key}>{nutrientNames[key]} {key === "calories" ? form.energyUnit : key === "sodium" ? form.sodiumUnit : "g"}<input inputMode="decimal" maxLength={64} placeholder="未知请留空" value={form.nutrients[key]} onChange={e => update({ nutrients: { ...form.nutrients, [key]: e.target.value } })}/></label>)}</div>
+        <details className="recipe-rules" open={Object.values(form.nrv ?? {}).some(v => v?.trim()) || undefined}><summary>NRV% 营养素参考值（可空，按标签抄）</summary><p>标签给了 NRV% 就照抄；确认建档时会反推每项含量并与录入值核对，对不上会拦下请你复核。没给的项目留空，不会按 0 处理。</p>
+          <div className="form-grid">{nutrientKeys.map(key => <label key={key}>{nutrientNames[key]}（% NRV）<input inputMode="decimal" maxLength={16} placeholder="未标注请留空" value={form.nrv?.[key] ?? ""} onChange={e => update({ nrv: { ...form.nrv, [key]: e.target.value } })}/></label>)}</div></details>
         <details className="recipe-rules" open={form.conversions.length > 0 || undefined}><summary>包装与单位换算（按需填写）</summary><p>例如参考规格为 100 克：1 包装对应 200 克，应填换算数量 1、对应参考数量 200。净含量只作核对，不自动建立换算；克与毫升、生熟不默认互换。</p>
           {form.conversions.map((c, i) => <div className="label-conversion" key={i}><div className="form-grid"><label>换算数量<input inputMode="decimal" value={c.quantity} onChange={e => update({ conversions: form.conversions.map((v, n) => n === i ? { ...v, quantity: e.target.value } : v) })}/></label><label>换算单位<select value={c.unit} onChange={e => update({ conversions: form.conversions.map((v, n) => n === i ? { ...v, unit: e.target.value as FoodUnit } : v) })}>{units()}</select></label><label>对应参考数量（{foodUnitLabels[form.basisUnit]}）<input inputMode="decimal" value={c.basisQuantity} onChange={e => update({ conversions: form.conversions.map((v, n) => n === i ? { ...v, basisQuantity: e.target.value } : v) })}/></label></div><button className="text-button" onClick={() => update({ conversions: form.conversions.filter((_, n) => n !== i) })}>移除此换算</button></div>)}
           <button className="button secondary small" disabled={form.conversions.length >= 4} onClick={() => update({ conversions: [...form.conversions, { unit: "package", quantity: "1", basisQuantity: "" }] })}>添加换算关系</button>
@@ -69,7 +74,7 @@ export function LabelDraftModal({ draft, source, onClose }: { draft?: LabelDraft
         </details>
         <label>来源与核对备注（可空）<textarea maxLength={1000} value={form.sourceNote} onChange={e => update({ sourceNote: e.target.value })}/></label>
       </fieldset>
-      {preview ? <div className="label-preview"><h3>换算预览</h3>{([["当前参考规格", preview.nutrition], ["每 100 克", form.basisUnit === "g" && Number(form.basisQuantity) === 100 ? undefined : preview.per100g], ["每 100 毫升", form.basisUnit === "ml" && Number(form.basisQuantity) === 100 ? undefined : preview.per100ml]] as const).map(([label, facts]) => facts && <div key={label}><strong>{label}</strong><span>能量 {nutrientLabel(facts, "calories")} kcal · 蛋白质 {nutrientLabel(facts, "protein")} g · 钠 {nutrientLabel(facts, "sodium")} mg</span></div>)}<small>其余营养按相同规格换算；未提供重量／容量关系时，不派生对应每 100 克／毫升资料。</small></div> : <p className="recipe-context-note">待补全：{previewError} 可以先存草稿。</p>}
+      {preview ? <div className="label-preview"><h3>换算预览</h3>{([["当前参考规格", preview.nutrition], ["每 100 克", form.basisUnit === "g" && Number(form.basisQuantity) === 100 ? undefined : preview.per100g], ["每 100 毫升", form.basisUnit === "ml" && Number(form.basisQuantity) === 100 ? undefined : preview.per100ml]] as const).map(([label, facts]) => facts && <div key={label}><strong>{label}</strong><span>能量 {nutrientLabel(facts, "calories", 1, displayUnit)} {energyUnitLabels[displayUnit]} · 蛋白质 {nutrientLabel(facts, "protein")} g · 钠 {nutrientLabel(facts, "sodium")} mg</span></div>)}<small>其余营养按相同规格换算；未提供重量／容量关系时，不派生对应每 100 克／毫升资料。</small></div> : <p className="recipe-context-note">待补全：{previewError} 可以先存草稿。</p>}
       {!readonly && <>
         <button className="button secondary" disabled={action.busy || !dirty} onClick={() => void save()}>{action.busy ? "正在处理…" : "保存草稿（允许未填完）"}</button>
         <div className="label-review"><h3>核对后建档</h3>{dirty && <p>有未保存修改，请先保存，再核对当前版本。</p>}{Object.entries(labelReviewItems).map(([key, text]) => <label key={key} className="checkbox-label"><input type="checkbox" disabled={action.busy || dirty || !preview} checked={review[key as keyof typeof review]} onChange={e => setReview(v => ({ ...v, [key]: e.target.checked }))}/><span>{text}</span></label>)}

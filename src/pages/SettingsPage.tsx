@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { Database, HardDrive, KeyRound, LockKeyhole, RotateCcw, Shield, Trash2 } from "lucide-react";
+import { Database, Gauge, HardDrive, KeyRound, LockKeyhole, RotateCcw, Shield, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { aiBudgetState, aiProviders, providerDescriptor, validateProviderSettings } from "../ai/providers";
 import { Modal } from "../components/Modal";
@@ -11,6 +11,9 @@ import { RuntimeDiagnostics } from "../components/RuntimeDiagnostics";
 import { isTauriRuntime } from "../data/storage";
 import { useConfirmedAction } from "../components/useConfirmedAction";
 import { ArtifactStoragePanel } from "../components/InputArtifacts";
+import { useEnergyUnit } from "../hooks/useEnergyUnit";
+import { energyUnitLabels, toDisplayEnergy } from "../domain/energyDisplay";
+import type { EnergyUnitPref } from "../domain/preferences";
 
 interface BackupResult {
   path: string;
@@ -42,6 +45,7 @@ const formatBytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 
 export function SettingsPage() {
   const profile = useAppStore((state) => state.profile);
+  const [energyUnit, setEnergyUnit] = useEnergyUnit();
   const savedAiSettings = useAppStore((state) => state.aiSettings);
   const [aiSettings, setAiDraft] = useState(savedAiSettings);
   const configAction = useConfirmedAction();
@@ -241,7 +245,14 @@ export function SettingsPage() {
         <RuntimeDiagnostics/>
         <section className="card settings-section">
           <div className="settings-title"><Database/><div><h2>个人目标</h2><p>修改目标时创建新版本，不回写历史。</p></div></div>
-          <div className="settings-list"><div><span>阶段体重</span><b>{profile.startWeightKg} → {profile.targetWeightKg} kg</b></div><div><span>每日热量</span><b>{profile.dailyCalories.min}–{profile.dailyCalories.max} kcal</b></div><div><span>蛋白质 / 纤维</span><b>{profile.proteinTargetG} g / {profile.fiberTargetG} g</b></div><div><span>设备</span><b>{profile.equipment.join("、")}</b></div></div>
+          <div className="settings-list"><div><span>阶段体重</span><b>{profile.startWeightKg} → {profile.targetWeightKg} kg</b></div><div><span>每日热量</span><b>{Math.round(toDisplayEnergy(profile.dailyCalories.min, energyUnit))}–{Math.round(toDisplayEnergy(profile.dailyCalories.max, energyUnit))} {energyUnitLabels[energyUnit]}</b></div><div><span>蛋白质 / 纤维</span><b>{profile.proteinTargetG} g / {profile.fiberTargetG} g</b></div><div><span>设备</span><b>{profile.equipment.join("、")}</b></div></div>
+        </section>
+        <section className="card settings-section">
+          <div className="settings-title"><Gauge/><div><h2>显示偏好</h2><p>只影响界面显示；数据库统一以 kcal 存储，录入表单保持 kcal 口径不混排。</p></div></div>
+          <div className="form compact-form">
+            <label>能量单位<select value={energyUnit} data-testid="energy-unit-select" onChange={(event) => setEnergyUnit(event.target.value as EnergyUnitPref)}><option value="kcal">千卡 kcal（默认）</option><option value="kJ">千焦 kJ</option></select></label>
+            <p className="form-hint">换算系数与标签校验同源：1 kcal = 4.184 kJ。切换后饮食、今日、趋势、计划与标签预览的显示单位一致；导出与备份不受影响。</p>
+          </div>
         </section>
         <section className="card settings-section">
           <div className="settings-title"><HardDrive/><div><h2>存储与附件</h2><p>附件原件、缩略图和接收记录由 SQLite 事务保存；列表按需读取小预览。</p></div></div>

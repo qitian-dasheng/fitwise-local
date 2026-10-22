@@ -38,3 +38,21 @@ it("requires one known nutrient, positive basis, nonduplicate conversion units",
   const f = sample(); f.basisQuantity = "0"; expect(() => previewLabel(f)).toThrow();
   f.basisQuantity = "100"; f.conversions = [{ unit: "g", quantity: "1", basisQuantity: "1" }]; expect(() => previewLabel(f)).toThrow("重复");
 });
+
+it("carries optional NRV% inputs through validation without duplicating the reverse check", () => {
+  // M3：NRV% 输入位。前端只把格式与范围，反推校验在 Rust 侧 preview_form 统一执行。
+  const f = sample();
+  f.nrv = { protein: "10", sodium: "20" };
+  expect(() => previewLabel(f)).not.toThrow();
+  f.nrv = { protein: "600" };
+  expect(() => previewLabel(f)).toThrow("超出可信范围");
+  f.nrv = { protein: "abc" };
+  expect(() => previewLabel(f)).toThrow();
+  // 0% NRV 是「未检出」的合法标注。
+  f.nrv = { sugar: "0" };
+  expect(() => previewLabel(f)).not.toThrow();
+  // 0.6.2 存量记录没有 nrv 字段，读取后照常预览。
+  const legacy = sample() as unknown as { nrv?: undefined };
+  delete legacy.nrv;
+  expect(() => previewLabel(legacy as Parameters<typeof previewLabel>[0])).not.toThrow();
+});

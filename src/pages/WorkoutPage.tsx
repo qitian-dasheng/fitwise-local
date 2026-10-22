@@ -20,9 +20,12 @@ import {
   latestActiveWorkout,
   undoHeadFor,
 } from "../domain/workouts";
+import { useEnergyUnit } from "../hooks/useEnergyUnit";
+import { energyUnitLabels, toDisplayEnergy, toDisplayEnergyMaybe } from "../domain/energyDisplay";
 
 export function WorkoutPage({ date = diaryToday(), onDateChange, autoOpen, onAutoOpenConsumed }: DiaryDateProps & { autoOpen?: boolean; onAutoOpenConsumed?: () => void } = {}) {
   const [open, setOpen] = useState(false);
+  const [energyUnit] = useEnergyUnit();
   // 今日页「练了什么」直达：打开记录表单后立刻回报。
   useEffect(() => {
     if (!autoOpen) return;
@@ -47,7 +50,7 @@ export function WorkoutPage({ date = diaryToday(), onDateChange, autoOpen, onAut
     <PageHeader eyebrow="消耗独立展示" title="运动记录" description="运动热量不会增加饮食额度。当前支持手工记录；Keep 截图自动识别尚未接通。" action={<button className="button primary" onClick={() => setOpen(true)}><Plus size={17}/> 记录运动</button>}/>
     <DiaryDateControl date={date} onChange={onDateChange}/>
     <p className="form-hint">仅统计 {date} 的有效记录：热量已知 {calorieCount}/{workouts.length} 次；平均心率按已知记录时长加权，不是逐秒测量。{inactiveCount > 0 ? `另有 ${inactiveCount} 条已更正或作废，不计入统计。` : ""}</p>
-    <div className="metric-row"><Metric icon={<Clock3/>} label="所选日时长" value={`${totalMinutes} 分钟`}/><Metric icon={<Flame/>} label="运动消耗" value={calorieCount ? `${Math.round(totalCalories)} kcal${calorieCount < workouts.length ? "（部分已知）" : ""}` : "未知"}/><Metric icon={<HeartPulse/>} label="时长加权心率" value={avgHeartRate ? `${Math.round(avgHeartRate)} 次/分` : "暂无"}/><Metric icon={<Activity/>} label="训练次数" value={`${workouts.length} 次`}/></div>
+    <div className="metric-row"><Metric icon={<Clock3/>} label="所选日时长" value={`${totalMinutes} 分钟`}/><Metric icon={<Flame/>} label="运动消耗" value={calorieCount ? `${Math.round(toDisplayEnergy(totalCalories, energyUnit))} ${energyUnitLabels[energyUnit]}${calorieCount < workouts.length ? "（部分已知）" : ""}` : "未知"}/><Metric icon={<HeartPulse/>} label="时长加权心率" value={avgHeartRate ? `${Math.round(avgHeartRate)} 次/分` : "暂无"}/><Metric icon={<Activity/>} label="训练次数" value={`${workouts.length} 次`}/></div>
     <section className="card workout-list"><div className="card-heading compact"><div><p className="eyebrow">训练历史</p><h2>本日记录</h2></div></div>    {dayWorkouts.length ? dayWorkouts.slice().reverse().map((item) => {
       const active = isActiveWorkout(item);
       // 旧行也给撤销入口：更正时改过日期的话，新行会跑到另一天去。
@@ -56,7 +59,7 @@ export function WorkoutPage({ date = diaryToday(), onDateChange, autoOpen, onAut
         <div className="workout-icon"><Dumbbell/></div>
         <div><strong>{item.name}</strong><span>{item.date} · {item.type}</span></div>
         <div><b>{item.durationMinutes}</b><span>分钟</span></div>
-        <div><b>{item.caloriesKcal ?? "—"}</b><span>千卡</span></div>
+        <div><b>{toDisplayEnergyMaybe(item.caloriesKcal, energyUnit) ?? "—"}</b><span>{energyUnitLabels[energyUnit]}</span></div>
         <div><b>{item.averageHeartRate ?? "—"}</b><span>平均心率</span></div>
         <div className="workout-actions">
           {active ? <>

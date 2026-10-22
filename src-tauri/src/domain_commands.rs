@@ -28,6 +28,7 @@ pub struct DomainCommandResponse {
     state: Value,
 }
 
+#[derive(Debug)]
 pub(crate) struct CommandMutation {
     pub(crate) applied: bool,
     pub(crate) result: Value,
@@ -566,6 +567,9 @@ fn execute_with_connection(
             | "save_label_draft"
             | "confirm_label_draft"
             | "discard_label_draft"
+            | "import_menu_draft"
+            | "confirm_menu_draft"
+            | "discard_menu_draft"
             | "revise_food_definition"
             | "set_food_favorite"
             | "record_food_meal"
@@ -649,6 +653,15 @@ fn execute_with_connection(
     let mutation = match request.kind.as_str() {
         "save_label_draft" | "confirm_label_draft" | "discard_label_draft" => {
             crate::label_drafts::apply(
+                &mut state,
+                &transaction,
+                &request.kind,
+                &request.payload,
+                &request.command_id,
+            )?
+        }
+        "import_menu_draft" | "confirm_menu_draft" | "discard_menu_draft" => {
+            crate::menu_drafts::apply(
                 &mut state,
                 &transaction,
                 &request.kind,

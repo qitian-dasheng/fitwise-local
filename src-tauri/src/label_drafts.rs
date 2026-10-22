@@ -33,12 +33,39 @@ struct LabelForm {
     energy_unit: String,
     sodium_unit: String,
     nutrients: BTreeMap<String, String>,
+    /// 标签 NRV%（GB 28050）。旧草稿没有该字段，serde(default) 保证向后兼容；空表 = 跳过 NRV 校验。
+    #[serde(default)]
+    nrv: BTreeMap<String, String>,
     conversions: Vec<RawConversion>,
     net_quantity: String,
     net_unit: String,
     drained_quantity: String,
     drained_unit: String,
     source_note: String,
+}
+/// NRV% 的可信上限：常规食品很难超过 500%（如鱼肝油的维生素类不在此表），超出基本是录错行。
+const NRV_PERCENT_MAX: f64 = 500.0;
+fn parse_nrv(f: &LabelForm) -> Result<Value, String> {
+    let mut map = Map::new();
+    for (key, raw) in &f.nrv {
+        if !KEYS.contains(&key.as_str()) {
+            return Err("NRV% 营养项目无效。".into());
+        }
+        if raw.len() > 16 {
+            return Err("NRV% 数值过长。".into());
+        }
+        if raw.trim().is_empty() {
+            continue;
+        }
+        let percent = number(raw, "NRV%", false)?;
+        if percent > NRV_PERCENT_MAX {
+            return Err(format!(
+                "{key} 的 NRV% {percent:.0} 超出可信范围（≤{NRV_PERCENT_MAX:.0}%），请核对是否录错行或把含量当成了百分比。"
+            ));
+        }
+        map.insert(key.clone(), json!(percent));
+    }
+    Ok(Value::Object(map))
 }
 fn parse_form(raw: &Value) -> Result<LabelForm, String> {
     let mut form: LabelForm =
@@ -139,9 +166,10 @@ pub(crate) fn preview_form(raw: &Value) -> Result<Value, String> {
     );
     let preview = crate::food_library::preview_input(&json!({"input":input}))?;
     // 三项交叉校验：能量上限、Atwater 自洽、NRV% 反推、每份规格量级。
-    // 旧实现只查「每 100 克超过 1000 千卡」这一条，kJ 当 kcal、录错行都能溜过去。
-    crate::label_checks::run_all(&preview, &f.basis_unit, basis, &Value::Null, None)?;
-    Ok(json!({"input":input,"preview":preview,"declaredKcal":declared}))
+    // 标签给了 NRV% 就交给 nrv_check 反推；没给传空表，整体跳过。
+    let nrv = parse_nrv(&f)?;
+    crate::label_checks::run_all(&preview, &f.basis_unit, basis, &nrv, None)?;
+    Ok(json!({"input":input,"preview":preview,"declaredKcal":declared,"nrv":nrv}))
 }
 
 fn get(connection: &Connection, id: &str) -> Result<Value, String> {
@@ -312,4 +340,59 @@ pub fn list_label_drafts(app: AppHandle, status: String, offset: u32) -> Result<
 #[tauri::command]
 pub fn get_label_draft(app: AppHandle, id: String) -> Result<Value, String> {
     get(&crate::domain_store::open_database(&app)?, &id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn form_json(nrv: Value) -> Value {
+        json!({
+            "name": "测试燕麦", "brand": "", "measurementBasis": "packaged",
+            "basisQuantity": "100", "basisUnit": "g", "energyUnit": "kcal", "sodiumUnit": "mg",
+            "nutrients": {"calories": "300", "protein": "6", "carbohydrates": "30", "fat": "10", "fiber": "", "sugar": "", "sodium": "200"},
+            "nrv": nrv,
+            "conversions": [], "netQuantity": "", "netUnit": "g", "drainedQuantity": "", "drainedUnit": "g",
+            "sourceNote": ""
+        })
+    }
+
+    #[test]
+    fn old_drafts_without_nrv_field_still_parse() {
+        // 0.6.2 存量的草稿没有 nrv 字段：serde(default) 必须兜住，不能让升级后草稿打不开。
+        let mut raw = form_json(json!({}));
+        raw.as_object_mut().unwrap().remove("nrv");
+        let f = parse_form(&raw).unwrap();
+        assert!(f.nrv.is_empty());
+    }
+
+    #[test]
+    fn preview_form_passes_consistent_nrv_and_echoes_it() {
+        // 蛋白 6g / NRV 60g = 10%，与录入一致；返回值带回 nrv 供 UI 复核。
+        let out = preview_form(&form_json(json!({"protein": "10"}))).unwrap();
+        assert_eq!(out["nrv"]["protein"], json!(10.0));
+    }
+
+    #[test]
+    fn preview_form_blocks_a_conflicting_nrv_label() {
+        // 蛋白 30% NRV = 18g，与录入 6g 对不上：这就是「录错行」的典型样本。
+        let err = preview_form(&form_json(json!({"protein": "30"}))).unwrap_err();
+        assert!(err.contains("NRV"), "{err}");
+        assert!(err.contains("protein"), "{err}");
+    }
+
+    #[test]
+    fn nrv_percent_out_of_range_is_rejected() {
+        let err = preview_form(&form_json(json!({"protein": "600"}))).unwrap_err();
+        assert!(err.contains("超出可信范围"), "{err}");
+        // 0% 与「未检出」互为印证，是合法标注。
+        assert!(preview_form(&form_json(json!({"sugar": "0"}))).is_ok());
+    }
+
+    #[test]
+    fn empty_nrv_keeps_the_check_skipped() {
+        // 没给 NRV% 时行为与 0.6.2 完全一致：整体跳过，不按 0 处理。
+        assert!(preview_form(&form_json(json!({}))).is_ok());
+    }
 }

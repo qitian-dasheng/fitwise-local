@@ -1,6 +1,8 @@
 import { Copy, Plus, PencilLine } from "lucide-react";
 import type { RecipeVersion } from "../domain/types";
 import { Drawer } from "./Drawer";
+import { useEnergyUnit } from "../hooks/useEnergyUnit";
+import { energyUnitLabels, toDisplayEnergyMaybe } from "../domain/energyDisplay";
 
 interface RecipeManagerDrawerProps {
   /** 全部菜谱版本（含历史）。 */
@@ -34,6 +36,7 @@ export function RecipeManagerDrawer({
   onClose,
 }: RecipeManagerDrawerProps) {
   const isLatest = recipe ? latest.some((item) => item.id === recipe.id) : false;
+  const [energyUnit] = useEnergyUnit();
 
   return (
     <Drawer title="管理菜谱" eyebrow="标准菜谱" onClose={onClose}>
@@ -80,7 +83,7 @@ export function RecipeManagerDrawer({
             {isLatest ? "（最新）" : "（历史）"}
           </strong>
           <span>
-            {recipe.nutrition.calories.value ?? "未知"} kcal · {recipe.nutrition.protein.value ?? "未知"} g 蛋白质 ·{" "}
+            {toDisplayEnergyMaybe(recipe.nutrition.calories.value, energyUnit) ?? "未知"} {energyUnitLabels[energyUnit]} · {recipe.nutrition.protein.value ?? "未知"} g 蛋白质 ·{" "}
             {recipe.ingredients.length} 种原料 · {recipe.totalMinutes} 分钟
           </span>
           <span>共 {recipes.length} 个版本，其中最新版本 {latest.length} 个。</span>

@@ -7,6 +7,8 @@ import { useAppStore } from "../store/appStore";
 import { calculateFoodPortion, foodBasisLabels, foodUnitLabels, nutrientLabel } from "../domain/foodLibrary";
 import { previewRecipe } from "../domain/recipes";
 import type { FoodUnit, InventoryLot, RecipeInput, RecipeVersion } from "../domain/types";
+import { useEnergyUnit } from "../hooks/useEnergyUnit";
+import { energyUnitLabels } from "../domain/energyDisplay";
 
 type Row = {
   key: string;
@@ -32,6 +34,7 @@ export function RecipeEditor({ recipe, copyMode = false, onClose, onSaved }: {
 }) {
   const state = useAppStore();
   const action = useConfirmedAction();
+  const [displayUnit] = useEnergyUnit();
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [name, setName] = useState(copyMode && recipe ? `${recipe.name}（副本）` : recipe?.name ?? "");
   const [minutes, setMinutes] = useState(String(recipe?.totalMinutes ?? 30));
@@ -157,7 +160,7 @@ export function RecipeEditor({ recipe, copyMode = false, onClose, onSaved }: {
                 <li>带骨、沥干、可食率和原料状态请人工核对。原菜谱没有食材营养关联时须逐项补全。</li>
               </ul>
             </details>
-            {preview ? <div className="library-notice" role="status">整锅预览：{nutrientLabel(preview.nutrition, "calories")} kcal · 蛋白质 {nutrientLabel(preview.nutrition, "protein")} g · 纤维 {nutrientLabel(preview.nutrition, "fiber")} g。</div>
+            {preview ? <div className="library-notice" role="status">整锅预览：{nutrientLabel(preview.nutrition, "calories", 1, displayUnit)} {energyUnitLabels[displayUnit]} · 蛋白质 {nutrientLabel(preview.nutrition, "protein")} g · 纤维 {nutrientLabel(preview.nutrition, "fiber")} g。</div>
               : !missing && <p className="form-error" role="status">{error}</p>}
             {!equipment.length && <p className="form-error">请展开“厨具与保存规则”，选择实际厨具后再保存。</p>}
             {rows.some(r => !r.inventoryConfirmed) && !missing && <p className="form-hint">核对每项原料后，勾选对应确认项即可保存。</p>}

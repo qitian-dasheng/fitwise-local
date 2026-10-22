@@ -657,6 +657,8 @@ button.calendar-cell:focus-visible { outline: 2px solid var(--green); outline-of
 /* ===== 0.5 M1.5 信息架构：行动台、工具分组、助手浮层 ===== */
 .page-stack { display: grid; }
 .page-stack > .page { padding-bottom: 28px; }
+/* .card 基类不含 padding（见 L164 约定），每张卡片自带内边距；quick-actions 0.6.2 验收发现漏配导致「补记一笔」贴边，0.6.3 起补齐，数值对齐同页 .meals-card。 */
+.quick-actions { padding: 24px; }
 .quick-actions .quick-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 4px; }
 .quick-action { display: flex; align-items: center; gap: 10px; min-width: 0; height: 54px; padding: 0 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; transition: border-color .12s, background .12s; }
 .quick-action b { white-space: nowrap; }
@@ -678,3 +680,21 @@ button.calendar-cell:focus-visible { outline: 2px solid var(--green); outline-of
   .nav-tool-label { display: none; }
   .quick-actions .quick-row { grid-template-columns: 1fr; }
 }
+
+/* ===== M3：AI 授权摘要与菜单草稿通道 ===== */
+/* .card 基类无 padding（见 L164 约定），两张新卡片自带内边距，数值对齐 .meals-card。 */
+.ai-brief-card, .menu-drafts-card { padding: 24px; display: grid; gap: 12px; }
+.ai-brief-card textarea, .menu-drafts-card textarea { min-height: 120px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; font: inherit; font-size: 13px; line-height: 1.7; resize: vertical; background: var(--surface-raise); }
+.menu-draft-format { margin: 0; padding: 14px 16px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface-sunken); font-size: 12px; line-height: 1.7; overflow: auto; max-height: 320px; }
+.menu-draft-checks { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.menu-draft-checks li { display: grid; gap: 2px; padding: 10px 14px; border: 1px solid var(--line-soft); border-radius: 10px; font-size: 12px; }
+.menu-draft-checks li.bad { border-color: var(--amber); background: var(--surface-sunken); }
+.menu-draft-checks li b { font-size: 12.5px; }
+.menu-draft-checks li span { color: var(--muted); }
+.menu-drafts-list { display: grid; gap: 4px; }
+.menu-draft-row { display: grid; gap: 8px; padding: 14px 0; border-top: 1px solid var(--line-soft); }
+.menu-draft-row > div:first-child { display: grid; gap: 2px; }
+.menu-draft-row small { color: var(--muted); }
+.menu-draft-row .button-row { justify-content: flex-end; }
+/* 来源胶囊第三态「AI 草稿」：info 蓝调，与 演示（flat）/已选（ok）区分。 */
+.status-pill.info { color: var(--blue); background: var(--surface-sunken); border: 1px solid var(--line); }

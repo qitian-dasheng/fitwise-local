@@ -6,6 +6,8 @@ export interface LabelDraftForm {
   name: string; brand: string; measurementBasis: FoodDefinitionInput["measurementBasis"];
   basisQuantity: string; basisUnit: FoodUnit; energyUnit: "kcal" | "kJ"; sodiumUnit: "g" | "mg";
   nutrients: Record<NutrientKey, string>;
+  /** 标签 NRV%（可空）。只填标签上真实标注的项目；校验在 Rust 侧 nrv_check 做反推，前端不重复算。 */
+  nrv?: Partial<Record<NutrientKey, string>>;
   conversions: { unit: FoodUnit; quantity: string; basisQuantity: string }[];
   netQuantity: string; netUnit: "g" | "kg" | "ml" | "l"; drainedQuantity: string; drainedUnit: "g" | "kg"; sourceNote: string;
 }
@@ -20,7 +22,7 @@ export interface LabelDraftRecord extends LabelDraftSummary {
 export const labelReviewItems = { energy: "已核对千焦 kJ / 千卡 kcal", basis: "已核对每 100 克、每份或每包装参考规格", packaging: "已核对包装、净含量和换算；未猜测生熟或密度", unknowns: "已核对空白为未知，只有明确的零填 0" };
 export type LabelReview = Record<keyof typeof labelReviewItems, boolean>;
 export const emptyLabelReview = (): LabelReview => ({ energy: false, basis: false, packaging: false, unknowns: false });
-export const emptyLabelForm = (): LabelDraftForm => ({ name: "", brand: "", measurementBasis: "packaged", basisQuantity: "100", basisUnit: "g", energyUnit: "kJ", sodiumUnit: "mg", nutrients: Object.fromEntries(nutrientKeys.map(k => [k, ""])) as Record<NutrientKey, string>, conversions: [], netQuantity: "", netUnit: "g", drainedQuantity: "", drainedUnit: "g", sourceNote: "" });
+export const emptyLabelForm = (): LabelDraftForm => ({ name: "", brand: "", measurementBasis: "packaged", basisQuantity: "100", basisUnit: "g", energyUnit: "kJ", sodiumUnit: "mg", nutrients: Object.fromEntries(nutrientKeys.map(k => [k, ""])) as Record<NutrientKey, string>, nrv: {}, conversions: [], netQuantity: "", netUnit: "g", drainedQuantity: "", drainedUnit: "g", sourceNote: "" });
 
 function decimal(text: string, field: string, positive = false) {
   if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(text.trim())) throw new Error(`${field} 请输入明确小数，不接受范围、逗号或文字；未知营养请留空。`);
@@ -38,6 +40,12 @@ export function previewLabel(form: LabelDraftForm) {
     if (!["g", "kg"].includes(form.netUnit) || net === undefined || drained > net * (form.netUnit === "kg" ? 1000 : 1)) throw new Error("沥干物量需要已知重量净含量，且不能大于净含量；不猜测密度。");
   }
   if (form.sourceNote.length > 1000) throw new Error("来源备注最多 1000 字。");
+  // NRV% 只做录入合法性把关（格式与范围），反推校验统一在 Rust 侧 preview_form 里跑，避免两套口径。
+  for (const [key, raw] of Object.entries(form.nrv ?? {})) {
+    if (!raw?.trim()) continue;
+    const percent = decimal(raw, `NRV%（${key}）`);
+    if (percent > 500) throw new Error(`NRV%（${key}）超出可信范围（≤500%），请核对是否录错行。`);
+  }
   const input: FoodDefinitionInput = { name: form.name, brand: form.brand, measurementBasis: form.measurementBasis, basis: { quantity: decimal(form.basisQuantity, "标签参考数量", true), unit: form.basisUnit }, energyUnit: form.energyUnit, nutrients, conversions: form.conversions.map(c => ({ unit: c.unit, quantity: decimal(c.quantity, "换算数量", true), basisQuantity: decimal(c.basisQuantity, "对应参考数量", true) })), source: "label" };
   validateFoodInput(input);
   const normalized = { ...nutrients };

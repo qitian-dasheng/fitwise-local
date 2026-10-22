@@ -139,6 +139,7 @@ export interface WeightReviseInput extends WeightRecordInput {
 
 interface AppActions {
   labelDraftCommand: (kind: "save_label_draft" | "confirm_label_draft" | "discard_label_draft", payload: Record<string, unknown>, commandId: string) => Promise<ActionResult>;
+  menuDraftCommand: (kind: "import_menu_draft" | "confirm_menu_draft" | "discard_menu_draft", payload: Record<string, unknown>, commandId: string) => Promise<ActionResult>;
   correctBatch: (kind: "void_prepared_batch" | "revise_waste" | "void_waste", input: { batchId?: string; wasteId?: string; reason: string; ratio?: number }, commandId?: string) => Promise<ActionResult>;
   correctMeal: (input: MealCorrectionInput, voided: boolean, commandId?: string) => Promise<ActionResult>;
   saveRecipe: (input: RecipeInput, commandId?: string) => Promise<ActionResult>;
@@ -217,6 +218,10 @@ export const useAppStore = create<AppStore>()(
       ...(isTauriRuntime() ? createPersonalState() : initialState),
       async labelDraftCommand(kind, payload, commandId) {
         if (!isTauriRuntime()) return { error: "离线草稿的持久化与确认需要桌面版；浏览器只提供填写预览，不模拟成功。" };
+        return submit(kind, payload, commandId);
+      },
+      async menuDraftCommand(kind, payload, commandId) {
+        if (!isTauriRuntime()) return { error: "AI 菜单草稿的导入与确认需要桌面版；浏览器不模拟正式写入。" };
         return submit(kind, payload, commandId);
       },
       async correctBatch(kind, input, commandId = uid()) {

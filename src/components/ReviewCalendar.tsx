@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { CalendarCell } from "../domain/review";
+import { toDisplayEnergyMaybe } from "../domain/energyDisplay";
 
 const STATUS_LABEL: Record<CalendarCell["status"], string> = {
   none: "没有记录",
@@ -8,9 +9,9 @@ const STATUS_LABEL: Record<CalendarCell["status"], string> = {
   hit: "达标",
 };
 
-function cellTitle(cell: CalendarCell) {
+function cellTitle(cell: CalendarCell, energyUnit: "kcal" | "kJ") {
   const parts = [cell.date, STATUS_LABEL[cell.status]];
-  if (cell.calories !== null) parts.push(`${Math.round(cell.calories)} kcal`);
+  if (cell.calories !== null) parts.push(`${Math.round(toDisplayEnergyMaybe(cell.calories, energyUnit) ?? 0)} ${energyUnit}`);
   if (cell.protein !== null) parts.push(`蛋白 ${Math.round(cell.protein)} g`);
   if (cell.complete) parts.push("已确认完整");
   if (cell.workoutCount > 0) parts.push(`运动 ${cell.workoutCount} 次`);
@@ -29,11 +30,14 @@ export function ReviewCalendar({
   onSelect,
   selectLabel = "饮食记录",
   headerAction,
+  energyUnit = "kcal",
 }: {
   cells: CalendarCell[];
   onSelect?: (date: string) => void;
   selectLabel?: string;
   headerAction?: ReactNode;
+  /** 仅影响悬浮提示里热量的显示单位；达标判断口径不受影响。 */
+  energyUnit?: "kcal" | "kJ";
 }) {
   return (
     <section className="card review-calendar">
@@ -50,7 +54,7 @@ export function ReviewCalendar({
       <div className="calendar-grid">
         {cells.map((cell) => {
           const className = `calendar-cell calendar-${cell.status}${cell.complete ? " calendar-complete" : ""}`;
-          const label = cellTitle(cell);
+          const label = cellTitle(cell, energyUnit);
           return onSelect ? (
             <button
               key={cell.date}
