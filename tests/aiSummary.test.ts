@@ -64,8 +64,8 @@ describe("buildAiSummary", () => {
   it("最新晨重取所选日之前最近的代表称重", () => {
     const text = buildAiSummary(
       stateWith({ measurements: [
-        { id: "m1", date: day, weightKg: 83.8, source: "manual", confidence: "high", createdAt: `${day}T07:00:00Z` },
-      ] as AppState["measurements"] }),
+        { id: "m1", date: day, weightKg: 83.8, source: "manual" as const, createdAt: `${day}T07:00:00Z` },
+      ] as unknown as AppState["measurements"] }),
       day,
     );
     expect(text).toContain("最新晨重 83.8 kg");
