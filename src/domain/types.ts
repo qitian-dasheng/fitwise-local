@@ -162,13 +162,24 @@ export interface BodyMeasurement {
 
 export interface WorkoutSession {
   id: string;
-  /** 缺失视为 active；作废/更正后保留旧行留证。 */
-  status?: "active" | "superseded" | "void";
+  /**
+   * 缺失视为 active。`superseded` = 被更正的旧值；`reverted` = 被撤销的那次更正；
+   * `void` = 本来就不该存在的记录。三者都不是有效记录，只有 active 参与统计。
+   */
+  status?: "active" | "superseded" | "void" | "reverted";
   supersedesId?: string;
   supersededBy?: string;
   correctionReason?: string;
   correctedAt?: string;
   voidedAt?: string;
+  /** 被撤销的那次更正：撤销时刻与撤销原因（原因可空）。 */
+  revertedAt?: string;
+  revertedReason?: string;
+  /** 重新生效的时刻与原因，撤销更正与恢复作废共用。 */
+  restoredAt?: string;
+  restoredReason?: string;
+  /** 撤销更正时写上「被撤销的那次更正是哪一条」，作为父子链的补充证据。 */
+  restoredCorrectionId?: string;
   date: ISODate;
   name: string;
   type: string;

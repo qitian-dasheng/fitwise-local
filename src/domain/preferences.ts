@@ -2,6 +2,8 @@
  * 界面偏好只存浏览器 localStorage：不进 AppState，不写领域库，不参与导出与审计。
  * 读写失败一律静默回落，不能因为一个显示开关弹出保存失败提示。
  */
+import { RANGE_PRESETS, type RangePreset } from "./review";
+
 export const DIARY_SODIUM_KEY = "qingheng.food-diary.show-sodium";
 
 export function readDiaryShowSodium(): boolean {
@@ -17,5 +19,55 @@ export function writeDiaryShowSodium(visible: boolean): void {
     window.localStorage.setItem(DIARY_SODIUM_KEY, visible ? "1" : "0");
   } catch {
     // 隐私模式或配额受限时忽略：开关本次会话仍然生效。
+  }
+}
+
+/**
+ * 复盘区间偏好：预设档位与自定义起止日只存一个 key。
+ * 拆成两个 key 会出现「选了 14 天、自定义区间还留着」的撕裂状态，读的时候还得再造优先级。
+ */
+export const TRENDS_RANGE_KEY = "qingheng.trends.range";
+
+export type TrendsRangePref =
+  | { mode: "preset"; days: RangePreset }
+  | { mode: "custom"; start: string; end: string };
+
+const DEFAULT_TRENDS_RANGE: TrendsRangePref = { mode: "preset", days: 7 };
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function readTrendsRange(): TrendsRangePref {
+  try {
+    const raw = window.localStorage.getItem(TRENDS_RANGE_KEY);
+    if (!raw) return DEFAULT_TRENDS_RANGE;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return DEFAULT_TRENDS_RANGE;
+    const value = parsed as Record<string, unknown>;
+    if (value.mode === "preset") {
+      const days = value.days;
+      // 只认界面上真实存在的档位：手改过的 999 天会让查询跨度失控。
+      if (typeof days === "number" && RANGE_PRESETS.includes(days as RangePreset)) {
+        return { mode: "preset", days: days as RangePreset };
+      }
+      return DEFAULT_TRENDS_RANGE;
+    }
+    if (value.mode === "custom") {
+      if (typeof value.start !== "string" || typeof value.end !== "string") {
+        return DEFAULT_TRENDS_RANGE;
+      }
+      if (!ISO_DATE.test(value.start) || !ISO_DATE.test(value.end)) return DEFAULT_TRENDS_RANGE;
+      return { mode: "custom", start: value.start, end: value.end };
+    }
+    return DEFAULT_TRENDS_RANGE;
+  } catch {
+    // 存坏了（手改、旧版本、隐私模式）一律回落默认值，不弹错误。
+    return DEFAULT_TRENDS_RANGE;
+  }
+}
+
+export function writeTrendsRange(value: TrendsRangePref): void {
+  try {
+    window.localStorage.setItem(TRENDS_RANGE_KEY, JSON.stringify(value));
+  } catch {
+    // 写不进去也要让本次会话的区间照常生效。
   }
 }

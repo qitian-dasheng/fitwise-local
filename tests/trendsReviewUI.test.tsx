@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { TrendsPage } from "../src/pages/TrendsPage";
 import { initialState } from "../src/domain/seed";
+import { diaryToday } from "../src/domain/diary";
 import { useAppStore } from "../src/store/appStore";
 import type { BodyMeasurement, DailyCheckIn, MealEntry, WorkoutSession } from "../src/domain/types";
 
@@ -282,4 +283,86 @@ it("says so plainly when the range has no waist measurement", async () => {
   const waist = cards.find((text) => text.includes("区间腰围变化"))!;
   expect(waist).toContain("区间内未量");
   expect(waist).toContain("在「身体」页记一次腰围");
+});
+
+// ===== 0.4.11 区间记忆与日历跳转目标 =====
+
+const setDateValue = (input: HTMLInputElement, value: string) => {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+};
+
+async function remount() {
+  await act(async () => root.unmount());
+  root = createRoot(host);
+}
+
+it("remembers the chosen preset across a remount", async () => {
+  await renderPage();
+  await act(async () => metricCard("14 天")!.click());
+  expect(host.querySelector(".form-hint")?.textContent).toContain("（14 天）");
+
+  await remount();
+  await renderPage();
+  expect(host.querySelector(".form-hint")?.textContent).toContain("（14 天）");
+});
+
+it("remembers a custom range with both endpoints", async () => {
+  await renderPage();
+  await act(async () => metricCard("自定义")!.click());
+  const inputs = [...host.querySelectorAll(".range-custom input")] as HTMLInputElement[];
+  await act(async () => setDateValue(inputs[0], "2026-10-01"));
+  expect(host.querySelector(".form-hint")?.textContent).toContain("2026-10-01 至 2026-10-21（21 天）");
+
+  await remount();
+  await renderPage();
+  const restored = [...host.querySelectorAll(".range-custom input")] as HTMLInputElement[];
+  expect(restored).toHaveLength(2);
+  expect(restored[0].value).toBe("2026-10-01");
+  expect(restored[1].value).toBe("2026-10-21");
+  expect(host.querySelectorAll(".calendar-grid .calendar-cell")).toHaveLength(21);
+});
+
+it("clamps a stored end date that is in the future", async () => {
+  window.localStorage.setItem(
+    "qingheng.trends.range",
+    JSON.stringify({ mode: "custom", start: "2026-10-01", end: "2099-01-01" }),
+  );
+  await renderPage();
+
+  const inputs = [...host.querySelectorAll(".range-custom input")] as HTMLInputElement[];
+  // 存量偏好里的结束日可能晚于今天（跨时区、改过系统时间），进 state 前必须收回。
+  expect(inputs[1].value).toBe(diaryToday());
+  expect(host.querySelectorAll(".calendar-grid .calendar-cell").length).toBeLessThanOrEqual(92);
+});
+
+it("falls back to seven days when the preference is corrupt", async () => {
+  window.localStorage.setItem("qingheng.trends.range", "not-json");
+  await renderPage();
+  expect(host.querySelector(".range-custom")).toBeNull();
+  expect(host.querySelector(".form-hint")?.textContent).toContain("（7 天）");
+
+  window.localStorage.setItem("qingheng.trends.range", JSON.stringify({ mode: "preset", days: 999 }));
+  await remount();
+  await renderPage();
+  expect(host.querySelector(".form-hint")?.textContent).toContain("（7 天）");
+});
+
+it("jumps to the chosen destination and renames the calendar hint", async () => {
+  const goTo = vi.fn();
+  await renderPage({ meals: [meal("2026-10-18", 2000, 170)] }, { goTo });
+
+  const targets = [...host.querySelectorAll(".calendar-target button")] as HTMLButtonElement[];
+  expect(targets.map((item) => item.textContent)).toEqual(["饮食", "身体", "运动"]);
+  expect(host.querySelector(".calendar-hint")?.textContent).toContain("饮食记录");
+
+  await act(async () => targets[1].click());
+
+  const cells = [...host.querySelectorAll(".calendar-grid button.calendar-cell")] as HTMLButtonElement[];
+  const target = cells.find((cell) => cell.textContent?.includes("18"))!;
+  // 文案要跟着目标变，不能出现「点了却说跳饮食」的错提示。
+  expect(target.title).toContain("身体记录");
+  await act(async () => target.click());
+  expect(goTo).toHaveBeenLastCalledWith("body");
+  expect(host.querySelector(".calendar-hint")?.textContent).toContain("身体记录");
 });

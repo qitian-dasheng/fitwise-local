@@ -522,8 +522,9 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 .body-cell-muted, .body-cell-note { font-size: 11px; }
 
 /* ===== 0.4.9 运动记录：行内更正/作废与作废留证 ===== */
-.workout-row { grid-template-columns: 48px 1fr repeat(3, minmax(75px, .35fr)) 96px; }
-.workout-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+/* 0.4.11 起有效记录可能有三个按钮（编辑/作废/撤销更正），末列改成可伸展并允许换行。 */
+.workout-row { grid-template-columns: 48px 1fr repeat(3, minmax(75px, .35fr)) minmax(150px, auto); }
+.workout-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; row-gap: 6px; }
 .workout-actions .danger-text { color: var(--coral); }
 .workout-actions .danger-text:hover { color: #a33b30; }
 .workout-inactive-note { color: var(--muted); font-size: 11px; line-height: 1.5; text-align: right; overflow-wrap: anywhere; }
@@ -628,3 +629,9 @@ button.calendar-cell:focus-visible { outline: 2px solid var(--green); outline-of
 /* 安全区间稍微加深，浅一档在浅绿底上几乎看不出边界。 */
 .gauge-safe { background: rgba(39,106,83,.3); box-shadow: inset 0 0 0 1px rgba(39,106,83,.16); }
 .trends-page .chart-large:has(.empty-chart) { height: 190px; }
+
+/* ===== 0.4.11 撤销更正 / 恢复作废 与复盘页偏好 ===== */
+/* 日历卡头部：跳转目标与达标天数并排；窄屏时目标控件换行而不是被拉满整行。 */
+.calendar-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; }
+.calendar-target { width: auto; padding: 3px; }
+.calendar-target button { flex: 0 0 auto; min-width: 46px; padding: 6px 10px; font-size: 12px; }

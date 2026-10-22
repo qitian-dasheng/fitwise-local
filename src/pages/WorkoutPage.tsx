@@ -9,15 +9,26 @@ import type { WorkoutSession } from "../domain/types";
 import { useConfirmedAction } from "../components/useConfirmedAction";
 import type { ActionResult } from "../store/appStore";
 import { WorkoutCorrectionModal } from "../components/WorkoutCorrectionModal";
-import { isActiveWorkout, isInactiveLabel } from "../domain/workouts";
+import { WorkoutRevertModal } from "../components/WorkoutRevertModal";
+import {
+  canRestoreVoid,
+  canUndoCorrection,
+  correctionParent,
+  draftFromWorkout,
+  isActiveWorkout,
+  isInactiveLabel,
+  latestActiveWorkout,
+} from "../domain/workouts";
 
 export function WorkoutPage({ date = diaryToday(), onDateChange }: DiaryDateProps = {}) {
   const [open, setOpen] = useState(false);
   const [correction, setCorrection] = useState<{ workout: WorkoutSession; mode: "edit" | "void" } | null>(null);
+  const [revert, setRevert] = useState<{ workout: WorkoutSession; mode: "undo" | "restore" } | null>(null);
   const allWorkouts = useAppStore((state) => state.workouts);
   const dayWorkouts = allWorkouts.filter((item) => item.date === date);
   const workouts = dayWorkouts.filter(isActiveWorkout);
   const addWorkout = useAppStore((state) => state.addWorkout);
+  const suggestion = latestActiveWorkout(allWorkouts, date);
   const totalMinutes = workouts.reduce((sum, item) => sum + item.durationMinutes, 0);
   const totalCalories = workouts.reduce((sum, item) => sum + (item.caloriesKcal ?? 0), 0);
   const heartWorkouts = workouts.filter((item) => item.averageHeartRate != null);
@@ -42,12 +53,17 @@ export function WorkoutPage({ date = diaryToday(), onDateChange }: DiaryDateProp
           {active ? <>
             <button className="text-button" onClick={() => setCorrection({ workout: item, mode: "edit" })}>编辑</button>
             <button className="text-button danger-text" onClick={() => setCorrection({ workout: item, mode: "void" })}>作废</button>
-          </> : <span className="workout-inactive-note">{isInactiveLabel(item)}{item.correctionReason ? ` · ${item.correctionReason}` : ""}</span>}
+            {canUndoCorrection(item, allWorkouts) && <button className="text-button" onClick={() => setRevert({ workout: item, mode: "undo" })}>撤销更正</button>}
+          </> : <>
+            <span className="workout-inactive-note">{isInactiveLabel(item)}{item.correctionReason ? ` · ${item.correctionReason}` : ""}</span>
+            {canRestoreVoid(item, allWorkouts) && <button className="text-button" onClick={() => setRevert({ workout: item, mode: "restore" })}>恢复</button>}
+          </>}
         </div>
       </article>;
     }) : <div className="large-empty"><Dumbbell/><h3>尚未记录运动</h3><p>可先手工录入；Keep 截图目前只能保存在收件箱，暂不会自动生成运动草稿。</p><button className="button secondary" onClick={() => setOpen(true)}>添加第一条记录</button></div>}</section>
-    {open && <WorkoutModal initialDate={date} onRecorded={onDateChange} onClose={() => setOpen(false)} onSave={addWorkout}/>}
+    {open && <WorkoutModal initialDate={date} suggestion={suggestion} onRecorded={onDateChange} onClose={() => setOpen(false)} onSave={addWorkout}/>}
     {correction && <WorkoutCorrectionModal workout={correction.workout} mode={correction.mode} onClose={() => setCorrection(null)}/>}
+    {revert && <WorkoutRevertModal workout={revert.workout} mode={revert.mode} parent={correctionParent(revert.workout, allWorkouts) ?? undefined} onClose={() => setRevert(null)}/>}
   </div>;
 }
 
@@ -55,11 +71,31 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
 
 type WorkoutInput = Omit<WorkoutSession, "id" | "createdAt">;
 
-function WorkoutModal({ onClose, onSave, initialDate, onRecorded }: { initialDate: string; onRecorded?: (date: string) => void; onClose: () => void; onSave: (input: WorkoutInput, commandId?: string) => Promise<ActionResult> }) {
+function WorkoutModal({ onClose, onSave, initialDate, onRecorded, suggestion }: { initialDate: string; suggestion?: WorkoutSession | null; onRecorded?: (date: string) => void; onClose: () => void; onSave: (input: WorkoutInput, commandId?: string) => Promise<ActionResult> }) {
   const [form, setForm] = useState({ date: initialDate, name: "", type: "低冲击有氧", durationMinutes: "", caloriesKcal: "", load: "", averageHeartRate: "", maxHeartRate: "" });
+  const [filled, setFilled] = useState(false);
   const action = useConfirmedAction();
+  // 只在名字还空着时提示，用户开始打字后自动让位，不覆盖已输入内容。
+  const canSuggest = Boolean(suggestion) && !form.name.trim();
+  function fillFromPrevious() {
+    if (!suggestion) return;
+    const draft = draftFromWorkout(suggestion, form.date);
+    setForm({
+      ...form,
+      name: draft.name,
+      type: draft.type,
+      durationMinutes: String(draft.durationMinutes),
+      caloriesKcal: draft.caloriesKcal === undefined ? "" : String(draft.caloriesKcal),
+      load: draft.load === undefined ? "" : String(draft.load),
+      averageHeartRate: draft.averageHeartRate === undefined ? "" : String(draft.averageHeartRate),
+      maxHeartRate: draft.maxHeartRate === undefined ? "" : String(draft.maxHeartRate),
+    });
+    setFilled(true);
+  }
   return <Modal title="记录一次运动" onClose={() => { if (!action.busy) onClose(); }}><form className="form" onSubmit={async (event) => { event.preventDefault(); const input = { date: form.date, name: form.name, type: form.type, durationMinutes: Number(form.durationMinutes), caloriesKcal: form.caloriesKcal ? Number(form.caloriesKcal) : undefined, load: form.load ? Number(form.load) : undefined, averageHeartRate: form.averageHeartRate ? Number(form.averageHeartRate) : undefined, maxHeartRate: form.maxHeartRate ? Number(form.maxHeartRate) : undefined }; const result = await action.run(JSON.stringify(input), (id) => onSave(input, id)); if (!result.error) { onRecorded?.(form.date); onClose(); } }}>
     <fieldset className="library-fields" disabled={action.busy}>
+    {canSuggest && suggestion && <button type="button" className="button secondary wide" onClick={fillFromPrevious}>填入上次训练 · {suggestion.date.slice(5)} {suggestion.name} · {suggestion.durationMinutes} 分钟</button>}
+    {filled && !canSuggest && suggestion && <p className="form-hint">已填入 {suggestion.date.slice(5)} 的记录，可直接修改后保存。</p>}
     <div className="form-grid"><label><span>日期</span><input type="date" required max={diaryToday()} value={form.date} onChange={(event) => setForm({...form,date:event.target.value})}/></label><label><span>运动类型</span><input value={form.type} onChange={(event) => setForm({...form,type:event.target.value})}/></label></div>
     <label><span>课程或训练名称</span><input required value={form.name} onChange={(event) => setForm({...form,name:event.target.value})} placeholder="例如 低冲击有氧"/></label>
     <div className="form-grid"><label><span>时长（分钟）</span><input required type="number" min="1" value={form.durationMinutes} onChange={(event) => setForm({...form,durationMinutes:event.target.value})}/></label><label><span>热量（可选）</span><input type="number" min="0" value={form.caloriesKcal} onChange={(event) => setForm({...form,caloriesKcal:event.target.value})}/></label></div>

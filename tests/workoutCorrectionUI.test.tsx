@@ -170,3 +170,62 @@ it("rejects a bad heart rate before writing anything", async () => {
   expect(button("确认更正", dialog)!.disabled).toBe(true);
   expect(useAppStore.getState().workouts).toHaveLength(1);
 });
+
+// ===== 0.4.11 填入上次训练 =====
+
+it("fills the new form from the last active workout", async () => {
+  await renderPage([workout({ id: "a" })]);
+  await act(async () => button("记录运动")!.click());
+  const dialog = document.querySelector(".modal") as HTMLElement;
+
+  const fill = button("填入上次训练", dialog)!;
+  // 文案必须带来源日期与名称：用户自己判断这条记录还值不值得照抄。
+  expect(fill.textContent).toContain("10-19");
+  expect(fill.textContent).toContain("B4 全身进阶");
+  expect(fill.textContent).toContain("22 分钟");
+
+  await act(async () => fill.click());
+  expect(fieldByLabel(dialog, "课程或训练名称").value).toBe("B4 全身进阶");
+  expect(fieldByLabel(dialog, "时长（分钟）").value).toBe("22");
+  expect(fieldByLabel(dialog, "热量（可选）").value).toBe("169");
+  expect(fieldByLabel(dialog, "平均心率（可选）").value).toBe("125");
+  // 日期保持当前所选日，不会退回上次那条记录的日期。
+  expect(fieldByLabel(dialog, "日期").value).toBe("2026-10-19");
+  expect(dialog.textContent).toContain("已填入 10-19 的记录");
+
+  // 复制只带业务字段：sourceFingerprint 一旦被带过去，add_workout 会当成重复直接不写。
+  await act(async () => button("确认运动记录", dialog)!.click());
+  const created = useAppStore.getState().workouts.find((item) => item.id !== "a")!;
+  expect(created.name).toBe("B4 全身进阶");
+  expect(created.sourceFingerprint).toBeUndefined();
+});
+
+it("skips voided records when suggesting the previous workout", async () => {
+  await renderPage([
+    workout({ id: "voided", name: "被作废的一次", status: "void", voidedAt: "2026-10-19T03:00:00Z" }),
+    workout({
+      id: "old",
+      name: "更早的那次",
+      date: "2026-10-17",
+      durationMinutes: 30,
+      createdAt: "2026-10-17T00:00:00Z",
+    }),
+  ]);
+  await act(async () => button("记录运动")!.click());
+  const dialog = document.querySelector(".modal") as HTMLElement;
+
+  const fill = button("填入上次训练", dialog)!;
+  expect(fill.textContent).toContain("10-17");
+  expect(fill.textContent).toContain("更早的那次");
+  expect(fill.textContent).not.toContain("被作废的一次");
+});
+
+it("hides the fill button once the name is typed", async () => {
+  await renderPage([workout({ id: "a" })]);
+  await act(async () => button("记录运动")!.click());
+  const dialog = document.querySelector(".modal") as HTMLElement;
+  expect(button("填入上次训练", dialog)).toBeTruthy();
+
+  await act(async () => setValue(fieldByLabel(dialog, "课程或训练名称"), "自己写的课程"));
+  expect(button("填入上次训练", dialog)).toBeUndefined();
+});

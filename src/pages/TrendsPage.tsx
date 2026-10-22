@@ -33,12 +33,13 @@ import { ReviewCalendar } from "../components/ReviewCalendar";
 import { WeeklyDeltaGauge } from "../components/WeeklyDeltaGauge";
 import { isActiveWorkout } from "../domain/workouts";
 import { formatCm, formatPercent, formatWeight, girthDeltaText } from "../domain/body";
+import { readTrendsRange, writeTrendsRange } from "../domain/preferences";
 
 /** 自定义区间上限：再长就不是「阶段复盘」了；也顺带挡住误输入的天文数字。 */
-const MAX_CUSTOM_DAYS = 92;
+export const MAX_CUSTOM_DAYS = 92;
 
 /** 输入即收窄：结束不晚于今天，开始不晚于结束、不早于「结束 − 91 天」，保证 span 永远 ≤ 上限。 */
-function clampRange(start: string, end: string) {
+export function clampRange(start: string, end: string) {
   const today = diaryToday();
   const safeEnd = end > today ? today : end;
   let safeStart = start > safeEnd ? safeEnd : start;
@@ -47,14 +48,30 @@ function clampRange(start: string, end: string) {
   return { start: safeStart, end: safeEnd };
 }
 
+/** 点日历格跳去哪一页。默认饮食；不记忆，免得「默认」名存实亡。 */
+export type CalendarTarget = "food" | "body" | "workout";
+
+const CALENDAR_TARGETS: { value: CalendarTarget; label: string; selectLabel: string }[] = [
+  { value: "food", label: "饮食", selectLabel: "饮食记录" },
+  { value: "body", label: "身体", selectLabel: "身体记录" },
+  { value: "workout", label: "运动", selectLabel: "运动记录" },
+];
+
 export function TrendsPage({
   date = diaryToday(),
   onDateChange,
   goTo,
 }: DiaryDateProps & { goTo?: (page: string) => void } = {}) {
-  const [rangeDays, setRangeDays] = useState<RangePreset>(7);
+  // 偏好只在挂载时读一次；存下的 end 可能晚于今天、start 可能早于 92 天，所以先过 clampRange。
+  const [initialRange] = useState(readTrendsRange);
+  const [rangeDays, setRangeDays] = useState<RangePreset>(
+    initialRange.mode === "preset" ? initialRange.days : 7,
+  );
   // null = 用预设档位；有值 = 用户自己指定的起止日（与日记日解耦）。
-  const [custom, setCustom] = useState<{ start: string; end: string } | null>(null);
+  const [custom, setCustom] = useState<{ start: string; end: string } | null>(() =>
+    initialRange.mode === "custom" ? clampRange(initialRange.start, initialRange.end) : null,
+  );
+  const [calendarTarget, setCalendarTarget] = useState<CalendarTarget>("food");
   const start = custom ? custom.start : shiftDiaryDate(date, -(rangeDays - 1));
   const end = custom ? custom.end : date;
   const spanDays = Math.max(1, daySpan(start, end));
@@ -140,6 +157,7 @@ export function TrendsPage({
               onClick={() => {
                 setCustom(null);
                 setRangeDays(preset);
+                writeTrendsRange({ mode: "preset", days: preset });
               }}
             >
               {preset} 天
@@ -149,7 +167,11 @@ export function TrendsPage({
             type="button"
             className={custom ? "active" : ""}
             aria-pressed={!!custom}
-            onClick={() => setCustom({ start, end })}
+            onClick={() => {
+              const next = { start, end };
+              setCustom(next);
+              writeTrendsRange({ mode: "custom", ...next });
+            }}
           >
             自定义
           </button>
@@ -164,7 +186,11 @@ export function TrendsPage({
               type="date"
               value={custom.start}
               max={custom.end}
-              onChange={(event) => setCustom(clampRange(event.target.value, custom.end))}
+              onChange={(event) => {
+                const next = clampRange(event.target.value, custom.end);
+                setCustom(next);
+                writeTrendsRange({ mode: "custom", ...next });
+              }}
             />
           </label>
           <label>
@@ -174,11 +200,22 @@ export function TrendsPage({
               value={custom.end}
               min={custom.start}
               max={diaryToday()}
-              onChange={(event) => setCustom(clampRange(custom.start, event.target.value))}
+              onChange={(event) => {
+                const next = clampRange(custom.start, event.target.value);
+                setCustom(next);
+                writeTrendsRange({ mode: "custom", ...next });
+              }}
             />
           </label>
           <span className="calendar-hint">最长 {MAX_CUSTOM_DAYS} 天，超出会自动收窄。</span>
-          <button className="text-button" type="button" onClick={() => setCustom(null)}>
+          <button
+            className="text-button"
+            type="button"
+            onClick={() => {
+              setCustom(null);
+              writeTrendsRange({ mode: "preset", days: rangeDays });
+            }}
+          >
             回到 {rangeDays} 天预设
           </button>
         </div>
@@ -259,10 +296,28 @@ export function TrendsPage({
 
       <ReviewCalendar
         cells={review.calendar}
+        selectLabel={CALENDAR_TARGETS.find((item) => item.value === calendarTarget)!.selectLabel}
+        headerAction={
+          goTo ? (
+            <div className="range-tabs calendar-target" role="group" aria-label="日历格跳转到">
+              {CALENDAR_TARGETS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  className={item.value === calendarTarget ? "active" : ""}
+                  aria-pressed={item.value === calendarTarget}
+                  onClick={() => setCalendarTarget(item.value)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          ) : undefined
+        }
         onSelect={(day) => {
-          // 点某天＝把日记日切到那天并跳到饮食页，省掉「记住日期再自己翻」。
+          // 点某天＝把日记日切到那天，再跳到用户选的那一页，省掉「记住日期再自己翻」。
           onDateChange?.(day);
-          goTo?.("food");
+          goTo?.(calendarTarget);
         }}
       />
 

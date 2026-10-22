@@ -39,6 +39,7 @@ export interface WorkoutReviseInput extends WorkoutDraftInput {
 export function isInactiveLabel(workout: WorkoutSession) {
   if (workout.status === "void") return "已作废";
   if (workout.status === "superseded") return "已更正";
+  if (workout.status === "reverted") return "已撤销更正";
   return "";
 }
 
@@ -98,4 +99,67 @@ export function workoutDraftPayload(input: WorkoutDraftInput): Record<string, un
   if (input.averageHeartRate !== undefined) payload.averageHeartRate = input.averageHeartRate;
   if (input.maxHeartRate !== undefined) payload.maxHeartRate = input.maxHeartRate;
   return payload;
+}
+
+/**
+ * 更正链的父子关系只认 `supersedesId` / `supersededBy` 两个指针。
+ * 绝不能从 id 前缀反推：Rust 生成 `{kind}-{commandId}`，浏览器预览用 uid()，两套规则并存。
+ */
+export function correctionParent(
+  workout: WorkoutSession,
+  list: WorkoutSession[],
+): WorkoutSession | null {
+  if (!workout.supersedesId) return null;
+  return list.find((item) => item.id === workout.supersedesId) ?? null;
+}
+
+/** 只有「当前有效、且父行确实还被自己替换着」的更正才允许撤销。 */
+export function canUndoCorrection(workout: WorkoutSession, list: WorkoutSession[]) {
+  if (!isActiveWorkout(workout) || !workout.supersedesId) return false;
+  const parent = correctionParent(workout, list);
+  if (!parent) return false;
+  return parent.status === "superseded" && parent.supersededBy === workout.id;
+}
+
+/** 只有作废行能恢复；如果它本来是某次更正，链还得对得上，否则会出现父子双活。 */
+export function canRestoreVoid(workout: WorkoutSession, list: WorkoutSession[]) {
+  if (workout.status !== "void") return false;
+  if (!workout.supersedesId) return true;
+  const parent = correctionParent(workout, list);
+  if (!parent) return false;
+  return parent.status === "superseded" && parent.supersededBy === workout.id;
+}
+
+/**
+ * 「上次练的是什么」：只从有效记录里找，日期不晚于所选日，按 日历日 → 录入时刻 取最新。
+ * 作废 / 已更正 / 已撤销更正一律不作为来源，避免把错数据复制成新记录。
+ */
+export function latestActiveWorkout(list: WorkoutSession[], date: string): WorkoutSession | null {
+  const candidates = list
+    .filter((item) => isActiveWorkout(item) && item.date <= date)
+    .slice()
+    .sort((left, right) => {
+      if (left.date !== right.date) return left.date < right.date ? 1 : -1;
+      if (left.createdAt !== right.createdAt) return left.createdAt < right.createdAt ? 1 : -1;
+      return left.id < right.id ? 1 : -1;
+    });
+  return candidates[0] ?? null;
+}
+
+/**
+ * 把一条既有记录变成可再次提交的草稿：日期用调用方给的（通常是当前所选日），
+ * 不带 id / createdAt / status / sourceFingerprint——指纹带过去会被 add_workout 判成重复。
+ */
+export function draftFromWorkout(workout: WorkoutSession, date: string): WorkoutDraftInput {
+  const draft: WorkoutDraftInput = {
+    date,
+    name: workout.name,
+    type: workout.type,
+    durationMinutes: workout.durationMinutes,
+  };
+  if (workout.caloriesKcal !== undefined) draft.caloriesKcal = workout.caloriesKcal;
+  if (workout.load !== undefined) draft.load = workout.load;
+  if (workout.averageHeartRate !== undefined) draft.averageHeartRate = workout.averageHeartRate;
+  if (workout.maxHeartRate !== undefined) draft.maxHeartRate = workout.maxHeartRate;
+  return draft;
 }

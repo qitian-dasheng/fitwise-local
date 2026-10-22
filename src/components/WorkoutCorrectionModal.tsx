@@ -126,7 +126,7 @@ export function WorkoutCorrectionModal({
               checked={voided}
               onChange={(event) => { setVoided(event.target.checked); setConfirmed(false); }}
             />
-            <span>作废这次运动（不计入时长、次数与趋势，不可一键恢复）</span>
+            <span>作废这次运动（不计入时长、次数与趋势；作废后仍可在行内恢复）</span>
           </label>
           {voided && (
             <p className="library-notice">

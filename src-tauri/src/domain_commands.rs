@@ -577,6 +577,8 @@ fn execute_with_connection(
             | "add_workout"
             | "revise_workout"
             | "void_workout"
+            | "undo_workout_correction"
+            | "restore_voided_workout"
             | "set_checkin"
             | "set_day_complete"
             | "add_purchase"
@@ -697,8 +699,12 @@ fn execute_with_connection(
             )?
         }
         // 运动更正必须显式匹配：留到 `_ =>` 兜底会落到 record_commands，
-        // 那里只认 add_workout，两个新 kind 会被当成未知命令拒绝。
-        "revise_workout" | "void_workout" => crate::workout_commands::apply(
+        // 那里只认 add_workout，其余 kind 会被当成未知命令拒绝。
+        // 新增的撤销/恢复同理，白名单与分发必须同一次改。
+        "revise_workout"
+        | "void_workout"
+        | "undo_workout_correction"
+        | "restore_voided_workout" => crate::workout_commands::apply(
             &mut state,
             &request.kind,
             &request.payload,

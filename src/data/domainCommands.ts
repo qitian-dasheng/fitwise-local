@@ -24,6 +24,8 @@ export type DomainCommandKind =
   | "add_workout"
   | "revise_workout"
   | "void_workout"
+  | "undo_workout_correction"
+  | "restore_voided_workout"
   | "set_checkin"
   | "set_day_complete"
   | "add_purchase"

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { CalendarCell } from "../domain/review";
 
 const STATUS_LABEL: Record<CalendarCell["status"], string> = {
@@ -20,14 +21,19 @@ function cellTitle(cell: CalendarCell) {
  * 区间达标日历：一格一天。
  * 「达标」用严格口径（热量在目标区间内且蛋白达到目标），
  * 热量未知的那天单独标出来，不混进达标或未达标。
- * 传入 onSelect 时每格变成按钮，点了就跳到那一天。
+ * 传入 onSelect 时每格变成按钮，点了就跳到那一天；`selectLabel` 决定文案里说的是
+ * 哪一页（饮食记录 / 身体记录 / 运动记录），避免「点了却说跳饮食」的错文案。
  */
 export function ReviewCalendar({
   cells,
   onSelect,
+  selectLabel = "饮食记录",
+  headerAction,
 }: {
   cells: CalendarCell[];
   onSelect?: (date: string) => void;
+  selectLabel?: string;
+  headerAction?: ReactNode;
 }) {
   return (
     <section className="card review-calendar">
@@ -36,7 +42,10 @@ export function ReviewCalendar({
           <p className="eyebrow">严格口径 · 热量区间内且蛋白达标</p>
           <h2>达标日历</h2>
         </div>
-        <span className="calendar-total">{cells.filter((cell) => cell.status === "hit").length} 天达标</span>
+        <div className="calendar-meta">
+          {headerAction}
+          <span className="calendar-total">{cells.filter((cell) => cell.status === "hit").length} 天达标</span>
+        </div>
       </div>
       <div className="calendar-grid">
         {cells.map((cell) => {
@@ -47,8 +56,8 @@ export function ReviewCalendar({
               key={cell.date}
               type="button"
               className={className}
-              title={`${label} · 点击查看这一天`}
-              aria-label={`${label}，点击查看这一天`}
+              title={`${label} · 点击查看这一天的${selectLabel}`}
+              aria-label={`${label}，点击查看这一天的${selectLabel}`}
               onClick={() => onSelect(cell.date)}
             >
               <span>{Number(cell.date.slice(8, 10))}</span>
@@ -62,7 +71,9 @@ export function ReviewCalendar({
           );
         })}
       </div>
-      {onSelect && <p className="calendar-hint">点任意一格跳到那一天，查看当天的饮食记录。</p>}
+      {onSelect && (
+        <p className="calendar-hint">点任意一格跳到那一天，查看当天的{selectLabel}。</p>
+      )}
       <ul className="calendar-legend">
         <li><i className="calendar-cell calendar-hit" /> 达标</li>
         <li><i className="calendar-cell calendar-miss" /> 未达标</li>

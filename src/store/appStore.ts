@@ -165,6 +165,8 @@ interface AppActions {
   addWorkout: (input: Omit<WorkoutSession, "id" | "createdAt">, commandId?: string) => Promise<ActionResult>;
   reviseWorkout: (input: WorkoutReviseInput, commandId?: string) => Promise<ActionResult>;
   voidWorkout: (input: { workoutId: string; reason: string }, commandId?: string) => Promise<ActionResult>;
+  undoWorkoutCorrection: (input: { workoutId: string; reason?: string }, commandId?: string) => Promise<ActionResult>;
+  restoreVoidedWorkout: (input: { workoutId: string; reason: string }, commandId?: string) => Promise<ActionResult>;
   setCheckIn: (input: { hunger?: number; energy?: number; date?: string }, commandId?: string) => Promise<ActionResult>;
   setDayComplete: (date: string, complete: boolean, commandId?: string) => Promise<ActionResult>;
   toggleDayComplete: (commandId?: string) => Promise<ActionResult>;
@@ -505,6 +507,104 @@ export const useAppStore = create<AppStore>()(
               entityType: "workout_session",
               entityId: target.id,
               payload: { before: target, reason },
+              createdAt: now,
+            },
+          ],
+        }));
+        return {};
+      },
+      async undoWorkoutCorrection(input, commandId = uid()) {
+        const reason = (input.reason ?? "").trim();
+        if (reason.length > WORKOUT_REASON_LIMIT) return { error: `原因不能超过 ${WORKOUT_REASON_LIMIT} 字。` };
+        const payload: Record<string, unknown> = { workoutId: input.workoutId };
+        // 撤销的原因可留空：没写就不带这个键，审计里留 null，不伪造用户意图。
+        if (reason) payload.reason = reason;
+        if (isTauriRuntime()) return submit("undo_workout_correction", payload, commandId);
+        const state = get();
+        // 只认指针，不看 id 前缀：浏览器预览用 uid()，Rust 用 {kind}-{commandId}。
+        const head = state.workouts.find((item) => item.id === input.workoutId);
+        if (!head) return { error: "找不到这条运动记录。" };
+        if (!isActiveWorkout(head)) return { error: "这条运动记录当前不是有效记录，无法撤销更正。" };
+        if (!head.supersedesId) return { error: "这条运动不是更正产生的，没有可撤销的更正。" };
+        const parent = state.workouts.find((item) => item.id === head.supersedesId);
+        if (!parent) return { error: "找不到被更正的原始记录，无法撤销。" };
+        if (parent.status !== "superseded") return { error: "这条更正已经撤销过或已被改动，请刷新后重试。" };
+        if (parent.supersededBy !== head.id) return { error: "更正记录之间的关系已不一致，请刷新后重试。" };
+        const now = new Date().toISOString();
+        const restoredParent: WorkoutSession = {
+          ...parent,
+          status: "active",
+          restoredAt: now,
+          restoredCorrectionId: head.id,
+          ...(reason ? { restoredReason: reason } : {}),
+        };
+        // 只清指向已失效对象的指针；correctionReason 留着说明当初为什么改。
+        delete restoredParent.supersededBy;
+        delete restoredParent.correctedAt;
+        const revertedHead: WorkoutSession = {
+          ...head,
+          status: "reverted",
+          revertedAt: now,
+          ...(reason ? { revertedReason: reason } : {}),
+        };
+        set((current) => ({
+          workouts: current.workouts.map((item) =>
+            item.id === parent.id ? restoredParent : item.id === head.id ? revertedHead : item,
+          ),
+          auditEvents: [
+            ...current.auditEvents,
+            {
+              id: `${commandId}:audit`,
+              eventType: "workout_correction_undone",
+              entityType: "workout_session",
+              entityId: parent.id,
+              payload: {
+                before: { head, parent },
+                after: { head: revertedHead, parent: restoredParent },
+                reason: reason || null,
+                restoredWorkoutId: parent.id,
+                revertedWorkoutId: head.id,
+              },
+              createdAt: now,
+            },
+          ],
+        }));
+        return {};
+      },
+      async restoreVoidedWorkout(input, commandId = uid()) {
+        const reason = input.reason.trim();
+        // 与撤销相反：恢复会让记录重新计入统计，必须写明为什么。
+        if (!reason) return { error: "请填写修改原因。" };
+        if (reason.length > WORKOUT_REASON_LIMIT) return { error: `原因不能超过 ${WORKOUT_REASON_LIMIT} 字。` };
+        if (isTauriRuntime()) return submit("restore_voided_workout", { workoutId: input.workoutId, reason }, commandId);
+        const state = get();
+        const target = state.workouts.find((item) => item.id === input.workoutId);
+        if (!target) return { error: "找不到这条运动记录。" };
+        if (target.status !== "void") return { error: "只有已作废的记录可以恢复。" };
+        if (target.supersedesId) {
+          const parent = state.workouts.find((item) => item.id === target.supersedesId);
+          if (!parent || parent.status !== "superseded" || parent.supersededBy !== target.id) {
+            return { error: "这条记录与原来的更正链不一致，请刷新后重试。" };
+          }
+        }
+        const now = new Date().toISOString();
+        const restored: WorkoutSession = {
+          ...target,
+          status: "active",
+          restoredAt: now,
+          restoredReason: reason,
+        };
+        delete restored.voidedAt;
+        set((current) => ({
+          workouts: current.workouts.map((item) => (item.id === target.id ? restored : item)),
+          auditEvents: [
+            ...current.auditEvents,
+            {
+              id: `${commandId}:audit`,
+              eventType: "workout_void_restored",
+              entityType: "workout_session",
+              entityId: target.id,
+              payload: { before: target, after: restored, reason },
               createdAt: now,
             },
           ],
