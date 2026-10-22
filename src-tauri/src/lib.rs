@@ -11,6 +11,8 @@ mod record_commands;
 mod workout_commands;
 
 #[cfg(test)]
+mod domain_reset_tests;
+#[cfg(test)]
 mod migration_scenario_tests;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -24,6 +26,7 @@ pub fn run() {
             domain_store::domain_storage_remove,
             domain_store::domain_storage_set,
             domain_store::get_domain_storage_status,
+            domain_store::reset_domain_records,
             domain_commands::execute_domain_command,
             domain_queries::query_period_summary,
             domain_queries::export_domain_json,

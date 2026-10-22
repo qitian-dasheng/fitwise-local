@@ -68,7 +68,7 @@ export function SettingsPage() {
           <DataExportPanel/>
         </section>
       </div>
-      <section className="danger-zone card"><div><h3>重置本地记录</h3><p>清除应用记录和命令回执。桌面版回到空白记录并保留标准菜谱。</p></div><button className="button danger" disabled={busy} onClick={async () => { if (!confirm("确定清除这台电脑上的全部应用记录？建议先导出 JSON 备份。")) return; setBusy(true); try { await resetDemo(); setMessage("本地记录已重置。"); } catch (cause) { setMessage(String(cause)); } finally { setBusy(false); } }}><RotateCcw size={16}/> 重置</button></section>
+      <section className="danger-zone card"><div><h3>重置本地记录</h3><p>清除全部饮食、体重/腰围/体脂、运动、打卡记录、审计事件与命令回执；保留食材库与营养版本、引用有效的菜谱、个人目标与显示偏好（能量单位/钠开关/趋势区间）。重置不可撤销，建议先导出 JSON 备份。</p></div><button className="button danger" disabled={busy} onClick={async () => { if (!confirm("确定重置本地记录？将清除全部饮食、身体、运动、打卡记录与命令回执；保留食材库、引用有效的菜谱、个人目标与显示偏好。建议先导出 JSON 备份。")) return; setBusy(true); try { const summary = await resetDemo(); const kept = `保留食材库 ${summary.keptFoodDefinitions} 项、营养版本 ${summary.keptFoodDefinitionVersions} 个、菜谱 ${summary.keptRecipes} 道、个人目标与显示偏好`; const cleared = `清除饮食 ${summary.clearedMeals} 条、身体记录 ${summary.clearedMeasurements} 条、运动 ${summary.clearedWorkouts} 条、打卡 ${summary.clearedCheckIns} 条、审计 ${summary.clearedAuditEvents} 条、命令回执 ${summary.clearedCommandReceipts} 条`; const dropped = summary.droppedRecipes.length > 0 ? `；剔除失效菜谱 ${summary.droppedRecipes.length} 道（${summary.droppedRecipes.join("、")}）` : ""; setMessage(`本地记录已重置：${kept}；${cleared}${dropped}。`); } catch (cause) { setMessage(String(cause)); } finally { setBusy(false); } }}><RotateCcw size={16}/> 重置</button></section>
     </div>
   );
 }

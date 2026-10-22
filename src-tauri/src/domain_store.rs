@@ -3,7 +3,7 @@ use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
-use std::{fs, path::PathBuf};
+use std::{collections::HashSet, fs, path::PathBuf};
 use tauri::{AppHandle, Manager};
 
 pub(crate) const STORAGE_NAME: &str = "fitwise-app-state-v1";
@@ -131,7 +131,11 @@ fn entity_id(collection: &str, value: &Value) -> Result<String, String> {
         .ok_or_else(|| format!("{collection} 中存在缺少稳定标识的实体。"))
 }
 
-fn persist_envelope(connection: &mut Connection, name: &str, raw: &str) -> Result<(), String> {
+pub(crate) fn persist_envelope(
+    connection: &mut Connection,
+    name: &str,
+    raw: &str,
+) -> Result<(), String> {
     if name != STORAGE_NAME {
         return Err("未知的领域存储名称。".into());
     }
@@ -385,6 +389,211 @@ pub fn domain_storage_remove(app: AppHandle, name: String) -> Result<(), String>
         .execute("DELETE FROM app_kv WHERE key = ?1", [&name])
         .map_err(|error| error.to_string())?;
     transaction.commit().map_err(|error| error.to_string())
+}
+
+/// 重置结果摘要：前端据此在重置成功后准确说明保留/清除/剔除的内容。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetSummary {
+    pub kept_food_definitions: i64,
+    pub kept_food_definition_versions: i64,
+    pub kept_recipes: i64,
+    pub cleared_meals: i64,
+    pub cleared_check_ins: i64,
+    pub cleared_measurements: i64,
+    pub cleared_workouts: i64,
+    pub cleared_audit_events: i64,
+    pub cleared_command_receipts: i64,
+    pub dropped_food_versions: i64,
+    pub dropped_recipes: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetResult {
+    pub state: Value,
+    pub summary: ResetSummary,
+}
+
+/// 重置本地记录（方案 B）：在单个 IMMEDIATE 事务内完成保留、清理与实体重建。
+/// 保留：profile 单例、食材库定义、引用了有效定义的营养版本、全部原料都引用有效版本的菜谱；
+/// 清除：meals/checkIns/measurements/workouts/auditEvents 与全部命令回执/负载；
+/// 不动：迁移文件与 user_version、升级诊断（domain_upgrade_reports）。
+/// 任何一步失败整体回滚，库保持重置前状态。
+pub(crate) fn reset_domain_records_with_connection(
+    connection: &mut Connection,
+) -> Result<ResetResult, String> {
+    ensure_repository_schema(connection)?;
+    let transaction = connection
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        .map_err(|error| format!("无法开始重置事务：{error}"))?;
+    let raw = load_envelope(&transaction)?.ok_or("领域仓库尚未初始化，没有可重置的记录。")?;
+    let envelope: Value =
+        serde_json::from_str(&raw).map_err(|error| format!("状态 JSON 无效：{error}"))?;
+    let version = envelope
+        .get("version")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| "状态缺少持久化版本。".to_string())?;
+    let state = envelope
+        .get("state")
+        .and_then(Value::as_object)
+        .cloned()
+        .ok_or_else(|| "状态缺少领域对象。".to_string())?;
+
+    let (retained, mut summary) = build_reset_state(&state)?;
+    summary.cleared_command_receipts = transaction
+        .query_row("SELECT COUNT(*) FROM domain_command_receipts", [], |row| {
+            row.get(0)
+        })
+        .map_err(|error| error.to_string())?;
+
+    let serialized =
+        serde_json::to_string(&serde_json::json!({"state": retained, "version": version}))
+            .map_err(|error| error.to_string())?;
+    let hash = format!("{:x}", Sha256::digest(serialized.as_bytes()));
+    let now = Utc::now().to_rfc3339();
+    // 重写 domain_entities/domain_singletons；投影视图建在实体表上，随之反映保留后的数据。
+    write_transaction(&transaction, &retained, version, &hash, &now)?;
+    transaction
+        .execute("DELETE FROM domain_command_receipts", [])
+        .map_err(|error| error.to_string())?;
+    transaction
+        .execute("DELETE FROM domain_command_payloads", [])
+        .map_err(|error| error.to_string())?;
+    // 旧版 app_kv 快照同样携带已清除的记录，一并清掉，避免库内残留测试数据。
+    transaction
+        .execute("DELETE FROM app_kv WHERE key = ?1", params![STORAGE_NAME])
+        .map_err(|error| error.to_string())?;
+    transaction
+        .commit()
+        .map_err(|error| format!("提交重置事务失败：{error}"))?;
+    Ok(ResetResult {
+        state: Value::Object(retained),
+        summary,
+    })
+}
+
+fn collection_len(state: &Map<String, Value>, key: &str) -> i64 {
+    state
+        .get(key)
+        .and_then(Value::as_array)
+        .map(|items| items.len() as i64)
+        .unwrap_or(0)
+}
+
+/// 与前端 `buildResetState`（src/domain/resetState.ts）保持同一套保留口径。
+/// 失效引用明确处置：孤儿营养版本与引用失效的菜谱整体剔除，菜谱在摘要中记名。
+fn build_reset_state(
+    state: &Map<String, Value>,
+) -> Result<(Map<String, Value>, ResetSummary), String> {
+    let mut next = state.clone();
+    let cleared_meals = collection_len(&next, "meals");
+    let cleared_check_ins = collection_len(&next, "checkIns");
+    let cleared_measurements = collection_len(&next, "measurements");
+    let cleared_workouts = collection_len(&next, "workouts");
+    let cleared_audit_events = collection_len(&next, "auditEvents");
+    for key in [
+        "meals",
+        "checkIns",
+        "measurements",
+        "workouts",
+        "auditEvents",
+    ] {
+        next.insert(key.into(), Value::Array(Vec::new()));
+    }
+
+    // 食材库：定义全保留；营养版本只保留 foodId 仍指向有效定义的那些。
+    let definition_ids: HashSet<String> = next
+        .get("foodDefinitions")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.get("id").and_then(Value::as_str).map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+    let original_versions = next
+        .get("foodDefinitionVersions")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let versions: Vec<Value> = original_versions
+        .iter()
+        .filter(|item| {
+            item.get("foodId")
+                .and_then(Value::as_str)
+                .map(|id| definition_ids.contains(id))
+                .unwrap_or(false)
+        })
+        .cloned()
+        .collect();
+    let dropped_food_versions = (original_versions.len() - versions.len()) as i64;
+    let version_ids: HashSet<String> = versions
+        .iter()
+        .filter_map(|item| item.get("id").and_then(Value::as_str).map(str::to_owned))
+        .collect();
+    next.insert("foodDefinitionVersions".into(), Value::Array(versions));
+
+    // 菜谱：只保留每项原料都引用有效营养版本的菜谱；失效菜谱整体剔除并记名，
+    // 避免保留无法编辑/保存的菜谱（保存路径会因找不到营养版本而拒绝）。
+    let original_recipes = next
+        .get("recipes")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let mut dropped_recipes = Vec::new();
+    let recipes: Vec<Value> = original_recipes
+        .iter()
+        .filter(|item| {
+            let valid = item
+                .get("ingredients")
+                .and_then(Value::as_array)
+                .map(|items| {
+                    !items.is_empty()
+                        && items.iter().all(|ingredient| {
+                            ingredient
+                                .get("foodVersionId")
+                                .and_then(Value::as_str)
+                                .map(|id| version_ids.contains(id))
+                                .unwrap_or(false)
+                        })
+                })
+                .unwrap_or(false);
+            if !valid {
+                dropped_recipes.push(
+                    item.get("name")
+                        .and_then(Value::as_str)
+                        .unwrap_or("未命名菜谱")
+                        .to_owned(),
+                );
+            }
+            valid
+        })
+        .cloned()
+        .collect();
+    next.insert("recipes".into(), Value::Array(recipes));
+
+    let summary = ResetSummary {
+        kept_food_definitions: collection_len(&next, "foodDefinitions"),
+        kept_food_definition_versions: collection_len(&next, "foodDefinitionVersions"),
+        kept_recipes: collection_len(&next, "recipes"),
+        cleared_meals,
+        cleared_check_ins,
+        cleared_measurements,
+        cleared_workouts,
+        cleared_audit_events,
+        cleared_command_receipts: 0,
+        dropped_food_versions,
+        dropped_recipes,
+    };
+    Ok((next, summary))
+}
+
+#[tauri::command]
+pub fn reset_domain_records(app: AppHandle) -> Result<ResetResult, String> {
+    let mut connection = open_database(&app)?;
+    reset_domain_records_with_connection(&mut connection)
 }
 
 #[tauri::command]

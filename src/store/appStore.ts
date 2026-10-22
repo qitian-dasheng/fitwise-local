@@ -1,7 +1,9 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { invoke } from "@tauri-apps/api/core";
 import { activeMeals, nutrition } from "../domain/calculations";
 import { createPersonalState, initialState } from "../domain/seed";
+import { buildResetState, type ResetSummary } from "../domain/resetState";
 import type {
   AppState,
   MealEntry,
@@ -162,7 +164,7 @@ interface AppActions {
   setCheckIn: (input: { hunger?: number; energy?: number; date?: string }, commandId?: string) => Promise<ActionResult>;
   setDayComplete: (date: string, complete: boolean, commandId?: string) => Promise<ActionResult>;
   toggleDayComplete: (commandId?: string) => Promise<ActionResult>;
-  resetDemo: () => Promise<void>;
+  resetDemo: () => Promise<ResetSummary>;
 }
 
 export type AppStore = AppState & AppActions;
@@ -657,11 +659,21 @@ export const useAppStore = create<AppStore>()(
         return {};
       },
       async resetDemo() {
-        await enqueueDomainCommand(async () => {
-          await flushAppStorageWrites();
+        return enqueueDomainCommand(async () => {
+          if (isTauriRuntime()) {
+            // 桌面版：Rust 单事务完成保留/清理/实体重建；重置后不得再回写旧状态。
+            await flushAppStorageWrites();
+            const result = await invoke<{ state: AppState; summary: ResetSummary }>("reset_domain_records");
+            suppressNextAppStorageWrite();
+            set(result.state);
+            return result.summary;
+          }
+          // 浏览器预览：与 Rust 同一套保留规则，在内存与 localStorage 上镜像执行。
+          const { state, summary } = buildResetState(get());
           await appStorage.removeItem("fitwise-app-state-v1");
-          set(isTauriRuntime() ? createPersonalState() : structuredClone(initialState));
+          set(state);
           await flushAppStorageWrites();
+          return summary;
         });
       },
     });
