@@ -17,7 +17,6 @@ interface MealDiaryTableProps {
   date: string;
   entries: MealEntry[];
   showSodium: boolean;
-  batchCount: number;
   /** 中性参考小字，例如「目标约 100 g」；不参与达标判断。 */
   notes?: Partial<Record<NutrientKey, string>>;
   onSodiumChange: (visible: boolean) => void;
@@ -46,7 +45,6 @@ export function MealDiaryTable({
   date,
   entries,
   showSodium,
-  batchCount,
   notes,
   onSodiumChange,
   onAdd,
@@ -92,7 +90,7 @@ export function MealDiaryTable({
           <p className="eyebrow">日合计</p>
           <strong>{isEmpty ? "尚无记录" : `${active.length} 条记录`}</strong>
           <span>
-            {batchCount} 个已确认批次 · 热量覆盖率 {summary.coverage.calories}%
+            {active.length} 条记录 · 热量覆盖率 {summary.coverage.calories}%
           </span>
           {/* 空日已经在上一行写了「尚无记录」，不再重复一个同文徽标。 */}
           {!isEmpty && <span className={`status-pill ${status.tone}`}>{status.label}</span>}

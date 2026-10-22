@@ -1,4 +1,4 @@
-import { shanghaiDate } from "./purchases";
+import { shanghaiDate } from "./time";
 
 export const diaryToday = () => shanghaiDate();
 export function shiftDiaryDate(date: string, days: number) {
@@ -12,6 +12,4 @@ export function daySpan(start: string, end: string) {
   if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return 0;
   return Math.round((to - from) / 864e5) + 1;
 }
-export function ratioPercent(ratio: number) { return Number((ratio * 100).toFixed(2)); }
 export interface DiaryDateProps { date?: string; onDateChange?: (date: string) => void }
-export function isDemoPlan(id: string) { return /^plan-[123]$/.test(id); }

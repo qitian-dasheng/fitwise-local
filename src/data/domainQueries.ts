@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { useAppStore } from "../store/appStore";
-import type { InventoryLot, NutrientKey } from "../domain/types";
+import type { NutrientKey } from "../domain/types";
 import { enqueueDomainCommand } from "./domainCommands";
 import { isTauriRuntime, flushAppStorageWrites } from "./storage";
 
@@ -26,8 +26,6 @@ export interface PeriodSummary {
   measurements: { id: string; date: string; weightKg: number; average: number; isOutlier: boolean }[];
 }
 
-interface InventorySummary { items: InventoryLot[]; remainingCostCny: number }
-
 function useDomainQuery<T>(command: string, args: Record<string, string>, dependency: unknown) {
   const [result, setResult] = useState<{ key?: string; data?: T | null; error: string }>({ error: "" });
   const serialized = JSON.stringify(args);
@@ -50,11 +48,6 @@ export function usePeriodSummary(start: string, end: string) {
   // Every persisted domain command changes this array, including non-nutrition operations.
   const audit = useAppStore((state) => state.auditEvents);
   return useDomainQuery<PeriodSummary>("query_period_summary", { start, end }, audit);
-}
-
-export function useInventorySummary() {
-  const audit = useAppStore((state) => state.auditEvents);
-  return useDomainQuery<InventorySummary>("query_inventory_summary", {}, audit);
 }
 
 export function exportDomainJson() {

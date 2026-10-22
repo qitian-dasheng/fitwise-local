@@ -1,7 +1,6 @@
 import type {
   DailyCheckIn,
   BodyMeasurement,
-  InventoryLot,
   MealEntry,
   MealType,
   NutritionFacts,
@@ -127,38 +126,4 @@ export function completedDayCalorieAverage(entries: MealEntry[], checkIns: Daily
   const eligible = [...grouped.values()].filter((day) => day.every((meal) => meal.nutrition.calories.state !== "unknown" && Number.isFinite(meal.nutrition.calories.value))).map(summarizeMeals);
   if (!eligible.length) return null;
   return eligible.reduce((sum, day) => sum + day.totals.calories, 0) / eligible.length;
-}
-
-export function deductInventoryFEFO(
-  lots: InventoryLot[],
-  foodId: string,
-  amount: number,
-): { lots: InventoryLot[]; deductions: { lotId: string; amount: number }[]; shortage: number } {
-  let remaining = amount;
-  const deductions: { lotId: string; amount: number }[] = [];
-  const ordered = [...lots]
-    .filter((lot) => lot.foodId === foodId && lot.remainingAmount > 0)
-    .sort((a, b) => {
-      if (a.opened !== b.opened) return a.opened ? -1 : 1;
-      const expiryA = a.expiresAt ?? "9999-12-31";
-      const expiryB = b.expiresAt ?? "9999-12-31";
-      return expiryA.localeCompare(expiryB) || a.purchasedAt.localeCompare(b.purchasedAt);
-    });
-
-  const next = lots.map((lot) => ({ ...lot }));
-  for (const lot of ordered) {
-    if (remaining <= 0) break;
-    const take = Math.min(lot.remainingAmount, remaining);
-    const target = next.find((item) => item.id === lot.id)!;
-    target.remainingAmount = Number((target.remainingAmount - take).toFixed(3));
-    remaining -= take;
-    deductions.push({ lotId: lot.id, amount: take });
-  }
-  return { lots: next, deductions, shortage: Math.max(0, remaining) };
-}
-
-export function remainingDays(expiresAt: string | undefined, now = new Date()) {
-  if (!expiresAt) return null;
-  const end = new Date(`${expiresAt}T23:59:59`);
-  return Math.ceil((end.getTime() - now.getTime()) / 86_400_000);
 }

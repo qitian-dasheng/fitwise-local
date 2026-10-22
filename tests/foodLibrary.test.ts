@@ -59,7 +59,6 @@ describe("food library", () => {
     expect(searchFoodState(reloaded, "测试品牌", "favorites")).toHaveLength(1);
     expect(searchFoodState(reloaded, "", "recent")).toHaveLength(1);
     expect(reloaded.meals[0].nutrition.calories.value).toBe(200);
-    expect(reloaded.inventory).toEqual(initialState.inventory);
   });
 
   it("rejects invalid quantities and preserves state on failed batch", async () => {
@@ -70,7 +69,6 @@ describe("food library", () => {
     const failed = await useAppStore.getState().recordFoodMeal({ date: "2026-10-20", type: "lunch", entries: [{ foodVersionId: result.foodVersionId!, quantity: 50, unit: "g" }, { foodVersionId: result.foodVersionId!, quantity: 50, unit: "ml" }] });
     expect(failed.error).toContain("换算关系");
     expect(useAppStore.getState().meals).toBe(before.meals);
-    expect(useAppStore.getState().inventory).toBe(before.inventory);
   });
 
   it("upgrades v3 by adding empty collections without changing previous records", async () => {
@@ -79,6 +77,6 @@ describe("food library", () => {
     const migrated = await useAppStore.persist.getOptions().migrate!(old, 3) as typeof state;
     expect(migrated.foodDefinitions).toEqual([]);
     expect(migrated.foodDefinitionVersions).toEqual([]);
-    for (const key of ["meals", "batches", "inventory", "inventoryMovements", "recipes", "measurements"] as const) expect(migrated[key]).toEqual(state[key]);
+    for (const key of ["meals", "recipes", "measurements"] as const) expect(migrated[key]).toEqual(state[key]);
   });
 });

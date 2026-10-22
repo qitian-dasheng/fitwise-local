@@ -2,12 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   completedDayCalorieAverage,
   activeMeasurements,
-  deductInventoryFEFO,
   movingAverage,
   nutrition,
   summarizeMeals,
 } from "../src/domain/calculations";
-import type { InventoryLot, MealEntry } from "../src/domain/types";
+import type { MealEntry } from "../src/domain/types";
 
 function meal(id: string, calories: number | undefined, ratio = 1): MealEntry {
   return {
@@ -53,42 +52,6 @@ describe("nutrition summaries", () => {
       { date: "2026-10-21", complete: false },
     ]);
     expect(average).toBe(1800);
-  });
-});
-
-describe("inventory FEFO", () => {
-  const lot = (id: string, remainingAmount: number, expiresAt: string, opened = false): InventoryLot => ({
-    id,
-    foodId: "tofu",
-    name: "豆腐",
-    purchasedAmount: remainingAmount,
-    remainingAmount,
-    unit: "g",
-    purchasePriceCny: 5,
-    purchasedAt: "2026-10-20",
-    expiresAt,
-    opened,
-    confidence: "high",
-  });
-
-  it("deducts opened lots before later unopened lots", () => {
-    const result = deductInventoryFEFO(
-      [lot("later-open", 100, "2026-10-25", true), lot("early-closed", 100, "2026-10-21")],
-      "tofu",
-      150,
-    );
-    expect(result.deductions).toEqual([
-      { lotId: "later-open", amount: 100 },
-      { lotId: "early-closed", amount: 50 },
-    ]);
-    expect(result.lots.find((item) => item.id === "early-closed")?.remainingAmount).toBe(50);
-    expect(result.shortage).toBe(0);
-  });
-
-  it("reports shortages without creating negative inventory", () => {
-    const result = deductInventoryFEFO([lot("only", 100, "2026-10-21")], "tofu", 300);
-    expect(result.shortage).toBe(200);
-    expect(result.lots[0].remainingAmount).toBe(0);
   });
 });
 

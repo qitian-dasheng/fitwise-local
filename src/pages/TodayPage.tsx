@@ -1,9 +1,8 @@
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { diaryToday, isDemoPlan, shiftDiaryDate, type DiaryDateProps } from "../domain/diary";
+import { diaryToday, type DiaryDateProps } from "../domain/diary";
 import { DiaryDateControl } from "../components/DiaryDateControl";
-import { ArrowRight, Check, Dumbbell, Plus, Scale, Sparkles, Utensils, Wheat } from "lucide-react";
-import { useMemo } from "react";
+import { ArrowRight, Check, Dumbbell, Plus, Scale, Sparkles, Utensils } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { activeMeals, summarizeMeals } from "../domain/calculations";
 import { dailyRepresentatives } from "../domain/body";
@@ -32,8 +31,6 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickActi
   const measurements = useAppStore((state) => state.measurements);
   const workouts = useAppStore((state) => state.workouts);
   const checkIns = useAppStore((state) => state.checkIns);
-  const inventory = useAppStore((state) => state.inventory);
-  const plans = useAppStore((state) => state.plans);
   const setCheckIn = useAppStore((state) => state.setCheckIn);
   const setDayComplete = useAppStore((state) => state.setDayComplete);
   const today = date;
@@ -42,11 +39,9 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickActi
   const summary = period.data?.days[0] ?? summarizeMeals(todayMeals);
   const todayWorkouts = workouts.filter((item) => item.date === today);
   const todayCheck = checkIns.find((item) => item.date === today);
-  const selectedPlan = plans.find((item) => item.status === "selected") ?? plans[0];
   const currentMeasurements = dailyRepresentatives(measurements).filter(item => item.date <= date);
   const weightData = currentMeasurements.slice(-14).map((item) => ({ date: item.date.slice(5), weight: item.weightKg }));
   const latestWeight = period.data?.latestWeightKg ?? currentMeasurements.at(-1)?.weightKg ?? profile.startWeightKg;
-  const expiringCount = useMemo(() => inventory.filter((item) => item.remainingAmount > 0 && item.expiresAt && new Date(item.expiresAt).getTime() - Date.now() < 3 * 864e5).length, [inventory]);
   // 三个副标题全部由真实记录推导：写死文案在数据一变就会变成新的谎话。
   const mealHint = mealActionHint(meals, today);
   const workoutHint = workoutActionHint(workouts, today);
@@ -169,30 +164,17 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickActi
           <article className="card insight-card">
             <div className="insight-icon"><Sparkles size={19} /></div>
             <div>
-              <p className="eyebrow">今日助手</p>
+              <p className="eyebrow">今日提示</p>
               <h3>{todayMeals.length ? "按计划继续，不需要补偿性节食" : "先记录早餐或第一餐"}</h3>
               <p>{todayMeals.length ? `当前蛋白质 ${Math.round(summary.totals.protein)} 克。完成记录后再判断是否需要调整下一餐。` : "系统只根据确认过的数据给建议；没有记录时不会把空白当成低摄入。"}</p>
-              <button className="text-button" onClick={() => goTo("assistant")}>继续追问 <ArrowRight size={16} /></button>
             </div>
           </article>
 
           <article className="card quick-status">
             <div className="quick-item"><Dumbbell size={19} /><span>所选日运动</span><b>{(period.data?.workoutMinutes ?? todayWorkouts.reduce((sum, item) => sum + item.durationMinutes, 0)) || "未记录"}{period.data?.workoutMinutes || todayWorkouts.length ? " 分钟" : ""}</b></div>
-            <div className="quick-item"><Wheat size={19} /><span>临期库存</span><b className={expiringCount ? "warning-text" : ""}>{expiringCount} 项</b></div>
           </article>
         </div>
       </section>
-
-      {selectedPlan && <section className="card tomorrow-strip">
-        <div className="tomorrow-date"><span>明日</span><strong>{shiftDiaryDate(diaryToday(), 1).slice(5).replace("-", ".")}</strong></div>
-        <div className="tomorrow-main">
-          <p className="eyebrow">{isDemoPlan(selectedPlan.id) ? "演示菜单 · 非实时建议" : "候选菜单 · 尚需核对"}</p>
-          <h3>{selectedPlan.title}</h3>
-          <p>{isDemoPlan(selectedPlan.id) ? "当前尚未接入动态菜单；示例不代表你的实际库存或营养建议。" : selectedPlan.description}</p>
-        </div>
-
-        <button className="button secondary" onClick={() => goTo("plan")}>查看菜单状态</button>
-      </section>}
 
       <section className="checkin-bar card">
         <div><p className="eyebrow">主观状态</p><h3>这一天感觉怎么样？</h3></div>

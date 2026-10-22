@@ -71,10 +71,9 @@ fn reconciliation(raw: Option<&str>) -> Result<Value, String> {
             }
         })
         .sum();
-    let inventory: Vec<Value> = state.get("inventory").and_then(Value::as_array).into_iter().flatten().map(|lot| json!({"id":lot["id"],"remainingAmount":lot["remainingAmount"],"unit":lot["unit"]})).collect();
     let canonical = serde_json::to_vec(state).map_err(|error| error.to_string())?;
     Ok(
-        json!({"initialized":true,"counts":counts,"caloriesKcal":calories,"inventory":inventory,"stateSha256":format!("{:x}",Sha256::digest(canonical))}),
+        json!({"initialized":true,"counts":counts,"caloriesKcal":calories,"stateSha256":format!("{:x}",Sha256::digest(canonical))}),
     )
 }
 
@@ -166,10 +165,10 @@ mod tests {
         let path = directory.join("fitwise.db");
         let mut connection = Connection::open(&path).unwrap();
         crate::domain_store::ensure_repository_schema(&connection).unwrap();
-        connection.execute_batch("DROP VIEW domain_food_library_projection; DROP INDEX idx_domain_food_version_meals;").unwrap();
+        // 模拟 0006 之前的旧库：投影视图/索引缺失 + user_version 回退到 5，upgrade() 会重放 0006–0013 再跑 0014。
+        connection.execute_batch("DROP VIEW IF EXISTS domain_food_library_projection; DROP INDEX IF EXISTS idx_domain_food_version_meals; PRAGMA user_version = 5;").unwrap();
         let mut state = serde_json::Map::new();
         state.insert("profile".into(), json!({"name":"test"}));
-        state.insert("aiSettings".into(), json!({"provider":"openai"}));
         for key in [
             "foodDefinitions",
             "foodDefinitionVersions",
@@ -178,24 +177,11 @@ mod tests {
             "measurements",
             "workouts",
             "recipes",
-            "batches",
-            "consumptionEvents",
-            "wasteEvents",
             "auditEvents",
-            "inventory",
-            "inventoryMovements",
-            "purchases",
-            "inbox",
-            "plans",
         ] {
             state.insert(key.into(), json!([]));
         }
         state.insert("meals".into(), json!([{"id":"old-manual-meal","nutrition":{"calories":{"state":"known","value":800}},"consumedRatio":0.75}]));
-        state.insert(
-            "inventory".into(),
-            json!([{"id":"lot","remainingAmount":100,"unit":"g"}]),
-        );
-        state.insert("batches".into(), json!([{"id":"batch","consumedRatio":0.75,"remainingRatio":0.25,"wastedRatio":0.0,"status":"open"}]));
         state.insert(
             "recipes".into(),
             json!([{"id":"old-recipe","nutrition":{"protein":{"state":"known","value":119.57}}}]),
@@ -242,7 +228,7 @@ mod tests {
         let report: Value = serde_json::from_str(&raw).unwrap();
         assert_eq!(report["before"], report["after"]);
         assert_eq!(report["before"]["caloriesKcal"], 600.0);
-        assert_eq!(report["before"]["inventory"][0]["remainingAmount"], 100);
+        assert_eq!(report["before"]["counts"]["meals"], 1);
         assert!(Path::new(report["backupPath"].as_str().unwrap()).exists());
         drop(connection);
         fs::remove_dir_all(directory).unwrap();
@@ -255,7 +241,7 @@ mod tests {
         let path = directory.join("fitwise.db");
         let mut connection = Connection::open(&path).unwrap();
         connection.execute_batch("CREATE TABLE app_kv(key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT NOT NULL); CREATE TABLE domain_upgrade_reports(version INTEGER PRIMARY KEY,backup_path TEXT,report_json TEXT,created_at TEXT); CREATE TRIGGER reject_upgrade BEFORE INSERT ON domain_upgrade_reports BEGIN SELECT RAISE(FAIL,'simulated interruption'); END;").unwrap();
-        let legacy = json!({"version":3,"state":{"meals":[],"inventory":[]}}).to_string();
+        let legacy = json!({"version":3,"state":{"meals":[]}}).to_string();
         connection
             .execute(
                 "INSERT INTO app_kv VALUES (?1,?2,'now')",
@@ -288,7 +274,7 @@ mod tests {
         let path = directory.join("fitwise.db");
         let mut connection = Connection::open(&path).unwrap();
         connection.execute_batch("CREATE TABLE app_kv (key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT NOT NULL);").unwrap();
-        let legacy = json!({"version":3,"state":{"meals":[{"id":"meal","nutrition":{"calories":{"state":"known","value":800}},"consumedRatio":0.75}],"inventory":[{"id":"lot","remainingAmount":100,"unit":"g"}]}}).to_string();
+        let legacy = json!({"version":3,"state":{"meals":[{"id":"meal","nutrition":{"calories":{"state":"known","value":800}},"consumedRatio":0.75}]}}).to_string();
         connection
             .execute(
                 "INSERT INTO app_kv VALUES (?1,?2,'now')",

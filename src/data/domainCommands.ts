@@ -3,17 +3,8 @@ import type { AppState } from "../domain/types";
 import { assertDesktopBridge, flushAppStorageWrites } from "./storage";
 
 export type DomainCommandKind =
-  | "save_label_draft"
-  | "confirm_label_draft"
-  | "discard_label_draft"
-  | "import_menu_draft"
-  | "confirm_menu_draft"
-  | "discard_menu_draft"
   | "revise_meal"
   | "void_meal"
-  | "void_prepared_batch"
-  | "revise_waste"
-  | "void_waste"
   | "save_recipe_version"
   | "save_food_definition"
   | "revise_food_definition"
@@ -31,23 +22,7 @@ export type DomainCommandKind =
   | "undo_workout_correction"
   | "restore_voided_workout"
   | "set_checkin"
-  | "set_day_complete"
-  | "add_purchase"
-  | "revise_purchase"
-  | "close_purchase"
-  | "update_purchase_payment"
-  | "dispose_inventory"
-  | "select_plan"
-  | "add_inbox_item"
-  | "set_inbox_status"
-  | "set_ai_settings"
-  | "record_ai_usage"
-  | "prepare_recipe"
-  | "consume_batch"
-  | "discard_batch"
-  | "receive_purchase"
-  | "adjust_inventory"
-  | "correct_receipt_weight";
+  | "set_day_complete";
 
 export interface DomainCommandResponse<TResult = Record<string, never>> {
   applied: boolean;
@@ -75,16 +50,7 @@ const stateKeys = [
   "measurements",
   "workouts",
   "recipes",
-  "batches",
-  "consumptionEvents",
-  "wasteEvents",
   "auditEvents",
-  "inventory",
-  "inventoryMovements",
-  "purchases",
-  "inbox",
-  "plans",
-  "aiSettings",
 ] as const satisfies readonly (keyof AppState)[];
 
 function serializeBootstrapState(state: AppState) {

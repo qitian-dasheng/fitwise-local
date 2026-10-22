@@ -3,7 +3,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SettingsPage } from "../src/pages/SettingsPage";
 import { FoodPage } from "../src/pages/FoodPage";
-import { PlanPage } from "../src/pages/PlanPage";
 import { nutrition } from "../src/domain/calculations";
 import { diaryToday } from "../src/domain/diary";
 import { initialState } from "../src/domain/seed";
@@ -99,16 +98,6 @@ it("饮食页在 kJ 偏好下列头、日合计与行值统一换算", async () 
 
   const summaryCalories = host.querySelector('.diary-summary-cell[data-nutrient="calories"] b');
   expect(summaryCalories?.textContent).toBe(String(Math.round(toDisplayEnergy(300, "kJ"))));
-});
-
-it("计划页表头跟随能量单位", async () => {
-  window.localStorage.setItem(ENERGY_UNIT_KEY, "kJ");
-  await render(<PlanPage />);
-
-  const header = [...host.querySelectorAll("th")].map((cell) => cell.textContent?.trim());
-  expect(header).toContain("热量 kJ");
-  const plan = useAppStore.getState().plans.find((item) => !item.id.startsWith("plan-")) ?? useAppStore.getState().plans[0];
-  expect(host.textContent).toContain(String(Math.round(toDisplayEnergy(plan.caloriesKcal, "kJ"))));
 });
 
 it("选项文案明确标注默认档", async () => {

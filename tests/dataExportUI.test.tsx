@@ -33,11 +33,10 @@ it("uses the native save dialog and verified backend write, not a browser downlo
   expect(host.textContent).toContain("已写入并回读校验"); expect(host.querySelector("a")).toBeNull();
 });
 
-it("preserves separate-day morning weights and excludes actions or credential-shaped extra properties", () => {
+it("preserves separate-day morning weights and excludes credential-shaped extra properties", () => {
   const state = structuredClone(initialState);
   // Synthetic dates and values, not a reconstruction of the user's health history.
   state.measurements = [{ id: "w1", date: "2025-01-01", weightKg: 78.3, createdAt: "" }, { id: "w2", date: "2025-01-02", weightKg: 78.55, createdAt: "" }];
-  Object.assign(state.aiSettings, { apiKey: "must-not-export" });
   const raw = JSON.stringify(captureWindowSnapshot(state));
   expect(JSON.parse(raw).measurements).toEqual(state.measurements);
   expect(raw).toContain("window_snapshot_unverified"); expect(raw).not.toContain("must-not-export");

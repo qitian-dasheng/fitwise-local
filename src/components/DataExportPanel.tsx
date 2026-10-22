@@ -6,15 +6,14 @@ import { assertDesktopBridge, isTauriRuntime } from "../data/storage";
 import { useAppStore } from "../store/appStore";
 import type { AppState } from "../domain/types";
 
-const collections = ["foodDefinitions", "foodDefinitionVersions", "meals", "checkIns", "measurements", "workouts", "recipes", "batches", "consumptionEvents", "wasteEvents", "auditEvents", "inventory", "inventoryMovements", "purchases", "inbox", "plans"] as const;
+const collections = ["foodDefinitions", "foodDefinitionVersions", "meals", "checkIns", "measurements", "workouts", "recipes", "auditEvents"] as const;
 
 export function captureWindowSnapshot(state: AppState) {
   return {
     app: "Fitwise Local", schemaVersion: 12, persistVersion: 4,
     source: "window_snapshot_unverified", exportedAt: new Date().toISOString(),
-    warning: "当前窗口快照，不代表数据库已保存；不含附件原件和独立标签草稿。恢复前须核对差异并另行确认。",
+    warning: "当前窗口快照，不代表数据库已保存；不含附件原件。恢复前须核对差异并另行确认。",
     profile: state.profile,
-    aiSettings: Object.fromEntries((["provider", "baseUrl", "model", "monthlyLimitCny", "estimatedSpendCny", "usageMonth", "cloudEnabled"] as const).map(key => [key, state.aiSettings[key]])),
     ...Object.fromEntries(collections.map(key => [key, state[key]])),
   };
 }
@@ -57,12 +56,12 @@ export function DataExportPanel() {
     } finally { lock.current = false; setBusy(false); }
   }
   return <div className="form compact-form">
-    <p className="form-hint">JSON 含健康、饮食和采购资料，未加密。请保存在私人位置，不要上传到公开仓库。导出不会覆盖已有文件，也不会导入或修改记录。</p>
+    <p className="form-hint">JSON 含健康、饮食和运动资料，未加密。请保存在私人位置，不要上传到公开仓库。导出不会覆盖已有文件，也不会导入或修改记录。</p>
     <div className="button-row">
       <button className="button secondary" disabled={busy} onClick={() => void exportJson(false)}><Download size={15}/> {busy ? "正在导出…" : "导出数据库 JSON（未加密）"}</button>
       <button className="button secondary" disabled={busy} onClick={() => void exportJson(true)}>另存当前窗口快照</button>
     </div>
-    <p className="form-hint">若界面与磁盘不一致，先保全当前窗口快照；快照不证明数据库已保存，也不含附件原件或独立标签草稿。</p>
+    <p className="form-hint">若界面与磁盘不一致，先保全当前窗口快照；快照不证明数据库已保存，也不含附件原件。</p>
     {message && <p role="status">{message}</p>}
     {recoveryText && <label>备用复制文本（未加密；点击后 Ctrl+A、Ctrl+C，自行另存）<textarea aria-label="导出备用 JSON" rows={8} value={recoveryText} readOnly onFocus={event => event.currentTarget.select()}/></label>}
   </div>;

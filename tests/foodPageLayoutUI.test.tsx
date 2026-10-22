@@ -3,7 +3,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FoodPage } from "../src/pages/FoodPage";
 import { initialState } from "../src/domain/seed";
-import { diaryToday } from "../src/domain/diary";
 import { useAppStore } from "../src/store/appStore";
 
 let host: HTMLDivElement;
@@ -26,26 +25,12 @@ afterEach(async () => {
 
 const button = (label: string) => [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === label)!;
 
-const batch = {
-  id: "layout-batch",
-  recipeVersionId: initialState.recipes[0].id,
-  date: diaryToday(),
-  inventoryDeducted: true,
-  consumedRatio: 0.5,
-  wastedRatio: 0,
-  remainingRatio: 0.5,
-  status: "open" as const,
-  ratioIsEstimated: true,
-  createdAt: "",
-};
-
-it("lays out cooking and pending batches side by side instead of one long column plus a hint card", async () => {
+it("lays out the cooking card and its footnote without a separate hint card", async () => {
   await act(async () => root.render(<FoodPage />));
 
   expect(host.querySelector(".food-page")).not.toBeNull();
   const workbench = host.querySelector(".food-workbench")!;
   expect(workbench).not.toBeNull();
-  // 旧布局把右栏塞满 padding 与一张说明卡，现在两栏都由真实内容承载。
   expect(host.querySelector(".two-column")).toBeNull();
   expect(host.querySelector(".validation-card")).toBeNull();
 
@@ -56,21 +41,6 @@ it("lays out cooking and pending batches side by side instead of one long column
   // 说明文案降级为厨房卡脚注，不再单独占一张卡。
   const footnote = kitchen.querySelector(".kitchen-footnote")!;
   expect(footnote.textContent).toContain("营养值不会把空白当成零");
-
-  expect(workbench.querySelector(".batches-panel")).not.toBeNull();
-  expect(workbench.querySelector(".batches-empty")).not.toBeNull();
-  expect(workbench.querySelector(".batches-empty")!.textContent).toContain("没有待处理的批次");
-});
-
-it("fills the pending panel with real batch cards and drops the dashed placeholder", async () => {
-  useAppStore.setState({ batches: [batch] });
-  await act(async () => root.render(<FoodPage />));
-
-  const panel = host.querySelector(".batches-panel")!;
-  expect(panel.querySelectorAll(".batch-card")).toHaveLength(1);
-  expect(panel.querySelector(".batches-empty")).toBeNull();
-  expect(panel.textContent).toContain("剩余 50%");
-  expect(panel.textContent).toContain("记录实际进食");
 });
 
 it("keeps recipe management inside a drawer that closes on Escape", async () => {

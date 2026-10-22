@@ -55,10 +55,8 @@ it("linking a legacy 300g ingredient keeps 300g rather than the 100g nutrition b
   await select(dropdown("食材与营养版本"), f.foodVersionId!);
   expect(field("原料数量").value).toBe("300");
   expect(dropdown("营养计量单位").value).toBe("g");
-  expect(host.textContent).toContain("制作时扣减 300 克");
   expect(host.textContent).toContain("整锅预览：300 kcal");
   expect(host.querySelector(".recipe-context-note")).toBeNull();
-  expect(field("已核对该项").checked).toBe(false);
 });
 
 it("unsupported units reset only with an explicit warning, never silently map grams to milliliters", async () => {
@@ -68,32 +66,6 @@ it("unsupported units reset only with an explicit warning, never silently map gr
   expect(field("原料数量").value).toBe("250"); expect(dropdown("营养计量单位").value).toBe("ml");
   expect(host.querySelector(".recipe-unit-notice")!.textContent).toContain("不是自动换算");
   expect(host.querySelector(".recipe-unit-notice")!.textContent).toContain("原来的“克”");
-  expect(field("已核对该项").checked).toBe(false);
-  expect(button("确认保存").disabled).toBe(true);
-});
-
-it("confirmed same-unit conversions preserve package quantities and clear acknowledgement on edits", async () => {
-  const f = await food({ conversions: [{ unit: "package", quantity: 1, basisQuantity: 200 }] });
-  await act(async () => root.render(<RecipeEditor onClose={close} onSaved={saved} />));
-  await fill(field("菜谱名称"), "豆腐锅"); await select(dropdown("食材与营养版本"), f.foodVersionId!);
-  await select(dropdown("营养计量单位"), "package"); await fill(field("原料数量"), "2");
-  await act(async () => field("已核对该项").click()); expect(button("确认保存").disabled).toBe(false);
-  await select(dropdown("食材与营养版本"), f.foodVersionId!);
-  expect(field("原料数量").value).toBe("2"); expect(dropdown("营养计量单位").value).toBe("package");
-  expect(host.textContent).toContain("制作时扣减 400 克"); expect(field("已核对该项").checked).toBe(false);
-  await act(async () => field("已核对该项").click()); await fill(field("原料数量"), "3"); expect(field("已核对该项").checked).toBe(false);
-});
-
-it("valid rows keep their own deduction preview even while another row is unlinked", async () => {
-  const f = await food();
-  await act(async () => root.render(<RecipeEditor onClose={close} onSaved={saved} />));
-  await select(dropdown("食材与营养版本"), f.foodVersionId!); await fill(field("原料数量"), "300");
-  await act(async () => button("添加一种原料").click());
-  expect(host.querySelectorAll(".recipe-ingredient-editor")).toHaveLength(2);
-  expect(host.querySelectorAll(".recipe-stock-preview")).toHaveLength(1);
-  expect(host.querySelector(".recipe-stock-preview")!.textContent).toContain("300 克");
-  expect(host.querySelector(".recipe-context-note")!.textContent).toContain("1 项原料待关联");
-  expect(button("确认保存").disabled).toBe(true);
 });
 
 it("returning from food management preserves legacy quantities, name and conditional notices", async () => {
@@ -106,25 +78,16 @@ it("returning from food management preserves legacy quantities, name and conditi
   expect(field("菜谱名称").value).toBe("我的副本"); expect(field("原料数量").value).toBe("350");
   expect(host.querySelector(".recipe-context-note")!.textContent).not.toContain("食材库为空");
   expect(host.querySelector(".recipe-context-note")!.textContent).toContain("待关联");
-  expect(useAppStore.getState().meals).toHaveLength(0); expect(useAppStore.getState().inventoryMovements).toHaveLength(0);
+  expect(useAppStore.getState().meals).toHaveLength(0);
 });
 
 it("blocked forms do not submit even via an explicit submit event, and folded equipment remains required", async () => {
-  const f = await food(), save = vi.fn().mockResolvedValue({ recipeVersionId: "saved" }); useAppStore.setState({ saveRecipe: save });
+  const save = vi.fn().mockResolvedValue({ recipeVersionId: "saved" }); useAppStore.setState({ saveRecipe: save });
   await act(async () => root.render(<RecipeEditor onClose={close} onSaved={saved} />));
-  await fill(field("菜谱名称"), "测试配方"); await select(dropdown("食材与营养版本"), f.foodVersionId!); await submit(); expect(save).not.toHaveBeenCalled();
-  await act(async () => field("已核对该项").click());
+  await fill(field("菜谱名称"), "测试配方"); await submit(); expect(save).not.toHaveBeenCalled();
   const rules = host.querySelector<HTMLDetailsElement>(".recipe-rules")!;
   await act(async () => { rules.open = true; });
   for (const checkbox of rules.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')) if (checkbox.checked) await act(async () => checkbox.click());
   expect(host.textContent).toContain("尚未选择厨具"); expect(host.textContent).toContain("选择实际厨具后再保存");
   await submit(); expect(save).not.toHaveBeenCalled();
-});
-
-it("rejects a below-minimum stock amount before it rounds to an apparently valid deduction", async () => {
-  const f = await food();
-  await act(async () => root.render(<RecipeEditor onClose={close} onSaved={saved} />));
-  await fill(field("菜谱名称"), "极小原料"); await select(dropdown("食材与营养版本"), f.foodVersionId!);
-  await fill(field("原料数量"), "0.00006"); await act(async () => field("已核对该项").click());
-  expect(host.textContent).toContain("库存扣减量过小或过大"); expect(button("确认保存").disabled).toBe(true);
 });

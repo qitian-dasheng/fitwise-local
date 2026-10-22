@@ -6,9 +6,6 @@ use serde_json::{json, Map, Value};
 fn active(value: &Value) -> bool {
     value["status"].as_str().is_none_or(|v| v == "active")
 }
-fn round(value: f64) -> f64 {
-    (value * 10000.0).round() / 10000.0
-}
 
 pub(crate) fn apply(
     state: &mut Map<String, Value>,
@@ -58,86 +55,7 @@ pub(crate) fn apply(
             map.remove("supersededBy");
         }
     }
-    let mut changed_batch = Value::Null;
-    if let Some(batch_id) = old["preparedBatchId"].as_str() {
-        let batch_index = array(state, "batches")?
-            .iter()
-            .position(|v| v["id"] == batch_id)
-            .ok_or("熟食批次缺失，不能孤立修改日记。")?;
-        let batch = array(state, "batches")?[batch_index].clone();
-        crate::batch_corrections::validate_balance(state, &batch)?;
-        if new_date.as_str() < batch["date"].as_str().ok_or("制作日期缺失。")? {
-            return Err("进食日期不能早于制作日。".into());
-        }
-        let event_id = old["consumptionEventId"]
-            .as_str()
-            .ok_or("进食事件缺失，不能单独改日记。")?;
-        let event_index = array(state, "consumptionEvents")?
-            .iter()
-            .position(|v| v["id"] == event_id && active(v))
-            .ok_or("关联进食事件不存在或已失效。")?;
-        let old_ratio = old["consumedRatio"].as_f64().ok_or("旧比例缺失。")?;
-        let event = array(state, "consumptionEvents")?[event_index].clone();
-        if event["batchId"] != batch_id
-            || event["date"] != old["date"]
-            || event["mealType"] != old["type"]
-            || (event["ratio"].as_f64().unwrap_or(-1.0) - old_ratio).abs() > 1e-8
-        {
-            return Err("日记与进食事件不一致，请停止并核对。".into());
-        }
-        let ratio = if void {
-            0.0
-        } else {
-            payload_number(payload, "ratio")?
-        };
-        if !void && (ratio <= 0.0 || ratio > 1.0 || (round(ratio) - ratio).abs() > 1e-8) {
-            return Err("比例须大于 0、不超过 100%，最多百分比两位小数。".into());
-        }
-        let consumed = batch["consumedRatio"].as_f64().ok_or("批次比例缺失。")?;
-        let remaining = batch["remainingRatio"].as_f64().ok_or("批次余量缺失。")?;
-        let wasted = batch["wastedRatio"].as_f64().ok_or("浪费比例缺失。")?;
-        let active_consumed: f64 = array(state, "consumptionEvents")?
-            .iter()
-            .filter(|e| e["batchId"] == batch_id && active(e))
-            .map(|e| e["ratio"].as_f64().unwrap_or(f64::NAN))
-            .sum();
-        if !active_consumed.is_finite() || (active_consumed - consumed).abs() > 1e-6 {
-            return Err("批次总量与有效进食事件不一致，请停止并核对。".into());
-        }
-        if (consumed + remaining + wasted - 1.0).abs() > 1e-6 || consumed + 1e-8 < old_ratio {
-            return Err("熟食比例不守恒，不能继续修改。".into());
-        }
-        let next_remaining = round(remaining + old_ratio - ratio);
-        if next_remaining < -1e-8 {
-            return Err("修改后的进食超过当前可分配余量，不能占用已丢弃或其他餐食的比例。".into());
-        }
-        let b = &mut array_mut(state, "batches")?[batch_index];
-        b["consumedRatio"] = json!(round(consumed - old_ratio + ratio));
-        b["remainingRatio"] = json!(next_remaining.max(0.0));
-        b["status"] = json!(if next_remaining > 0.0 {
-            "open"
-        } else {
-            "closed"
-        });
-        if next_remaining > 0.0 {
-            b.as_object_mut().ok_or("批次无效。")?.remove("closedAt");
-        } else {
-            b["closedAt"] = json!(now);
-        }
-        changed_batch = b.clone();
-        array_mut(state, "consumptionEvents")?[event_index]["status"] =
-            json!(if void { "void" } else { "superseded" });
-        if !void {
-            let new_event_id = format!("{command_id}:consumption");
-            array_mut(state,"consumptionEvents")?.push(json!({"id":new_event_id,"batchId":batch_id,"date":new_date,"mealType":next["type"],"ratio":ratio,"ratioIsEstimated":old["confidence"] != "high","status":"active","supersedesId":event_id,"createdAt":now}));
-            next["consumptionEventId"] = json!(new_event_id);
-            next["consumedRatio"] = json!(ratio);
-            next["amountLabel"] = json!(format!(
-                "整锅的 {}%（已纠错）",
-                (ratio * 10000.0).round() / 100.0
-            ));
-        }
-    } else if !void {
+    if !void {
         if let Some(version_id) = old["foodVersionId"].as_str() {
             if old["foodSnapshot"]["version"]["id"] != version_id {
                 return Err("原餐食营养快照缺失或不一致，不能自动修订。".into());
@@ -219,7 +137,7 @@ pub(crate) fn apply(
                 .remove("completedAt");
         }
     }
-    array_mut(state,"auditEvents")?.push(json!({"id":format!("{command_id}:audit"),"eventType":kind,"entityType":"meal","entityId":id,"createdAt":now,"payload":{"reason":reason,"before":old,"after":if void{Value::Null}else{next},"batchAfter":changed_batch,"commandId":command_id}}));
+    array_mut(state,"auditEvents")?.push(json!({"id":format!("{command_id}:audit"),"eventType":kind,"entityType":"meal","entityId":id,"createdAt":now,"payload":{"reason":reason,"before":old,"after":if void{Value::Null}else{next},"commandId":command_id}}));
     Ok(CommandMutation {
         applied: true,
         result: json!({"mealId":if void{Value::Null}else{json!(new_id)},"date":new_date}),

@@ -235,56 +235,6 @@ pub fn query_period_summary(app: AppHandle, start: String, end: String) -> Resul
 }
 
 #[tauri::command]
-pub fn query_inventory_summary(app: AppHandle) -> Result<Value, String> {
-    let mut connection = open_database(&app)?;
-    if load_envelope(&connection)?.is_none() {
-        import_legacy_state(&mut connection, STORAGE_NAME)?;
-    }
-    inventory_summary(&connection)
-}
-
-pub(crate) fn inventory_summary(connection: &Connection) -> Result<Value, String> {
-    let transaction = connection
-        .unchecked_transaction()
-        .map_err(|error| error.to_string())?;
-    let initialized: bool = transaction
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM domain_state_meta)",
-            [],
-            |row| row.get(0),
-        )
-        .map_err(|error| error.to_string())?;
-    if !initialized {
-        return Ok(Value::Null);
-    }
-    let mut items = Vec::new();
-    let mut statement = transaction.prepare("SELECT e.payload_json FROM domain_inventory_projection p JOIN domain_entities e ON e.collection='inventory' AND e.entity_id=p.id ORDER BY p.opened DESC,COALESCE(p.expires_at,'9999-12-31'),p.purchased_at,p.id").map_err(|error|error.to_string())?;
-    let rows = statement
-        .query_map([], |row| row.get::<_, String>(0))
-        .map_err(|error| error.to_string())?;
-    for row in rows {
-        items.push(
-            serde_json::from_str::<Value>(&row.map_err(|error| error.to_string())?)
-                .map_err(|error| error.to_string())?,
-        );
-    }
-    let remaining_cost: f64 = items
-        .iter()
-        .map(|item| {
-            let purchased = item["purchasedAmount"].as_f64().unwrap_or(0.0);
-            if purchased > 0.0 {
-                item["purchasePriceCny"].as_f64().unwrap_or(0.0)
-                    * item["remainingAmount"].as_f64().unwrap_or(0.0)
-                    / purchased
-            } else {
-                0.0
-            }
-        })
-        .sum();
-    Ok(json!({"items":items,"remainingCostCny":remaining_cost}))
-}
-
-#[tauri::command]
 pub fn export_domain_json(app: AppHandle) -> Result<Value, String> {
     // Export must never initialize, migrate or import records as a side effect.
     let path = app
@@ -313,14 +263,6 @@ fn export_domain_at_path(path: &std::path::Path) -> Result<Value, String> {
         .ok_or("领域仓库格式无效。")?
         .clone();
     data.insert("schemaVersion".into(), json!(12));
-    data.insert(
-        "labelDrafts".into(),
-        crate::label_drafts::manifest(&transaction)?,
-    );
-    data.insert(
-        "inputArtifacts".into(),
-        crate::artifacts::manifest(&transaction)?,
-    );
     data.insert("persistVersion".into(), envelope["version"].clone());
     data.insert("exportedAt".into(), json!(Utc::now().to_rfc3339()));
     data.insert("app".into(), json!("Fitwise Local"));
@@ -345,7 +287,7 @@ pub fn get_domain_upgrade_report(app: AppHandle) -> Result<Value, String> {
 mod export_tests {
     use super::*;
     #[test]
-    fn export_is_read_only_never_imports_legacy_and_preserves_all_manifests() {
+    fn export_is_read_only_never_imports_legacy_and_preserves_state() {
         let path = std::env::temp_dir().join(format!(
             "fitwise-readonly-export-{}.db",
             rand::random::<u64>()
@@ -360,14 +302,14 @@ mod export_tests {
         assert!(export_domain_at_path(&path).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), before);
         let connection = Connection::open(&path).unwrap();
-        connection.execute_batch("INSERT INTO domain_singletons(key,payload_json,updated_at) VALUES('profile','{}','test'),('aiSettings','{}','test'); INSERT INTO domain_state_meta(id,persist_version,revision,content_sha256,updated_at) VALUES(1,4,7,'test','test'); INSERT INTO domain_entities(collection,entity_id,payload_json,sort_index,updated_at) VALUES('meals','synthetic-meal','{\"id\":\"synthetic-meal\"}',0,'test');").unwrap();
+        connection.execute_batch("INSERT INTO domain_singletons(key,payload_json,updated_at) VALUES('profile','{}','test'); INSERT INTO domain_state_meta(id,persist_version,revision,content_sha256,updated_at) VALUES(1,4,7,'test','test'); INSERT INTO domain_entities(collection,entity_id,payload_json,sort_index,updated_at) VALUES('meals','synthetic-meal','{\"id\":\"synthetic-meal\"}',0,'test');").unwrap();
         drop(connection);
         let before = std::fs::read(&path).unwrap();
         let exported = export_domain_at_path(&path).unwrap();
         assert_eq!(exported["source"], "sqlite_domain_repository");
         assert_eq!(exported["meals"][0]["id"], "synthetic-meal");
-        assert_eq!(exported["labelDrafts"], json!([]));
-        assert_eq!(exported["inputArtifacts"]["binaryIncluded"], false);
+        assert_eq!(exported["schemaVersion"], 12);
+        assert_eq!(exported["persistVersion"], 4);
         assert_eq!(std::fs::read(&path).unwrap(), before);
         std::fs::remove_file(path).unwrap();
     }

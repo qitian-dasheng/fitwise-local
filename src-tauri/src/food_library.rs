@@ -227,31 +227,6 @@ fn selected(state: &Map<String, Value>, version_id: &str) -> Result<(Definition,
     Ok((definition, version))
 }
 
-pub(crate) fn preview_input(payload: &Value) -> Result<Value, String> {
-    let (input, nutrition, original) = parse_input(payload)?;
-    let version = Version {
-        id: "draft-preview".into(),
-        food_id: "draft".into(),
-        version: 1,
-        basis: input.basis,
-        energy_unit: input.energy_unit,
-        label_nutrients: original,
-        conversions: input.conversions,
-        nutrition,
-        source: input.source,
-        confirmed_by: "".into(),
-        confirmed_at: "".into(),
-        origin: None,
-    };
-    let mut result = json!({"nutrition":version.nutrition});
-    for (key, unit) in [("per100g", FoodUnit::G), ("per100ml", FoodUnit::Ml)] {
-        if unit == version.basis.unit || version.conversions.iter().any(|c| c.unit == unit) {
-            result[key] = portion(&version, 100.0, unit)?["nutrition"].clone();
-        }
-    }
-    Ok(result)
-}
-
 pub(crate) fn historical_portion(
     state: &Map<String, Value>,
     version_id: &str,

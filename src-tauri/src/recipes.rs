@@ -8,9 +8,6 @@ struct Ingredient {
     food_version_id: String,
     quantity: f64,
     unit: String,
-    inventory_food_id: String,
-    inventory_unit: String,
-    inventory_confirmed: bool,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -103,12 +100,6 @@ pub(crate) fn apply(
         "sodium",
     ];
     for item in input.ingredients {
-        if !item.inventory_confirmed {
-            return Err("请逐项核对库存品牌、生熟状态、净重和可食部分。".into());
-        }
-        if !["g", "ml", "piece"].contains(&item.inventory_unit.as_str()) {
-            return Err("库存仅按克、毫升或个扣减，份和包装需要已确认换算。".into());
-        }
         let mut snapshot = crate::food_library::historical_portion(
             state,
             &item.food_version_id,
@@ -132,48 +123,6 @@ pub(crate) fn apply(
             }
         }
         let definition = &snapshot["definition"];
-        let unit_preview = crate::food_library::historical_portion(
-            state,
-            &item.food_version_id,
-            1.0,
-            &item.inventory_unit,
-        )?;
-        let amount = snapshot["factor"].as_f64().ok_or("换算系数缺失。")?
-            / unit_preview["factor"].as_f64().ok_or("库存换算缺失。")?;
-        if !amount.is_finite() || !(0.0001..=1e9).contains(&amount) {
-            return Err("库存扣减量过小或过大，请核对规格。".into());
-        }
-        let amount = (amount * 10000.0).round() / 10000.0;
-        if item.inventory_food_id.is_empty() {
-            return Err("每项原料需要明确库存身份，不按同名自动匹配。".into());
-        }
-        if item.inventory_food_id != definition["id"].as_str().unwrap_or("") {
-            if array(state, "foodDefinitions")?
-                .iter()
-                .any(|v| v["id"] == item.inventory_food_id)
-            {
-                return Err(
-                    "不能把另一食材或品牌的库存绑定到这款营养资料，请选择相应食材。".into(),
-                );
-            }
-            let known = array(state, "inventory")?
-                .iter()
-                .any(|v| v["foodId"] == item.inventory_food_id && v["unit"] == item.inventory_unit)
-                || array(state, "recipes")?
-                    .iter()
-                    .flat_map(|v| v["ingredients"].as_array().into_iter().flatten())
-                    .any(|v| {
-                        v["foodId"] == item.inventory_food_id && v["unit"] == item.inventory_unit
-                    });
-            if !known {
-                return Err("所选库存关联不存在或单位不一致。".into());
-            }
-        }
-        if ingredients.iter().any(|v: &Value| {
-            v["foodId"] == item.inventory_food_id && v["unit"] != item.inventory_unit
-        }) {
-            return Err("同一库存食材不能使用不同基础单位。".into());
-        }
         for (index, key) in keys.iter().enumerate() {
             let metric = &snapshot["nutrition"][key];
             if metric["state"] == "unknown" {
@@ -186,7 +135,7 @@ pub(crate) fn apply(
             }
         }
         let basis = definition["measurementBasis"].as_str().unwrap_or("raw");
-        ingredients.push(json!({"foodId":item.inventory_food_id,"name":definition["name"],"amount":amount,"unit":item.inventory_unit,"measurementBasis":if basis=="packaged"{"package"}else{basis},"foodVersionId":item.food_version_id,"nutritionQuantity":item.quantity,"nutritionUnit":item.unit,"foodSnapshot":snapshot,"inventoryConfirmed":true}));
+        ingredients.push(json!({"foodId":definition["id"],"name":definition["name"],"measurementBasis":if basis=="packaged"{"package"}else{basis},"foodVersionId":item.food_version_id,"nutritionQuantity":item.quantity,"nutritionUnit":item.unit,"foodSnapshot":snapshot}));
     }
     let mut nutrition = Map::new();
     for (index, key) in keys.iter().enumerate() {

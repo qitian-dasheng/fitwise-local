@@ -2,8 +2,6 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { MealCorrectionModal } from "../src/components/MealCorrectionModal";
-import { BatchCorrectionModal } from "../src/components/BatchCorrectionModal";
-import { BatchHistory } from "../src/components/BatchHistory";
 import { RecipeEditor } from "../src/components/RecipeEditor";
 import { FoodPage } from "../src/pages/FoodPage";
 import { activeMeals, completedDayCalorieAverage, nutrition, summarizeMeals } from "../src/domain/calculations";
@@ -14,9 +12,8 @@ import { useAppStore } from "../src/store/appStore";
 import type { MealEntry } from "../src/domain/types";
 let host:HTMLDivElement;let root:Root;
 const close=vi.fn(),saved=vi.fn();
-const originalBatch=useAppStore.getState().correctBatch;
 const originalCorrect=useAppStore.getState().correctMeal,originalRecipe=useAppStore.getState().saveRecipe;
-beforeEach(()=>{(globalThis as Record<string,unknown>).IS_REACT_ACT_ENVIRONMENT=true;delete (window as unknown as Record<string,unknown>).__TAURI_INTERNALS__;useAppStore.setState({...structuredClone(initialState),correctBatch:originalBatch,correctMeal:originalCorrect,saveRecipe:originalRecipe});host=document.createElement("div");document.body.append(host);root=createRoot(host);close.mockReset();saved.mockReset();});
+beforeEach(()=>{(globalThis as Record<string,unknown>).IS_REACT_ACT_ENVIRONMENT=true;delete (window as unknown as Record<string,unknown>).__TAURI_INTERNALS__;useAppStore.setState({...structuredClone(initialState),correctMeal:originalCorrect,saveRecipe:originalRecipe});host=document.createElement("div");document.body.append(host);root=createRoot(host);close.mockReset();saved.mockReset();});
 afterEach(async()=>{await act(async()=>root.unmount());host.remove();vi.restoreAllMocks();});
 const button=(label:string)=>[...host.querySelectorAll("button")].find(b=>b.textContent?.includes(label))!;
 const input=(label:string)=>[...host.querySelectorAll("label")].find(l=>l.textContent?.includes(label))!.querySelector<HTMLInputElement>("input")!;
@@ -48,19 +45,12 @@ it("previews a corrected food portion using its fixed original nutrient version"
   await act(async()=>root.render(<MealCorrectionModal meal={original} onClose={close}/>));await fill(input("正确的摄入数量"),"50");expect(host.textContent).toContain("200 kcal");expect(host.textContent).toContain("沿用原 v1");
 });
 
-it("shows batch voiding consequences without suggesting a raw-stock refund",async()=>{
-  const correct=vi.fn().mockResolvedValue({date:meal.date});useAppStore.setState({correctMeal:correct});
-  await act(async()=>root.render(<MealCorrectionModal meal={{...meal,preparedBatchId:"batch-1",consumptionEventId:"event-1",consumedRatio:.75}} onClose={close}/>));
-  expect(host.textContent).toContain("不退回生鲜、不撤销浪费");await act(async()=>input("作废此条").click());await fill(host.querySelector("textarea")!,"实际没吃");await act(async()=>input("我已核对修改").click());await submit();expect(correct.mock.calls[0][1]).toBe(true);expect(correct.mock.calls[0][0].ratio).toBeUndefined();
-});
-
-it("selects a food version, previews stock quantity and only saves a recipe after confirmation",async()=>{
+it("selects a food version, previews nutrition and only saves a recipe after all fields are valid",async()=>{
   const food=await makeFood();const save=vi.fn().mockResolvedValueOnce({error:"模拟保存失败"}).mockResolvedValueOnce({recipeVersionId:"saved-v1"});useAppStore.setState({saveRecipe:save});
   await act(async()=>root.render(<RecipeEditor onClose={close} onSaved={saved}/>));await fill(input("菜谱名称"),"燕麦粥");
   await select([...host.querySelectorAll("label")].find(l=>l.textContent?.includes("食材与营养版本"))!.querySelector("select")!,food.foodVersionId!);
-  await fill(input("原料数量"),"50");expect(host.textContent).toContain("扣减 50 克");expect(host.textContent).toContain("200 kcal");expect(host.textContent).toContain("纤维 未知");expect(button("确认保存菜谱").disabled).toBe(true);
-  await act(async()=>input("已核对该项").click());await submit();expect(host.textContent).toContain("模拟保存失败");expect(input("原料数量").value).toBe("50");await submit();
-  expect(save.mock.calls[0][1]).toBe(save.mock.calls[1][1]);expect(save.mock.calls[1][0].ingredients[0]).toMatchObject({foodVersionId:food.foodVersionId,quantity:50,inventoryFoodId:food.foodId,inventoryConfirmed:true});expect(save.mock.calls[1][0].nutrition).toBeUndefined();expect(saved).toHaveBeenCalledWith("saved-v1");expect(useAppStore.getState().meals).toHaveLength(0);expect(useAppStore.getState().inventoryMovements).toHaveLength(0);
+  await fill(input("原料数量"),"50");expect(host.textContent).toContain("200 kcal");expect(host.textContent).toContain("纤维 未知");await submit();expect(host.textContent).toContain("模拟保存失败");expect(input("原料数量").value).toBe("50");await submit();
+  expect(save.mock.calls[0][1]).toBe(save.mock.calls[1][1]);expect(save.mock.calls[1][0].ingredients[0]).toMatchObject({foodVersionId:food.foodVersionId,quantity:50});expect(save.mock.calls[1][0].nutrition).toBeUndefined();expect(saved).toHaveBeenCalledWith("saved-v1");expect(useAppStore.getState().meals).toHaveLength(0);
 });
 
 it("ignores superseded and void meals in summaries but exposes their original evidence",async()=>{
@@ -83,42 +73,6 @@ it("does not fabricate successful desktop-only writes in browser previews",async
   const before=structuredClone(useAppStore.getState().meals);expect((await originalCorrect({mealId:meal.id,reason:"测试"},true)).error).toContain("需要桌面版");expect(useAppStore.getState().meals).toEqual(before);
   expect(()=>previewRecipe({foodDefinitionVersions:[]},{name:"空",totalMinutes:1,equipment:[],ingredients:[]})).toThrow("至少一种原料");
 });
-const batch = { id: "ledger-batch", recipeVersionId: initialState.recipes[0].id, date: diaryToday(), inventoryDeducted: true, consumedRatio: .75, wastedRatio: .25, remainingRatio: 0, status: "closed" as const, ratioIsEstimated: true, createdAt: "" };
-const waste = { id: "ledger-waste", batchId: batch.id, date: diaryToday(), ratio: .25, reason: "discarded" as const, createdAt: "" };
-
-it("waste correction previews safety consequences and retains inputs plus retry identity on failure", async () => {
-  const correct=vi.fn().mockResolvedValueOnce({error:"批次已变化，请核对"}).mockResolvedValueOnce({});
-  useAppStore.setState({correctBatch:correct});
-  await act(async()=>root.render(<BatchCorrectionModal batch={batch} waste={waste} onClose={close}/>));
-  expect(host.textContent).toContain("不退回生鲜");expect(host.textContent).toContain("不代表熟食仍可安全食用");
-  expect(button("确认更正浪费").disabled).toBe(true);
-  await fill(input("正确浪费比例"),"10");await fill(host.querySelector("textarea")!,"实际只丢弃一部分");
-  await act(async()=>input("已核对实际浪费").click());await submit();
-  expect(host.textContent).toContain("批次已变化");expect(input("正确浪费比例").value).toBe("10");expect(close).not.toHaveBeenCalled();
-  await submit();expect(correct.mock.calls[1][2]).toBe(correct.mock.calls[0][2]);expect(correct.mock.calls[1][0]).toBe("revise_waste");expect(correct.mock.calls[1][1]).toEqual({wasteId:waste.id,ratio:.1,reason:"实际只丢弃一部分"});expect(close).toHaveBeenCalledOnce();
-});
-it("voiding waste sends no replacement ratio and blocks double submit or close during commit", async () => {
-  let done!:(value:object)=>void;const correct=vi.fn<typeof originalBatch>(()=>new Promise<object>(resolve=>{done=resolve;}));useAppStore.setState({correctBatch:correct});
-  await act(async()=>root.render(<BatchCorrectionModal batch={batch} waste={waste} onClose={close}/>));
-  await act(async()=>input("作废这条").click());await fill(host.querySelector("textarea")!,"实际未丢弃");await act(async()=>input("已核对实际浪费").click());
-  await submit();await submit();await act(async()=>host.querySelector<HTMLButtonElement>('[aria-label="关闭"]')!.click());
-  expect(correct).toHaveBeenCalledOnce();expect(correct.mock.calls[0][0]).toBe("void_waste");expect(correct.mock.calls[0][1].ratio).toBeUndefined();expect(close).not.toHaveBeenCalled();
-  await act(async()=>done({error:"拒绝冲正"}));expect(host.querySelector("textarea")!.value).toBe("实际未丢弃");
-});
-it("mistaken cooking requires explicit acknowledgement and does not promise unsafe automatic refunds", async () => {
-  const correct=vi.fn().mockResolvedValue({});useAppStore.setState({correctBatch:correct});
-  await act(async()=>root.render(<BatchCorrectionModal batch={{...batch,consumedRatio:0,wastedRatio:0,remainingRatio:1,status:"open"}} onClose={close}/>));
-  expect(host.textContent).toContain("旧批次缺少快照");expect(host.textContent).toContain("已有分餐／浪费历史");
-  await fill(host.querySelector("textarea")!,"误点制作");await act(async()=>input("实际没有制作，已核对").click());await submit();
-  expect(correct.mock.calls[0][0]).toBe("void_prepared_batch");expect(correct.mock.calls[0][1]).toEqual({batchId:batch.id,reason:"误点制作"});
-});
-it("batch ledger includes cross-day waste, marks inactive evidence and excludes void batches from usable counts", async () => {
-  const yesterday="2020-01-01";
-  useAppStore.setState({batches:[{...batch,date:yesterday},{...batch,id:"voided-batch",status:"void",correctionReason:"误制作"}],wasteEvents:[{...waste,status:"superseded"},{...waste,id:"latest-waste",ratio:.1,status:"active",supersedesId:waste.id}],consumptionEvents:[]});
-  await act(async()=>root.render(<BatchHistory date={diaryToday()}/>));
-  expect(host.textContent).toContain("制作于 2020-01-01");expect(host.textContent).toContain("已修订（原记录不计入）");expect(host.textContent).toContain("已冲正");expect([...host.querySelectorAll("button")].filter(b=>b.textContent==="更正浪费")).toHaveLength(1);
-  expect(host.textContent).not.toContain("误点制作？");
-});
 it("historical recipe picker keeps the selected version and only permits copy or original-version cooking", async () => {
   const old=structuredClone(initialState.recipes[0]),newer={...old,id:"recipe-v2",name:"新版配方",version:2};
   useAppStore.setState({recipes:[old,newer]});await act(async()=>root.render(<FoodPage/>));
@@ -140,7 +94,7 @@ it("save-as creates independent recipe identity while pinning historical food ve
   const food=await makeFood(),save=vi.fn().mockResolvedValue({recipeVersionId:"copy-v1"});useAppStore.setState({saveRecipe:save});
   const recipe={...structuredClone(initialState.recipes[0]),ingredients:[{foodId:food.foodId!,name:"原味燕麦",amount:50,unit:"g" as const,measurementBasis:"package" as const,foodVersionId:food.foodVersionId,nutritionQuantity:50,nutritionUnit:"g" as const}]};
   await act(async()=>root.render(<RecipeEditor recipe={recipe} copyMode onClose={close} onSaved={saved}/>));
-  await act(async()=>input("已核对该项").click());await submit();
+  await submit();
   expect(save).toHaveBeenCalledOnce();const payload=save.mock.calls[0][0];expect(payload.recipeId).toBeUndefined();expect(payload.expectedVersionId).toBeUndefined();expect(payload.copiedFromVersionId).toBe(recipe.id);expect(payload.ingredients[0].foodVersionId).toBe(food.foodVersionId);expect(payload.ingredients[0].quantity).toBe(50);
 });
 it("splits edit and void row entries and previews before/after values",async()=>{

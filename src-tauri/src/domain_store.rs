@@ -7,8 +7,8 @@ use std::{fs, path::PathBuf};
 use tauri::{AppHandle, Manager};
 
 pub(crate) const STORAGE_NAME: &str = "fitwise-app-state-v1";
-const SINGLETONS: [&str; 2] = ["profile", "aiSettings"];
-const COLLECTIONS: [&str; 16] = [
+const SINGLETONS: [&str; 1] = ["profile"];
+const COLLECTIONS: [&str; 8] = [
     "foodDefinitions",
     "foodDefinitionVersions",
     "meals",
@@ -16,15 +16,7 @@ const COLLECTIONS: [&str; 16] = [
     "measurements",
     "workouts",
     "recipes",
-    "batches",
-    "consumptionEvents",
-    "wasteEvents",
     "auditEvents",
-    "inventory",
-    "inventoryMovements",
-    "purchases",
-    "inbox",
-    "plans",
 ];
 
 #[derive(Serialize)]
@@ -55,6 +47,8 @@ pub(crate) fn open_database(app: &AppHandle) -> Result<Connection, String> {
         .execute_batch("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;")
         .map_err(|error| format!("无法配置领域数据库：{error}"))?;
     crate::domain_upgrade::upgrade(&mut connection, &path)?;
+    // 确保 0014 精简迁移在连接建立时必然执行（不依赖第一个业务命令才触发）。
+    ensure_repository_schema(&connection)?;
     Ok(connection)
 }
 
@@ -69,33 +63,57 @@ pub(crate) fn ensure_repository_schema(connection: &Connection) -> Result<(), St
 }
 
 pub(crate) fn apply_repository_schema(connection: &Connection) -> Result<(), String> {
-    connection
-        .execute_batch(include_str!("../migrations/0001_schema.sql"))
+    // PRAGMA user_version 门闩：0.8.1 及更早的库 user_version 恒为 0。
+    // 历史迁移（0001–0013）只重放一次（保持 IF NOT EXISTS 幂等），
+    // 0014 精简迁移执行一次后置 user_version=14，后续启动不再重放、废弃表不复活。
+    let schema_version: i64 = connection
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
         .map_err(|error| error.to_string())?;
-    let has_batch_status: bool = connection.query_row(
-        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('prepared_batches') WHERE name = 'remaining_ratio')", [], |row| row.get(0)
-    ).map_err(|error| error.to_string())?;
-    if !has_batch_status {
+    if schema_version < 13 {
         connection
-            .execute_batch(include_str!("../migrations/0002_batch_events.sql"))
+            .execute_batch(include_str!("../migrations/0001_schema.sql"))
+            .map_err(|error| error.to_string())?;
+        // 0002 的 ALTER 不可幂等重放：只有 prepared_batches 表真实存在且缺列时才跑。
+        // 0014 之后该表已被删除，此时 0002 的批次事件迁移已无对象，跳过即可。
+        let has_batches_table: bool = connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'prepared_batches')", [], |row| row.get(0)
+        ).map_err(|error| error.to_string())?;
+        let has_batch_status: bool = connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('prepared_batches') WHERE name = 'remaining_ratio')", [], |row| row.get(0)
+        ).map_err(|error| error.to_string())?;
+        if has_batches_table && !has_batch_status {
+            connection
+                .execute_batch(include_str!("../migrations/0002_batch_events.sql"))
+                .map_err(|error| error.to_string())?;
+        }
+        for sql in [
+            include_str!("../migrations/0003_domain_entity_store.sql"),
+            include_str!("../migrations/0004_domain_commands.sql"),
+            include_str!("../migrations/0005_queries_and_request_identity.sql"),
+            include_str!("../migrations/0006_food_library.sql"),
+            include_str!("../migrations/0007_inventory_operations.sql"),
+            include_str!("../migrations/0008_input_artifacts.sql"),
+            include_str!("../migrations/0009_meal_corrections.sql"),
+            include_str!("../migrations/0010_label_drafts.sql"),
+            include_str!("../migrations/0011_measurement_conditions.sql"),
+            include_str!("../migrations/0012_workout_corrections.sql"),
+            include_str!("../migrations/0013_menu_drafts.sql"),
+        ] {
+            connection
+                .execute_batch(sql)
+                .map_err(|error| format!("无法初始化领域仓库：{error}"))?;
+        }
+        connection
+            .execute_batch("PRAGMA user_version = 13")
             .map_err(|error| error.to_string())?;
     }
-    for sql in [
-        include_str!("../migrations/0003_domain_entity_store.sql"),
-        include_str!("../migrations/0004_domain_commands.sql"),
-        include_str!("../migrations/0005_queries_and_request_identity.sql"),
-        include_str!("../migrations/0006_food_library.sql"),
-        include_str!("../migrations/0007_inventory_operations.sql"),
-        include_str!("../migrations/0008_input_artifacts.sql"),
-        include_str!("../migrations/0009_meal_corrections.sql"),
-        include_str!("../migrations/0010_label_drafts.sql"),
-        include_str!("../migrations/0011_measurement_conditions.sql"),
-        include_str!("../migrations/0012_workout_corrections.sql"),
-        include_str!("../migrations/0013_menu_drafts.sql"),
-    ] {
+    if schema_version < 14 {
         connection
-            .execute_batch(sql)
-            .map_err(|error| format!("无法初始化领域仓库：{error}"))?;
+            .execute_batch(include_str!("../migrations/0014_drop_deprecated.sql"))
+            .map_err(|error| format!("无法执行 0014 精简迁移：{error}"))?;
+        connection
+            .execute_batch("PRAGMA user_version = 14")
+            .map_err(|error| error.to_string())?;
     }
     Ok(())
 }
@@ -300,21 +318,9 @@ pub(crate) fn normalize_legacy_envelope(raw: &str) -> Result<String, String> {
         state.entry(key).or_insert_with(|| serde_json::json!([]));
     }
     if version == 2 {
-        for key in ["consumptionEvents", "wasteEvents", "auditEvents"] {
-            state.entry(key).or_insert_with(|| serde_json::json!([]));
-        }
-        if let Some(batches) = state.get_mut("batches").and_then(Value::as_array_mut) {
-            for batch in batches {
-                let consumed = batch["consumedRatio"].as_f64().unwrap_or(0.0);
-                let wasted = batch["wastedRatio"].as_f64().unwrap_or(0.0);
-                let remaining = batch["remainingRatio"]
-                    .as_f64()
-                    .unwrap_or((1.0 - consumed - wasted).max(0.0));
-                batch["remainingRatio"] = serde_json::json!(remaining);
-                batch["status"] =
-                    serde_json::json!(if remaining > 0.0 { "open" } else { "closed" });
-            }
-        }
+        state
+            .entry("auditEvents")
+            .or_insert_with(|| serde_json::json!([]));
         if let Some(measurements) = state.get_mut("measurements").and_then(Value::as_array_mut) {
             for measurement in measurements {
                 if measurement.get("status").is_none() {
@@ -432,10 +438,6 @@ mod tests {
     fn envelope(version: i64, meal_name: &str) -> String {
         let mut state = Map::new();
         state.insert("profile".into(), serde_json::json!({"name":"test"}));
-        state.insert(
-            "aiSettings".into(),
-            serde_json::json!({"provider":"openai"}),
-        );
         for collection in COLLECTIONS {
             state.insert(collection.into(), Value::Array(vec![]));
         }
@@ -463,16 +465,16 @@ mod tests {
     #[test]
     fn legacy_v2_is_normalized_before_desktop_hydration() {
         let mut legacy: Value = serde_json::from_str(&envelope(2, "old meal")).unwrap();
-        for key in ["consumptionEvents", "wasteEvents", "auditEvents"] {
-            legacy["state"].as_object_mut().unwrap().remove(key);
-        }
-        legacy["state"]["batches"] =
-            serde_json::json!([{"id":"batch-old","consumedRatio":0.75,"wastedRatio":0.25}]);
+        legacy["state"]
+            .as_object_mut()
+            .unwrap()
+            .remove("auditEvents");
+        legacy["state"]["measurements"] = serde_json::json!([{"id":"weight-old","weightKg":80}]);
         let normalized: Value =
             serde_json::from_str(&normalize_legacy_envelope(&legacy.to_string()).unwrap()).unwrap();
         assert_eq!(normalized["version"], 4);
-        assert_eq!(normalized["state"]["batches"][0]["remainingRatio"], 0.0);
-        assert_eq!(normalized["state"]["batches"][0]["status"], "closed");
+        assert_eq!(normalized["state"]["auditEvents"], serde_json::json!([]));
+        assert_eq!(normalized["state"]["measurements"][0]["status"], "active");
         assert_eq!(normalized["state"]["meals"][0], legacy["state"]["meals"][0]);
     }
 

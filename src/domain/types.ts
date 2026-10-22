@@ -3,7 +3,6 @@ export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 export type DataSource = "label" | "personal" | "official" | "ai_estimate" | "fatsecret" | "manual";
 export type Confidence = "high" | "medium" | "low";
 export type NutrientState = "unknown" | "zero" | "known";
-export type AiProviderId = "openai" | "deepseek" | "openai-compatible";
 
 export interface NutrientValue {
   state: NutrientState;
@@ -110,8 +109,6 @@ export interface MealEntry {
   consumedRatio: number;
   source: DataSource;
   confidence: Confidence;
-  preparedBatchId?: string;
-  consumptionEventId?: string;
   /** 「照搬上次」产生的新记录指回来源条目，便于回溯这次复制从哪来。 */
   copiedFromId?: string;
   foodDefinitionId?: string;
@@ -204,7 +201,6 @@ export interface RecipeIngredient {
   nutritionQuantity?: number;
   nutritionUnit?: FoodUnit;
   foodSnapshot?: MealEntry["foodSnapshot"];
-  inventoryConfirmed?: boolean;
 }
 
 export interface RecipeVersion {
@@ -223,50 +219,6 @@ export interface RecipeVersion {
   createdAt: string;
 }
 
-export interface PreparedBatch {
-  id: string;
-  recipeVersionId: string;
-  date: ISODate;
-  inventoryDeducted: boolean;
-  consumedRatio: number;
-  wastedRatio: number;
-  remainingRatio: number;
-  status: "open" | "closed" | "void";
-  inventoryDeductions?: { movementId: string; lotBefore: InventoryLot; lotAfter: InventoryLot }[];
-  voidedAt?: string;
-  correctionReason?: string;
-  ratioIsEstimated: boolean;
-  cookedWeightG?: number;
-  closedAt?: string;
-  createdAt: string;
-}
-
-export interface ConsumptionEvent {
-  id: string;
-  status?: "active" | "superseded" | "void";
-  supersedesId?: string;
-  batchId: string;
-  date: ISODate;
-  mealType: MealType;
-  ratio: number;
-  ratioIsEstimated: boolean;
-  createdAt: string;
-}
-
-export interface WasteEvent {
-  id: string;
-  status?: "active" | "superseded" | "void";
-  supersedesId?: string;
-  supersededBy?: string;
-  correctedAt?: string;
-  correctionReason?: string;
-  batchId: string;
-  date: ISODate;
-  ratio: number;
-  reason: "discarded" | "spoiled" | "other";
-  createdAt: string;
-}
-
 export interface AuditEvent {
   id: string;
   eventType: string;
@@ -274,128 +226,6 @@ export interface AuditEvent {
   entityId?: string;
   payload: Record<string, unknown>;
   createdAt: string;
-}
-
-export interface InventoryLot {
-  id: string;
-  foodId: string;
-  name: string;
-  purchasedAmount: number;
-  remainingAmount: number;
-  unit: "g" | "ml" | "piece";
-  purchasePriceCny: number;
-  purchasedAt: ISODate;
-  receivedAt?: ISODate;
-  expiresAt?: ISODate;
-  opened: boolean;
-  confidence: Confidence;
-  source?: string;
-  nutrition?: NutritionFacts;
-  purchaseId?: string;
-  receiptId?: string;
-  specification?: string;
-  nominalAmount?: number;
-  receiptBasis?: "nominal" | "weighed";
-  weighedAt?: string;
-  lastCountedAt?: string;
-  openedAt?: string;
-  returnedAmount?: number;
-  wastedAmount?: number;
-}
-
-export type InventoryMovementType = "purchase" | "cooking" | "waste" | "adjustment" | "return" | "receipt_correction";
-export interface InventoryMovement {
-  id: string;
-  lotId: string;
-  batchId?: string;
-  reversesMovementId?: string;
-  correctsReceiptId?: string;
-  type: InventoryMovementType;
-  amount: number;
-  reason: string;
-  createdAt: string;
-}
-
-export type PurchaseUnit = "g" | "kg" | "ml" | "l" | "piece" | "bag" | "box" | "bottle" | "pack";
-export type PurchasePlatform = "duoduo" | "pinduoduo" | "taobao" | "tmall" | "jd" | "douyin" | "meituan" | "online" | "supermarket" | "other";
-export interface PurchasePackaging { count: number; container: "bag" | "box" | "bottle" | "piece"; contentAmount: number; contentUnit: "g" | "kg" | "ml" | "l" | "piece" }
-export interface PurchaseReceipt {
-  id: string; lotId: string; quantity: number; actualAmount: number; unit: InventoryLot["unit"]; costCny: number;
-  name: string; foodId: string; receivedAt: string; expiresAt?: string; reason: string; replacement: boolean;
-  basis?: "nominal" | "weighed";
-}
-export interface ReceivePurchaseInput {
-  purchaseId: string; quantity: number; actualAmount?: number; costCny: number; receivedAt: string; expiresAt?: string;
-  final: boolean; reason: string; replacement?: { name: string; foodId?: string };
-}
-export interface InventoryCountInput { lotId: string; remainingAmount: number; opened: boolean; expiresAt: string | null; reason: string }
-export interface InventoryDisposalInput { lotId: string; amount: number; kind: "return" | "waste"; reason: string; refundCny?: number }
-export interface InventoryReceiptCorrectionInput { lotId: string; actualAmount: number; reason: string }
-
-export interface PurchaseDraft {
-  id: string;
-  foodId?: string;
-  name: string;
-  platform: PurchasePlatform;
-  platformName?: string;
-  url?: string;
-  amount: number;
-  unit: PurchaseUnit;
-  packaging?: PurchasePackaging;
-  packagingConfirmed?: boolean;
-  orderedAt?: string;
-  timezone?: string;
-  createdAt?: string;
-  paidCny?: number;
-  refundedCny?: number;
-  receipts?: PurchaseReceipt[];
-  closedQuantity?: number;
-  closedReason?: string;
-  priceCny: number;
-  expectedArrival?: ISODate;
-  status: "draft" | "ordered" | "partially_received" | "received" | "cancelled" | "closed";
-  confidence: Confidence;
-}
-
-export interface InboxItem {
-  id: string;
-  kind: "image" | "text" | "link";
-  title: string;
-  preview: string;
-  receivedAt: string;
-  status: "unreviewed" | "drafted" | "confirmed" | "discarded";
-  artifactPath?: string;
-  fingerprint?: string;
-}
-
-export interface PlanCandidate {
-  id: string;
-  recipeVersionId?: string;
-  date: ISODate;
-  title: string;
-  description: string;
-  caloriesKcal: number;
-  proteinG: number;
-  fiberG: number;
-  estimatedCostCny: number;
-  cookingMinutes: number;
-  inventoryCoverage: number;
-  reasons: string[];
-  missingIngredients: string[];
-  status: "candidate" | "selected" | "dismissed";
-  /** 来源：ai-draft = 经草稿通道确认进入；演示方案仍按 ID 正则判定，不走本字段。 */
-  origin?: "ai-draft";
-  menuDraftId?: string;
-}
-
-export interface AiSettings {
-  provider: AiProviderId;
-  baseUrl: string;
-  model: string;
-  monthlyLimitCny?: number;
-  estimatedSpendCny: number;
-  usageMonth: string;
-  cloudEnabled: boolean;
 }
 
 export interface AppState {
@@ -407,16 +237,7 @@ export interface AppState {
   measurements: BodyMeasurement[];
   workouts: WorkoutSession[];
   recipes: RecipeVersion[];
-  batches: PreparedBatch[];
-  consumptionEvents: ConsumptionEvent[];
-  wasteEvents: WasteEvent[];
   auditEvents: AuditEvent[];
-  inventory: InventoryLot[];
-  inventoryMovements: InventoryMovement[];
-  purchases: PurchaseDraft[];
-  inbox: InboxItem[];
-  plans: PlanCandidate[];
-  aiSettings: AiSettings;
 }
 
 export const nutrientKeys = [
@@ -448,7 +269,7 @@ export interface RecipeInput {
   name: string;
   totalMinutes: number;
   equipment: string[];
-  ingredients: { foodVersionId: string; quantity: number; unit: FoodUnit; inventoryFoodId: string; inventoryUnit: InventoryLot["unit"]; inventoryConfirmed: boolean }[];
+  ingredients: { foodVersionId: string; quantity: number; unit: FoodUnit }[];
   recipeId?: string;
   expectedVersionId?: string;
 }
