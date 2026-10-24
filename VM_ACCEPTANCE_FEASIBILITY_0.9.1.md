@@ -249,3 +249,21 @@
 **证据（已归档）**：固件截图存档于 `D:\HyperV-QH-Test\Evidence\phase1\fitwise-091-smoke-firmware-20261024.png`（105,728 字节，SHA-256 `03c3389dfa30ea60cee7355a008929202ff997905ed4968a5f346749b9feacb9`；内容：Microsoft Hyper-V UEFI / Virtual Machine Boot Summary / No boot devices were found / No operating system was loaded / Restart now，窗口标题「JR 上的 Fitwise-091-Smoke - 虚拟机连接」，状态栏「正在运行」）。transcript 日志在 `%TEMP%\fitwise-hyperv-smoke-*.log`。2026-10-24 19:45 由用户提供截图后归档。
 
 **下一步**：仅制定阶段 2（Windows 虚拟机环境准备）方案，见 `PHASE2_WINDOWS_VM_PREP_PLAN_0.9.1.md`；等待用户批准后执行。
+
+### 8.3 阶段 2.2 交付回执（2026-10-24：脚本与安全检查已交付，未执行创建）
+
+用户原则批准阶段 2.2 但要求**先交付创建脚本和安全检查**。本轮 AI 侧只读完成：
+
+| 交付物 | 状态 |
+|---|---|
+| `fitwise-hyperv-phase2b-create.ps1` | ✅ 已交付（8 阶段+验证门+守卫+异常即停；Parser 无语法错误；纯 ASCII；0 处启动命令） |
+| `fitwise-hyperv-phase2b-verify.ps1` | ✅ 已交付（只读全量复核，`-HashMedia` 可选） |
+| `fitwise-hyperv-phase2b-cleanup.ps1` | ✅ 已交付（五重守卫+显式路径+无通配符；`-IncludeMedia` 可选） |
+| `PHASE2_AUTOUNATTEND_TEMPLATE_0.9.1.xml` | ✅ 已交付（Python XML 解析通过；独立副本） |
+| 方案文档更新 | ✅ 第 5 节（脚本化+修订点）、6.3（应答文件审核+scope 移除）、6.5（第二 DVD 制作：IMAPI2FS）、第 14 节（完整交付清单） |
+
+**创建前 8 项核实的落实位置**：①VM 不存在（Phase 0 名称守卫）②冒烟 VM Off 不改（Phase 0+7 双重核查）③Default Switch 原状（Phase 0 指纹+Phase 7 复核）④路径与磁盘空间（Phase 0，≥100 GB 门）⑤vTPM/Key Protector/Secure Boot 顺序与语法（Phase 3→4，顺序＝Key Protector→vTPM→Secure Boot，均需 Off）⑥动态 VHDX/克隆/检查点开销（14.4 节量化）⑦分阶段+守卫+异常即停+不自动清理重建（脚本结构）⑧完整语法与范围审查（Parser+ASCII+网卡遗漏专项核查：创建脚本仅 1 处 `Remove-VMNetworkAdapter` 且带守卫）。
+
+**autounattend.xml 自动发现依据**：MSDN dn938367 隐式搜索顺序路径⑤「可移动只读介质根目录」——第二块虚拟 DVD 属此类，**有官方文档依据**；安装时实证，未命中转 6.3 路径 B/C/D。制作第二 DVD 用微软 IMAPI2FS API（离线、无需 ADK），见 6.5。
+
+**本轮未执行（停止点）**：未创建/启动 VM、未装 Windows、未运行 WebView2/MSI、未访问真实数据库、未改宿主机功能/网络/交换机、未触碰冒烟 VM 与 Default Switch、未改源码、未推送 GitHub。等待用户检查确认后授权执行创建。
