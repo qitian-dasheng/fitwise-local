@@ -267,3 +267,24 @@
 **autounattend.xml 自动发现依据**：MSDN dn938367 隐式搜索顺序路径⑤「可移动只读介质根目录」——第二块虚拟 DVD 属此类，**有官方文档依据**；安装时实证，未命中转 6.3 路径 B/C/D。制作第二 DVD 用微软 IMAPI2FS API（离线、无需 ADK），见 6.5。
 
 **本轮未执行（停止点）**：未创建/启动 VM、未装 Windows、未运行 WebView2/MSI、未访问真实数据库、未改宿主机功能/网络/交换机、未触碰冒烟 VM 与 Default Switch、未改源码、未推送 GitHub。等待用户检查确认后授权执行创建。
+
+### 8.4 阶段 2.2 安全修订回执（2026-10-24 rev.3：按用户审核意见修订，仍未执行）
+
+用户认可技术方案原则，但指出安全边界缺陷，**本轮仅授权修改脚本/应答文件/文档**。逐项落实：
+
+| 审核条目 | 缺陷（rev.2） | rev.3 修正 |
+|---|---|---|
+| §2.1 网卡删除 | `foreach` 遍历删除，不满足「恰好一块」 | 严格计数门：`Count -ne 1` 即停（0/多块都停）；`SwitchName` 非空即停；**无循环**；删前重读 VM 并核对自 Phase 1 记录的 **唯一 Id** + Gen2 + Off；删后验证 0 |
+| §2.2 启动序核查 | 直接读 `BootOrder[0].Path`，属属性假设 | `Get-BootIdentity` 经 `.Device` 取真实设备对象，四道门（有 Device→类型 DvdDrive→`.Device.Path` 逐字等于 ISO→控制器三元组交叉核对）；**无法验证即返回 ok=false、dump 原始模型并停止，不伪造 PASS** |
+| §2.3 创建前后保护 | 未记录 VM 唯一 ID；Evidence/日志/快照被混称「只读预检」 | Phase 1 写 `phase2b-creation-record.json`（含 `vmId`）；头部 **WRITE-PHASE MAP** 明确 Phase 0 只读 / 0W·1·2–6·8 写入范围与文件；`New-VM` 无 `-Force`；无提权绕过 |
+| §3 vTPM/证书 | 只做口头披露，无前后核对 | 证书存储**只读**基线 + after + delta（subject/thumbprint/有效期/HasPrivateKey 标志），写入 creation-record；**不读不导出私钥、不删证书、不改宿主 TPM/BitLocker/其他 VM 保护**；「宿主机零改动」措辞已在 §7 修正 |
+| §4.1 清理关机 | 非 Off 时 `Stop-VM -TurnOff -Force` | **删除全部关机命令**；非 Off 即 `[FAIL]` 停止并报告 |
+| §4.2 清理范围 | `-IncludeMedia` 可删媒体；父目录空则删 | 参数块整体删除；媒体/Evidence/冒烟 VM/证书/父目录**永不触碰**；事后只读校验媒体仍存在 |
+| §4.3 VM 身份 | 从待删对象自读属性比对 | 以 **creation-record（创建时可信记录）** 为身份来源：Id/名称/Gen/配置路径/VHDX 路径逐一比对；记录缺失即停 |
+| §4.4 递归删除 | 直接 `Remove-Item -Recurse` | 先枚举**完整文件清单**并过白名单（`Virtual Hard Disks\<exact>.vhdx`、`Virtual Machines\<vmId>*`）；未知文件/目录/AVHDX/检查点即停；无通配符；删后只读复核 + 报告落 Evidence |
+| §5 只读验证 | 缺少唯一 Id、启动序身份、证书清单 | 全部补齐（详见阶段 2 方案 14.15）；**0 变更命令、0 文件写入** |
+| §6 应答文件 | 空白密码账户 | 新增 `Password`（占位符 `__FITWISE_TEST_PASSWORD__` + `PlainText=true`，置于 Name/Group 前）；密码生命周期见方案 §6.6；回退路径 B/C/D 改为**需单独授权**，OOBE 不符预期即停 |
+
+**机器自检（2026-10-24）**：三脚本 Parser 0 错误、纯 ASCII 0 非 ASCII 字节；create 无 `Start-VM`/`Stop-VM`/`Remove-VM`/`Remove-Item`；cleanup 无 `Stop-VM`/`Restart-VM`、无 `param` 块；三脚本通配符删除计数 0；应答文件 Python XML 解析通过、`LocalAccount` 子元素顺序 = `Password, Name, Group`。
+
+**未执行（本轮停止点）**：未创建/启动/停止/删除任何 VM、未创建/删除 VHDX、未安装 Windows/WebView2/MSI、未执行清理脚本、未改宿主机功能/交换机/驱动/组策略/网络、未写或删宿主机证书、未读真实数据库、未改 0.9.0、未改源码、未推送 GitHub。**等待重新审核三脚本并单独批准实际创建。**
