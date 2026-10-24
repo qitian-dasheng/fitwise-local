@@ -128,6 +128,8 @@ Enable-WindowsOptionalFeature -Online -FeatureName "Containers-DisposableClient-
 
 **只读诊断结论**（详见 `SANDBOX_DIAGNOSIS_0.9.1.md`）：宿主侧无任何错误事件、资源与服务正常、本地会话、vGPU 为默认启用、混合图形（NVIDIA dGPU 驱动 2026-09-30）；失败发生在沙盒客人内部且其日志通道本机不存在。最可能方向为 GPU-PV/vGPU 兼容性（与大量公开社区报告的错误签名一致，但未经本机验证）。
 
-**下一候选步骤（均待你单独批准，未执行）**：N2 默认配置原样重试一次（测复现性）；N3 仅含 `VGpu=Disable` 的 `.wsb` 空跑（零系统改动、可逆）；N4 桌面恢复后才扩展 .wsb 走隔离验收（MSI 安装另需授权）。
+**N3 对照测试（2026-10-24 17:49 已执行，结果：失败）**：经你批准，按给定配置原样创建 `%TEMP%\fitwise-sandbox-novgpu.wsb`（VGpu=Disable + Networking=Disable + ClipboardRedirection=Disable + 空 MappedFolders，无文件夹映射、无自动启动脚本）**单次启动**。结果：进程约 20–30 秒自行退出，未出现可操作桌面，全程未捕获 0x80072746 弹窗，宿主侧零错误日志。**结论：禁用 vGPU 未能修复，且失败更快**——「仅禁 vGPU 即可修复」的预期被否定；GPU-PV 假设削弱，失败时点前移至更早阶段。证据（截图 20 帧 + watch.log）在 `%TEMP%\fitwise-novgpu-cap\`。
+
+**当前状态与可选方向（均待你另行批准，未执行）**：N2 已跳过、N4 不批准（其前提沙盒可用已不成立）。可选：① 退路 D（免安装 exe + 重定向 APPDATA 做 0.9.1 功能冒烟，零系统改动，不验证 MSI 安装）；② 深层宿主机排查（DISM/驱动/KB/功能重开关，每项触碰系统需逐项授权）；③ 退路 C（装虚拟机）；④ 暂停。
 
 **停止条件**：需要提权/改系统的步骤、新错误码、宿主机快照（`C:\Program Files\轻衡` / `%APPDATA%\cn.fitwise.local` / 开始菜单）任何变化、你叫停。
