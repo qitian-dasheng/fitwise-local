@@ -288,3 +288,20 @@
 **机器自检（2026-10-24）**：三脚本 Parser 0 错误、纯 ASCII 0 非 ASCII 字节；create 无 `Start-VM`/`Stop-VM`/`Remove-VM`/`Remove-Item`；cleanup 无 `Stop-VM`/`Restart-VM`、无 `param` 块；三脚本通配符删除计数 0；应答文件 Python XML 解析通过、`LocalAccount` 子元素顺序 = `Password, Name, Group`。
 
 **未执行（本轮停止点）**：未创建/启动/停止/删除任何 VM、未创建/删除 VHDX、未安装 Windows/WebView2/MSI、未执行清理脚本、未改宿主机功能/交换机/驱动/组策略/网络、未写或删宿主机证书、未读真实数据库、未改 0.9.0、未改源码、未推送 GitHub。**等待重新审核三脚本并单独批准实际创建。**
+
+### 8.5 阶段 2.2 rev.4 最终代码审查回执（2026-10-24，仍未执行）
+
+用户完成对 rev.3 的静态代码审查（三个文件 SHA-256 与交付记录一致），认可整体方向但指出 6 组剩余问题。本轮**只修订这 6 组，不扩大范围**：
+
+| 审查组 | 缺陷（rev.3） | rev.4 落实 |
+|---|---|---|
+| 1 清理白名单与遍历 | `<vmId>*` 前缀匹配；`Get-ChildItem` 可能 `SilentlyContinue` 导致不完整清单通过；未拒绝重解析点；清单与实际内容之间可能变化 | 闭环精确白名单（4 个固定扩展名 + 精确 VHDX 名）；枚举全部 `-ErrorAction Stop -Force`，失败即停；拒绝 VM 根/目录/文件上的 `ReparsePoint`；TOCTOU 二次枚举 + 名称/字节数/时间戳签名比对；保留精确路径/VM Id/Generation/Off 检查 |
+| 2 创建记录完整性 | 清理只要求记录「存在」；未校验 `finalizedUtc`/`finalState`/`bootOrderVerified`；部分创建失败仍可走常规清理 | 记录必须 `completionStatus=complete` + `finalizedUtc` 非空 + `bootOrderVerified=true` + `gateFailCount=0` + `gatePassCount=gateTotalCount>0` + `finalState`＝实测；部分创建一律拒绝并提示另交恢复方案；新增 schema `/2` + 14 字段 SHA-256 指纹（不再仅凭存在可信） |
+| 3 创建脚本日志与终态 | 无条件 `Stop-Transcript`；记录写入失败只 `Info` 后仍打印全通过；未把快照/记录/验证结果纳入验收；未区分「已创建但失败」与「完整成功」 | `$script:transcriptStarted` 守卫；记录/快照写入失败一律硬 `Fail`；新增 Phase 8 最终验收 15 项；三种终态文案明确区分，失败写 `incomplete` 记录 |
+| 4 清理报告真实性 | 失败固定输出「Nothing was deleted」 | 三态进度（VM 定义/VHDX/目录）+ 逐文件日志；失败打印实况并声明「不得假设什么都没删」；中途失败立即停止，不重建/不恢复/不猜测 |
+| 5 验证脚本一致性 | 启动序检查比 create 宽松；读不到属性时可能被当作 PASS | 复用与 create **完全相同**的四道门（含控制器三元组交叉核对），缺失即 `GAP` → `[FAIL]`；AVHDX 枚举失败也报 GAP；保持纯只读 |
+| 6 重新交付 | — | 三个完整 `.ps1` + SHA-256（create 41,888 B / verify 22,140 B / cleanup 28,683 B）+ Parser 0 错误 + 纯 ASCII + rev.3→rev.4 差异摘要（见阶段 2 方案 §16） |
+
+**机器自检**：三脚本 Parser 0 错误、纯 ASCII 0 非 ASCII 字节无 BOM；create 0 处 Start/Stop/Remove-VM/Remove-Item 且 `Stop-Transcript` 仅 1 处受守卫；verify 0 变更命令、0 文件写入；cleanup 0 处 `Remove-Item -Recurse`、0 处 Stop-VM、无 param 块、无 `Get-ChildItem ... SilentlyContinue`。离机自检另含：指纹在哈希表与 JSON 回读间一致、篡改可检出；白名单模拟目录测试中 `.vmcx.bak`（前缀伪装）、`stray.log`、`Snapshots\` 均被拒。
+
+**未执行（本轮停止点）**：未创建/启动/停止/删除任何 VM 或 VHDX、未安装 Windows/WebView2/轻衡、未执行清理脚本、未删任何文件、未改宿主机功能/交换机/驱动/组策略/网络、未写删宿主机证书、未读真实数据库、未改 0.9.0/源码、未推送 GitHub。**等待最终复审并单独批准实际创建。**

@@ -1,6 +1,6 @@
 # 轻衡 0.9.1｜阶段 2：Windows 虚拟机环境准备方案
 
-日期：2026-10-24｜状态：**阶段 2.1 已完成；阶段 2.2 三个脚本与应答文件已按 2026-10-24 审核意见修订为 rev.3，未执行、待重新审核后单独批准实际创建**（用户重新审核并单独授权前，不创建/启动/安装/清理任何 VM 或文件）；2.3 安装 Windows、轻衡 MSI 均未批准；不访问真实数据库。前置事实：Hyper-V 阶段 1 冒烟**已通过**（回执见 `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md` 第 8.1/8.2 节）。
+日期：2026-10-24｜状态：**阶段 2.1 已完成；阶段 2.2 三个脚本已按最终代码审查修订为 rev.4（白名单闭环、枚举遇错即停、记录完整性、清理真实状态报告、verify 严格度对齐），未执行任何创建/启动/停止/删除/安装动作，待最终复审后单独批准实际创建**；2.3 安装 Windows、轻衡 MSI 均未批准；不访问真实数据库。前置事实：Hyper-V 阶段 1 冒烟**已通过**（回执见 `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md` 第 8.1/8.2 节）。
 
 ---
 
@@ -90,6 +90,23 @@
 | 5 | 头部标注 **WRITE-PHASE MAP**，把 Evidence 目录、transcript、快照、creation-record 明确标为写入操作，不再混称「只读预检」 | §2.3 |
 | 6 | 增加宿主机证书存储**只读**前后清单与 delta（thumbprint/subject/有效期/HasPrivateKey 标志），明确不读不导出私钥、不删证书、不改宿主机 TPM/BitLocker | §3 |
 | 7 | 失败路径统一为「打印实际值 + 停止 + 报告」，无自动修复、无自动重试、无自动清理重建 | §2.3 / §5 |
+
+**rev.4 修订（2026-10-24 最终代码审查，仅覆盖审查指出的 6 组问题）**：
+
+| # | rev.4 修订 | 对应审查条目 |
+|---|---|---|
+| 1 | **清理白名单改为闭环精确名单**：`Virtual Hard Disks\Fitwise-091-Test.vhdx` + `Virtual Machines\<vmId>.vmcx/.vmrs/.vmgs/.bin`，**不再接受 `<vmId>*` 前缀**；其他任何文件/目录（含 `.vmcx.bak` 这类前缀伪装）一律停止 | §1 |
+| 2 | 文件与目录枚举**全部 `-ErrorAction Stop`**（含 `-Force`），枚举失败即停，**不接受不完整清单**；拒绝 VM 根/目录/文件上的**重解析点/符号链接/junction** | §1 |
+| 3 | 删除前**二次枚举并比对**（相对路径 + 字节数 + LastWriteTimeUtc），任何漂移（TOCTOU）即停 | §1 |
+| 4 | **取消 `Remove-Item -Recurse`**：按清单逐文件显式删除（每个文件删前再比对元数据、删后确认已消失），目录仅「确认为空」才逐个删除 | §1 / §4 |
+| 5 | 清理**要求 creation-record 已完成最终验收**：schema `/2`、指纹一致、`completionStatus=complete`、`finalizedUtc` 非空、`bootOrderVerified=true`、`gateFailCount=0`、`gatePassCount=gateTotalCount`、`finalState` 与实测状态一致；**部分创建失败禁止走常规清理**，须另交恢复方案 | §2 |
+| 6 | creation-record 增加 `completionStatus / finalizedUtc / finalState / gatePass\|Fail\|TotalCount` 与**关键字段 SHA-256 指纹**，**不再仅凭存在即视为可信** | §2 |
+| 7 | `Stop-Transcript` **仅在 `Start-Transcript` 成功时**调用（`$script:transcriptStarted` 守卫） | §3 |
+| 8 | creation-record 最终写入失败**改为硬 FAIL**，不再继续打印 `ALL FINAL GATES PASSED`；快照写入同样硬校验（存在且非空） | §3 |
+| 9 | 新增 **Phase 8 最终验收**：快照非空、记录可解析、指纹一致、`completionStatus=complete`、`finalState` 与实测一致、门计数自洽、`vmId` 与路径一致——**把证据、记录、验证结果一并纳入验收** | §3 |
+| 10 | 明确区分三种终态：`PHASE 2.2 COMPLETE`（全通过）/ `VM CREATED BUT NOT VERIFIED`（门失败）/ `VM CREATED BUT RECORD OR SNAPSHOT INCOMPLETE`（写入或验收失败），后两者均写入 `completionStatus=incomplete` 记录 | §3 |
+| 11 | 清理过程**逐项记录** VM 定义 / VHDX / 目录的真实状态，失败时按实况报告并停止；**取消固定的「Nothing was deleted」措辞** | §4 |
+| 12 | verify 的启动序检查改为与 create **完全相同的四道门**（设备对象→类型→媒体路径→控制器三元组），任一属性读不到即报 **GAP 并 FAIL**，**不假定 PASS**；AVHDX 枚举也改为失败即报缺口 | §5 |
 
 人工分步执行时的等价命令（**已不再是推荐路径**：手敲单条命令无法复现 rev.3 的计数门与设备身份验证，仅供理解命令语义；**推荐直接用交付脚本**）：
 
@@ -345,9 +362,12 @@ Select-String -LiteralPath $src -Pattern "__FITWISE_TEST_PASSWORD__"   # 必须�
 |---|---|
 | 关机 | **绝不自动强制关机**。脚本内**不存在** `Stop-VM`/`Restart-VM` 命令；VM 非 Off 时直接停止并报告，由你自行决定是否关机。 |
 | 身份校验 | 必须存在 `Evidence\phase2\phase2b-creation-record.json`（创建时写入的**可信记录**），且当前 VM 的**唯一 Id**、名称、Generation、配置路径、VHDX 路径必须与记录一致；记录缺失或不一致 → 停，不删。 |
+| **记录完成度校验（rev.4）** | 记录必须证明「已完成验收」：schema `/2`、关键字段指纹一致（防篡改/损坏）、`completionStatus=complete`、`finalizedUtc` 非空、`bootOrderVerified=true`、`gateFailCount=0`、`gatePassCount=gateTotalCount>0`、`finalState` 与实测 State 一致。**部分创建失败的 VM 一律拒绝清理**（须另交恢复方案）。 |
 | 设备校验 | 0 或 1 块 VHDX（路径＝授权路径且＝记录路径）；所有 DVD 必须指向授权媒体（安装 ISO / autounattend ISO）；**0 网卡**；**无检查点、无 AVHDX 残留**；否则停。 |
-| 递归删除前置 | 先枚举 VM 目录**完整文件清单**并过白名单（`Virtual Hard Disks\Fitwise-091-Test.vhdx`、`Virtual Machines\<vmId>*`），出现任何未知文件/未知子目录/额外 VHDX/日志/备份 → **一个字节都不删**，直接停。 |
-| 删除范围 | 仅三样：VM 定义（`Remove-VM`）、VHDX 文件（显式路径）、VM 目录（白名单通过后递归）。每条删除都做 `Resolve` 后逐字相等校验，**无通配符**。 |
+| 清单白名单（rev.4 收紧） | **闭环精确名单**：`Virtual Hard Disks\Fitwise-091-Test.vhdx` 与 `Virtual Machines\<vmId>.vmcx/.vmrs/.vmgs/.bin`；**不再接受 `<vmId>*` 前缀**（`.vmcx.bak` 这类前缀伪装会被拒）。文件/目录枚举全部 `-ErrorAction Stop`（含 `-Force`），**枚举报错即停、不接受不完整清单**；拒绝 VM 根/目录/文件上的**重解析点/符号链接/junction**；出现任何未知文件、未知目录、额外 VHDX、日志、备份 → **一个字节都不删**。 |
+| TOCTOU 防护（rev.4） | 删除前**二次枚举并逐项比对**（相对路径 + 字节数 + LastWriteTimeUtc），任何漂移即停。 |
+| 删除范围（rev.4） | 仅三样：VM 定义（`Remove-VM`）、清单内每个文件（**逐文件显式删除**，删前再比对元数据、删后确认消失）、**确认为空**的目录（`Virtual Hard Disks` → `Virtual Machines` → VM 根）。**不使用 `Remove-Item -Recurse`**；每条删除都做 `Resolve` 后逐字相等校验；**无通配符**。 |
+| 过程报告（rev.4） | 逐项记录 VM 定义 / VHDX / 目录的真实状态（removed / absent / FAILED / not attempted）；中途失败按**实况**报告并停止，不再固定输出「Nothing was deleted」。 |
 | 永不删除 | 安装 ISO、WebView2 安装包、autounattend 工作副本/ISO、`Evidence` 目录（含 creation-record 与报告）、`Fitwise-091-Smoke`、`Default Switch`、**宿主机证书**、真实轻衡数据库、父目录 `D:\HyperV-QH-Test`（rev.1/rev.2 的 `-IncludeMedia` 参数**已整体移除**，脚本接受 0 个参数）。 |
 | 事后 | 只读复核（VM 消失/VHDX 消失/目录消失/媒体与 Evidence 保留/交换机仍唯一/冒烟 VM 仍 Off/证书数量只读核对/D: 空间回收）+ 把报告写入 `Evidence\phase2\phase2b-cleanup-report-<时间戳>.txt`。 |
 
@@ -426,7 +446,7 @@ Select-String -LiteralPath $src -Pattern "__FITWISE_TEST_PASSWORD__"   # 必须�
 
 ---
 
-## 14. 阶段 2.2 交付清单（2026-10-24：rev.3 已按审核意见修订，**未执行创建**，待重新审核 + 单独批准）
+## 14. 阶段 2.2 交付清单（2026-10-24：rev.4 已按最终代码审查修订，**未执行创建**，待最终复审 + 单独批准）
 
 ### 14.1 交付文件（rev.3，均在 `%TEMP%`，管理员 Windows PowerShell 5.1 执行）
 
@@ -436,7 +456,9 @@ Select-String -LiteralPath $src -Pattern "__FITWISE_TEST_PASSWORD__"   # 必须�
 | `fitwise-hyperv-phase2b-verify.ps1` | rev.3：只读全量复核（含 VM 唯一 Id 与 creation-record 比对、BootOrder 设备身份 dump、证书存储只读清单、AVHDX/检查点检查）；`-HashMedia` 可选重算两个媒体 SHA-256 并与已知值比对。**不写任何文件** | 只读 |
 | `fitwise-hyperv-phase2b-cleanup.ps1` | rev.3：受控回滚。**无参数**（`-IncludeMedia` 已删除）、**无任何关机命令**、创建记录 Id 校验、设备/检查点校验、文件清单白名单、显式路径删除、删后只读复核+报告 | 变更类（仅单独授权后，本轮不得执行） |
 
-脚本自检结果（2026-10-24 rev.3，AI 侧只读核实）：PowerShell Parser 三脚本**均 0 错误**（create 34,786 B / verify 15,702 B / cleanup 17,209 B）；**纯 ASCII（0 个非 ASCII 字节、无 BOM）**；命令行级扫描：create 含 `New-VM`×1、`Set-VMKeyProtector`×1、`Enable-VMTPM`×1、`Set-VMFirmware`×2、`Set-VMMemory`×1、`Set-VMProcessor`×1、`Add-VMDvdDrive`×1、`$nics[0] | Remove-VMNetworkAdapter`×1，**0 处 `Start-VM`/`Stop-VM`/`Remove-VM`/`Remove-Item`/`-Force` on New-VM**；verify **0 处变更类命令**；cleanup 含 `Remove-VM`×1、`Remove-Item`×2（VHDX 显式 + VM 目录白名单后递归），**0 处 `Stop-VM`/`Restart-VM`**；三脚本**0 处通配符删除**（`Remove-Item ... *` 计数 0）；cleanup **无 `param` 块**（不接受任何开关）。
+脚本自检结果（2026-10-24 **rev.4**，AI 侧只读核实）：PowerShell Parser 三脚本**均 0 错误**（create 41,888 B / verify 22,140 B / cleanup 28,683 B）；**纯 ASCII（0 个非 ASCII 字节、无 BOM）**；命令行级扫描：create 含 `New-VM`×1、`Set-VMKeyProtector`×1、`Enable-VMTPM`×1、`Set-VMFirmware`×2、`Set-VMMemory`×1、`Set-VMProcessor`×1、`Add-VMDvdDrive`×1、`$nics[0] | Remove-VMNetworkAdapter`×1，**0 处 `Start-VM`/`Stop-VM`/`Remove-VM`/`Remove-Item`**，`Stop-Transcript` 仅 1 处且在 `$script:transcriptStarted` 守卫内；verify **0 处变更类命令、0 文件写入**；cleanup 含 `Remove-VM`×1、`Remove-Item`×2（逐文件循环 + 逐目录循环），**`Remove-Item -Recurse` 计数 0**、`Stop-VM`/`Restart-VM` 计数 0、**无 `param` 块**；三脚本通配符删除计数 0；清理脚本内 `Get-ChildItem` **无一处 `SilentlyContinue`**（枚举一律 `-ErrorAction Stop`）。
+
+另做两项离机自检（不接触 Hyper-V、不接触测试树）：① **指纹一致性**：同一记录在「创建端（有序哈希表）」与「验证端（JSON 回读对象）」计算的 SHA-256 完全一致；篡改 `gateFailCount`、把 `completionStatus` 改为 incomplete（并清空 `finalizedUtc`）都能被指纹识别。② **白名单逻辑**：在临时目录模拟 Hyper-V 结构，正常结构（2 文件/2 目录）通过；`stray.log`、`Snapshots\`、以及 **`<vmId>.vmcx.bak`（前缀伪装）**全部被识别为越界并拒绝。
 
 ### 14.2 vTPM 与 Secure Boot 配置依据
 
@@ -467,7 +489,7 @@ Select-String -LiteralPath $src -Pattern "__FITWISE_TEST_PASSWORD__"   # 必须�
 
 ### 14.5 创建后清理与恢复方案
 
-- **正常回滚（2.2 状态）**：`fitwise-hyperv-phase2b-cleanup.ps1` **rev.3** → 管理员守卫 → 名称精确 → **creation-record 读取成功且 VM 唯一 Id/名称/Generation/配置路径/VHDX 路径全部一致** → Gen2 → **State 必须 Off（非 Off 即停，无任何关机命令）** → 0/1 块 VHDX 且路径一致 → DVD 全部指向授权媒体 → 0 网卡 → 无检查点/无 AVHDX → Evidence 不重叠 → **文件清单白名单通过** → `Remove-VM` → 显式路径删 VHDX → 递归删 VM 目录 → 只读复核（VM 消失、VHDX/目录消失、媒体保留、Evidence 保留、Default Switch 唯一、冒烟 VM 仍 Off、证书数量只读核对、D: 空间回收）→ 报告写入 Evidence。**不删父目录、不删媒体、不删证书。**
+- **正常回滚（2.2 状态，rev.4 流程）**：`fitwise-hyperv-phase2b-cleanup.ps1` → 管理员守卫 → 名称精确 → **记录存在/可解析/schema `/2`/指纹一致/`completionStatus=complete`/`finalizedUtc` 非空/`bootOrderVerified=true`/`gateFailCount=0`/`gatePassCount=gateTotalCount>0`/`finalState`＝实测 State** → VM Id/名称/Gen/配置路径/VHDX 路径与记录一致 → Gen2 → **State 必须 Off（非 Off 即停，无任何关机命令）** → 0/1 块 VHDX 且路径一致 → DVD 全部指向授权媒体 → 0 网卡 → 无检查点/无 AVHDX → Evidence 不重叠 → **闭环白名单清单 + 枚举遇错即停 + 拒绝重解析点** → **TOCTOU 二次枚举比对** → `Remove-VM` → **逐文件显式删除**（删前比对元数据、删后确认消失）→ **逐目录「确认为空」才删** → 只读复核（VM 消失、VHDX/目录消失、媒体保留、Evidence 保留、Default Switch 唯一、冒烟 VM 仍 Off、证书数量只读核对、D: 空间回收）→ 报告写入 Evidence。**不用 `-Recurse`、不删父目录、不删媒体、不删证书、部分创建一律拒绝。**
 - **安装后（2.3+）重置到干净状态**：按 8.0bis 用基线 VHDX 的整文件克隆场景盘替换（关机→移除当前盘→挂下一场景盘，显式路径），**不用检查点作主路径**。
 - **宿主机全量回滚可证性**：全程宿主机功能/网络/防火墙/驱动/组策略/增强会话零改动；唯一主机侧 artifacts＝VM 相关文件 + vTPM 自动生成的两张本地证书（见 14.2）；`Get-VMSwitch` 前后一致可证。
 
@@ -524,9 +546,9 @@ Select-String -LiteralPath $src -Pattern "__FITWISE_TEST_PASSWORD__"   # 必须�
 5. 若 A（应答文件）失败 → **停止报告**，B/C/D 各需单独授权后才可尝试；
 6. 若全部路径不可行 → 停止并报告，不自行切换第三方镜像（既定边界）。
 
-### 14.10 本轮停止点声明（2026-10-24 rev.3 修订轮）
+### 14.10 本轮停止点声明（2026-10-24 rev.4 修订轮）
 
-仅修改/交付脚本、应答文件与文档。**未**创建 VM/VHDX、**未**启动或停止任何 VM、**未**安装 Windows、**未**运行 WebView2/MSI、**未**执行清理脚本、**未**删除任何文件、**未**访问真实数据库、**未**修改宿主机 Hyper-V 功能/驱动/组策略/网络/交换机、**未**触碰 `Default Switch` 与 `Fitwise-091-Smoke`、**未**改动宿主机证书存储（只读读取已在其上下文内说明）、**未**修改轻衡源码、**未**推送 GitHub/建 tag/Release。等待你重新审核三个脚本并**单独批准**实际创建 `Fitwise-091-Test`。
+仅修改/交付三个脚本与文档。**未**创建 VM/VHDX、**未**启动/停止/删除任何 VM、**未**安装 Windows、**未**运行 WebView2/MSI、**未**执行清理脚本、**未**删除任何文件、**未**访问真实数据库、**未**修改宿主机 Hyper-V 功能/驱动/组策略/网络/交换机、**未**触碰 `Default Switch` 与 `Fitwise-091-Smoke`、**未**写/删宿主机证书、**未**修改轻衡源码与 0.9.0、**未**推送 GitHub/建 tag/Release。AI 侧仅做了三类离机自检：脚本 Parser/ASCII 校验、指纹函数在「哈希表 vs JSON 回读」下的一致性测试、白名单逻辑在临时目录的模拟测试（测试目录用后已删除）。等待你最终复审三个脚本并**单独批准**实际创建 `Fitwise-091-Test`。
 
 ### 14.11 修订回执：密码管理（对应审核 §6）
 
@@ -574,13 +596,38 @@ Select-String -LiteralPath $src -Pattern "__FITWISE_TEST_PASSWORD__"   # 必须�
 
 ### 14.15 修订回执：只读验证脚本（对应审核 §5）
 
-verify rev.3 覆盖：名称 / **唯一 Id vs creation-record** / Generation / State / 配置路径 / VHDX 路径 / **网卡数=0** / DVD 路径 / vTPM / Key Protector（只验存在） / Secure Boot + 模板 / 内存 4/1/8 动态 / vCPU=4 / **启动序设备身份** / Default Switch / 冒烟 VM 原状 / **证书存储只读清单** / **AVHDX 与检查点检查** / 媒体尺寸（`-HashMedia` 时比对已知 SHA-256）。**不含任何变更类命令、不写任何文件**；失败只打印实际值不自动修复。
+verify rev.4 覆盖：名称 / **唯一 Id vs creation-record** / Generation / State / 配置路径 / VHDX 路径 / **网卡数=0** / DVD 路径 / vTPM / Key Protector（只验存在） / Secure Boot + 模板 / 内存 4/1/8 动态 / vCPU=4 / **启动序四道门设备身份（含控制器交叉核对）** / Default Switch / 冒烟 VM 原状 / **证书存储只读清单** / **AVHDX（枚举失败即报 GAP）与检查点检查** / **creation-record 完整性 13 项** / 媒体尺寸（`-HashMedia` 时比对已知 SHA-256）。**不含任何变更类命令、不写任何文件**；失败只打印实际值，读不到属性一律报 GAP 而非假定 PASS。
+
+### 14.16 修订回执：rev.4（最终代码审查 6 组问题逐条落实）
+
+| 审查条目 | rev.4 落实 |
+|---|---|
+| §1 白名单不得凭 `<vmId>*` 前缀 | 改**闭环精确名单**（`.vmcx/.vmrs/.vmgs/.bin` + 精确 VHDX 名）；临时目录自检确认 `.vmcx.bak`、`stray.log`、`Snapshots\` 全部被拒 |
+| §1 枚举遇错必须停止 | `Get-ChildItem` 全部 `-ErrorAction Stop` + `-Force`，包裹 try/catch → `Fail`；cleanup 内已无 `SilentlyContinue` |
+| §1 拒绝重解析点/符号链接/非预期目录与文件 | VM 根、每个目录、每个文件都检查 `ReparsePoint` 属性；目录白名单仅 `Virtual Hard Disks`/`Virtual Machines` |
+| §1 明确允许的 Hyper-V 文件结构 | 明确列出 5 个允许名（1 VHDX + 4 个 vmId 前缀固定的配置/状态文件）；**无法可靠识别即停** |
+| §1 删除前防止清单变化 | **TOCTOU**：二次枚举 + 逐项（相对路径/字节数/LastWriteTimeUtc）比对签名，漂移即停 |
+| §2 清理须记录已完成验收 | 记录必须 `completionStatus=complete`、`finalizedUtc` 非空、`bootOrderVerified=true`、`gateFailCount=0`、`gatePassCount=gateTotalCount>0`、`finalState` 与实测一致 |
+| §2 部分创建失败不得走常规清理 | 明确 `Fail` 文案：「must not be used for a partial creation - submit a separate recovery plan instead」；创建脚本在门失败时写 `completionStatus=incomplete` |
+| §2 记录不得仅凭存在即可信 | schema `/2` + 关键字段 SHA-256 指纹（14 个字段有序拼接）+ 与实测 VM 交叉核对 |
+| §3 仅当 transcript 成功才 Stop | `$script:transcriptStarted` 守卫；`Fail` 与正常结束都走 `Stop-LogIfStarted` |
+| §3 记录写入失败必须 FAIL | `Save-Record` 返回 false → `Fail`（含「VM CREATED BUT THE CREATION RECORD COULD NOT BE FINALIZED」）；快照写入同样硬校验 |
+| §3 快照/记录/验证结果纳入验收 | 新增 Phase 8「final acceptance」15 项（快照字节数、记录可解析、schema、指纹、completionStatus、finalizedUtc、finalState、bootOrderVerified、gate 自洽、vmId、路径） |
+| §3 区分「已创建但验收失败」与「完整成功」 | 三种终态文案：`PHASE 2.2 COMPLETE` / `VM CREATED BUT NOT VERIFIED` / `VM CREATED BUT FINAL ACCEPTANCE FAILED`（快照或记录失败各有专属文案） |
+| §4 不得固定输出 Nothing was deleted | 删除进度三态跟踪（VM 定义 / VHDX / 目录）+ 逐文件日志；失败时打印**实况**并声明「do not assume that nothing was deleted」 |
+| §4 逐项记录是否已删除 | 每项状态取值为 `removed` / `absent` / `FAILED` / `not attempted`；文件级日志逐条记录 |
+| §4 中途失败报告实况并停止 | 任一步失败立即 `Fail`（打印进度 + 报告落 Evidence），**不继续后续步骤**；无自动重建/恢复/猜测 |
+| §5 verify 与 create 同等严格 | 复用**同一份** `Get-BootIdentity`（四道门，含控制器三元组交叉核对）；两侧文本一致 |
+| §5 读不到属性须报缺口不得假定 PASS | 所有缺失分支返回 `GAP: ...` 且 `Ok=$false` → `[FAIL]`；AVHDX 枚举失败也报 GAP 而非「found 0」 |
+| §5 verify 保持只读 | 0 变更命令、0 文件写入（含不在 Evidence 落盘） |
+
+
 
 ---
 
 ## 15. 阶段 2.2 实际创建前最终操作清单（交付第 6 项）
 
-> **前提**：本节只有在「三脚本 rev.3 重新审核通过 + 你单独批准实际创建」之后才可执行。在此之前仅作检查清单浏览。
+> **前提**：本节只有在「三脚本 rev.4 最终复审通过 + 你单独批准实际创建」之后才可执行。在此之前仅作检查清单浏览。
 
 | # | 步骤 | 命令 / 动作 | 期望 |
 |---|---|---|---|
@@ -589,7 +636,7 @@ verify rev.3 覆盖：名称 / **唯一 Id vs creation-record** / Generation / S
 | 3 | 打开**管理员** Windows PowerShell 5.1 | 开始菜单 → Windows PowerShell → 右键「以管理员身份运行」 | 脚本自带管理员守卫，非管理员会直接 `[FAIL]` 退出 |
 | 4 | 确认脚本存在且未被改动 | `Get-FileHash "$env:TEMP\fitwise-hyperv-phase2b-create.ps1" -Algorithm SHA256` | 与本轮交付值一致（见 §16 回执） |
 | 5 | 建议先跑只读验证（VM 尚不存在时应报「VM 不存在」并退出） | `& "$env:TEMP\fitwise-hyperv-phase2b-verify.ps1"` | 输出 `[FAIL] VM 'Fitwise-091-Test' does not exist`，退出码 1，**这是预期**，证明脚本能正常读到环境 |
-| 6 | 执行创建脚本 | `& "$env:TEMP\fitwise-hyperv-phase2b-create.ps1"` | 逐阶段 `[OK]`，最终 `ALL FINAL GATES PASSED` + `PHASE 2.2 COMPLETE` |
+| 6 | 执行创建脚本 | `& "$env:TEMP\fitwise-hyperv-phase2b-create.ps1"` | 逐阶段 `[OK]`，最终 `ALL FINAL GATES PASSED + FINAL ACCEPTANCE PASSED` → `PHASE 2.2 COMPLETE`；若失败，终端会明确打印 `VM CREATED BUT NOT VERIFIED` 或 `VM CREATED BUT ... INCOMPLETE`（不会伪装成功） |
 | 7 | 记录输出 | 脚本会自建 `Evidence\phase2\phase2b-create-<时间戳>.log` / `phase2b-config-<时间戳>.txt` / `phase2b-creation-record.json` | 三个文件齐备 |
 | 8 | 立刻只读复核 | `& "$env:TEMP\fitwise-hyperv-phase2b-verify.ps1"` | `RESULT: PASS`，`failed: 0` |
 | 9 | 确认 VM 未被启动 | `(Get-VM -Name "Fitwise-091-Test").State` | `Off` |
@@ -600,7 +647,8 @@ verify rev.3 覆盖：名称 / **唯一 Id vs creation-record** / Generation / S
 1. **不要**重跑脚本（可能已产生部分状态）；
 2. **不要**手工补配置、不要手工删 VM；
 3. 把三样东西报告回来：①所有 `[FAIL]` 行原文；②若停在 Phase 6，`BootOrder[0]` 的原始 dump；③`Evidence\phase2\` 下对应时间戳的 transcript 路径；
-4. 等新的处置授权（可能是修订后重跑、也可能是按 §9 清理后重建）。
+4. **注意**：只要不是完整的 `PHASE 2.2 COMPLETE`，creation-record 就是 `completionStatus=incomplete`，此时**常规清理脚本会主动拒绝执行**（这是设计行为）——需要另交恢复方案，由你决定下一步；
+5. 等新的处置授权（可能是修订后重跑、也可能是另行批准的恢复方案）。
 
 **脚本成功后的固定动作**：保存 `phase2b-creation-record.json`（含 `vmId`）与 transcript；在验收记录里写下创建日期（评估版 90 天起算点）与 `vmId`；然后停在「等待 2.3 授权」。
 
@@ -608,23 +656,41 @@ verify rev.3 覆盖：名称 / **唯一 Id vs creation-record** / Generation / S
 
 ## 16. 本轮改动文件与本地提交（交付第 7 项）
 
-| 文件 | 本轮变更 |
+| 文件 | 本轮（rev.4）变更 |
 |---|---|
-| `%TEMP%\fitwise-hyperv-phase2b-create.ps1` | **重写为 rev.3**：WRITE-PHASE MAP、`Get-ShieldedCertList`/`Get-CertDelta`/`Get-BootIdentity`、Phase 0/0W/1–8 重构、严格单网卡门、VM 唯一 Id 落盘、证书前后 delta、启动序设备身份门 |
-| `%TEMP%\fitwise-hyperv-phase2b-verify.ps1` | **重写为 rev.3**：VM 唯一 Id 与 creation-record 比对、BootOrder 设备身份 dump + 门、证书存储只读清单、AVHDX/检查点检查、媒体 SHA-256 已知值比对 |
-| `%TEMP%\fitwise-hyperv-phase2b-cleanup.ps1` | **重写为 rev.3**：删除 `-IncludeMedia`（无参数）、删除全部关机命令、creation-record 身份校验、设备/检查点校验、文件清单白名单、删后只读复核 + 报告落 Evidence、不删父目录/媒体/证书 |
-| `PHASE2_AUTOUNATTEND_TEMPLATE_0.9.1.xml` | **rev.3**：新增 `Password`（占位符 + `PlainText=true`，置于 `Name`/`Group` 前），头部补密码策略说明 |
-| `PHASE2_WINDOWS_VM_PREP_PLAN_0.9.1.md` | 状态行、§5（9 阶段 + 7 条 rev.3 修订）、§6.3（模板 rev.3 + 回退路径 B/C/D 重新分级 + 停止纪律）、**新增 §6.6 密码管理**、§7（修正「零改动」措辞）、§9（清理范围收紧）、§14.1/14.2/14.5/14.6/14.8/14.9/14.10 更新、**新增 14.11–14.15 修订回执**、**新增 §15 创建前清单**、本节 |
+| `%TEMP%\fitwise-hyperv-phase2b-create.ps1` | rev.4：`Stop-LogIfStarted` 守卫（仅成功启动才 Stop）、`Get-RecordFingerprint`/`Save-Record`（写入+回读校验）、记录 schema `/2` + 完成度字段 + 指纹、门计数化、门失败与 Phase 6 身份缺口写 `incomplete` 记录、Phase 8 快照硬校验、Phase 8 新增 15 项「最终验收」、三种终态文案 |
+| `%TEMP%\fitwise-hyperv-phase2b-verify.ps1` | rev.4：复用四道门 `Get-BootIdentity`（含控制器交叉核对，缺失即 GAP/FAIL）、记录完整性 13 项门（schema/指纹/completionStatus/finalizedUtc/finalState/bootOrderVerified/门计数/路径）、AVHDX 枚举改 `-ErrorAction Stop` 并报 GAP |
+| `%TEMP%\fitwise-hyperv-phase2b-cleanup.ps1` | rev.4：闭环精确白名单（去掉 `<vmId>*` 前缀）、枚举全部 Stop（无 SilentlyContinue）、拒绝重解析点、TOCTOU 二次枚举比对、**取消 `Remove-Item -Recurse`**（逐文件 + 逐空目录）、记录完成度与指纹校验、三态进度与逐文件日志、失败按实况报告 |
+| `PHASE2_AUTOUNATTEND_TEMPLATE_0.9.1.xml` | 无变更（仍为 rev.3：`Password` 占位符 + `PlainText=true`，置于 `Name`/`Group` 前） |
+| `PHASE2_WINDOWS_VM_PREP_PLAN_0.9.1.md` | 状态行、§5（+12 条 rev.4 修订表）、§9（白名单/TOCTOU/记录完成度/删除范围/过程报告 5 行重写）、§14.1（自检数据与离机自检）、§14.5（rev.4 回滚流程）、**新增 §14.16 rev.4 逐条回执**、§15（前提与期望文案）、本节 |
 | `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md` | 新增 §8.4 修订回执 |
 | `ISOLATION_ACCEPTANCE_PLAN_0.9.1.md` | 第 3 行状态指针更新为「rev.3 已修订，待重新审核」 |
 
-**脚本哈希（§15 第 4 步核对用；日期 2026-10-24）**：
+**脚本哈希（§15 第 4 步核对用；rev.4，2026-10-24）**：
 
 | 文件 | 大小 | SHA-256 |
 |---|---|---|
-| `fitwise-hyperv-phase2b-create.ps1` | 34,786 B | `B3A2672ED60D7897318E82CF37E9BBD1F2F76BE95A6996D56F2EC51AC3F6EB21` |
-| `fitwise-hyperv-phase2b-verify.ps1` | 15,702 B | `5AEB9C9E4FA24163432B24D79AFD4741A6211974AE5785F9184C5ACDCD6D3389` |
-| `fitwise-hyperv-phase2b-cleanup.ps1` | 17,209 B | `5E40403B0F1B2AA28700D0D6A7F659E3AE14F9A35F3E7642195F7CA25B47F385` |
+| `fitwise-hyperv-phase2b-create.ps1` | 41,888 B | `C80CBC90C2DEB400E273C7A57596127AC0275B1E665B068A8BB7CA9BA269A151` |
+| `fitwise-hyperv-phase2b-verify.ps1` | 22,140 B | `8F3BB71B0ABD787C2E67FCEF7348F583148C1A6053944D47F32ED387EC85C754` |
+| `fitwise-hyperv-phase2b-cleanup.ps1` | 28,683 B | `AA188A374AD5690B1BF4787C69491176E8C19DAE5E91DFB20C1C895A6E105C67` |
 
-**未改动**：轻衡源码、数据库、0.9.0 安装产物、`Fitwise-091-Smoke`、`Default Switch`、宿主机功能/网络/驱动/组策略、GitHub 远端（本地提交不推送）。
+**rev.3 → rev.4 修改前后差异摘要（只动审查指出的 6 组，其余逻辑保持）**：
+
+| 位置 | rev.3 | rev.4 |
+|---|---|---|
+| cleanup 白名单 | `Virtual Machines\<vmId>*` 前缀匹配 | 闭环精确名单（4 个固定扩展名 + 精确 VHDX 名），`.vmcx.bak` 之类一律拒绝 |
+| cleanup 枚举 | `Get-ChildItem -Recurse` | 全部 `-ErrorAction Stop -Force` + try/catch，枚举失败即停；拒绝重解析点/符号链接 |
+| cleanup 删除 | `Remove-Item -Recurse`（VM 目录整树） | 逐文件显式 `Remove-Item -LiteralPath`（删前再比对元数据、删后确认消失）+ 逐目录「确认为空」才删；**无 `-Recurse`** |
+| cleanup 清单时效 | 一次枚举后直接删 | 二次枚举 + 名称/字节数/时间戳签名比对（TOCTOU） |
+| cleanup 记录可信度 | 存在 + Id/路径一致即可 | 追加 schema `/2`、指纹一致、`completionStatus=complete`、`finalizedUtc`、`bootOrderVerified`、门计数、`finalState`＝实测 |
+| cleanup 失败文案 | 固定「Nothing was deleted」 | 打印三态进度 + 逐文件日志的**实况**，声明不得假设 |
+| create transcript | 无条件 `Stop-Transcript` | `$script:transcriptStarted` 守卫 |
+| create 记录写入 | 失败只 `Info` 后继续 → 仍打印全通过 | 失败即 `Fail`；快照写入同样硬校验；新增 Phase 8 最终验收 15 项 |
+| create 终态 | 单一成功文案 | 三种终态明确区分（COMPLETE / NOT VERIFIED / RECORD OR SNAPSHOT INCOMPLETE），失败写 `incomplete` 记录 |
+| create 记录字段 | 无完成度/门计数/指纹 | `completionStatus`/`finalizedUtc`/`finalState`/`gatePass|Fail|TotalCount`/`integritySha256`（14 字段有序 SHA-256） |
+| verify 启动序 | 自写简化版（Device 类型 + 路径） | 与 create 完全相同的四道门（含控制器三元组），缺失即 GAP |
+| verify AVHDX | `-ErrorAction SilentlyContinue` | `-ErrorAction Stop`，枚举失败报 GAP 而非「found 0」 |
+| verify 记录 | 只比对 Id/路径 | 追加 13 项完整性门（schema/指纹/completionStatus/finalizedUtc/finalState/bootOrderVerified/门计数/路径） |
+
+**未改动**：轻衡源码、数据库、0.9.0 安装产物、`Fitwise-091-Smoke`、`Default Switch`、宿主机功能/网络/驱动/组策略、应答文件模板、GitHub 远端（本地提交不推送）。
 
