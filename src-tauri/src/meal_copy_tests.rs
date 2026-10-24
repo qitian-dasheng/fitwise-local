@@ -303,6 +303,57 @@ fn copy_meal_from_an_explicit_source_without_entries_is_reported() {
 }
 
 #[test]
+fn copy_meal_pins_the_original_food_version_after_a_library_revision() {
+    let mut connection = connection();
+    execute_with_connection(
+        &mut connection,
+        request(
+            "copy-food-seed",
+            "save_food_definition",
+            food_payload(),
+            Some(bootstrap()),
+        ),
+    )
+    .unwrap();
+    let recorded = execute_with_connection(
+        &mut connection,
+        request(
+            "copy-food-meal",
+            "record_food_meal",
+            json!({"date":"2026-10-21","type":"breakfast","entries":[{"foodVersionId":"food-version-copy-food-seed","quantity":50,"unit":"g"}]}),
+            None,
+        ),
+    )
+    .unwrap();
+    let original = meals_of(&recorded.state, "2026-10-21", "breakfast")[0].clone();
+    // 食材修订：active 版本热量翻倍，但已记录餐食的口径不得被改写。
+    let mut revision = food_payload();
+    revision["foodId"] = json!("food-copy-food-seed");
+    revision["expectedVersionId"] = json!("food-version-copy-food-seed");
+    revision["input"]["nutrients"]["calories"] = json!(800);
+    execute_with_connection(
+        &mut connection,
+        request("copy-food-revise", "revise_food_definition", revision, None),
+    )
+    .unwrap();
+
+    // 显式来源日期照搬：整条快照（含食材版本与营养）原样带过去。
+    let copied = copy_meal(
+        &mut connection,
+        "copy-food-copy",
+        json!({"date":"2026-10-22","type":"breakfast","sourceDate":"2026-10-21"}),
+        None,
+    )
+    .unwrap();
+    assert_eq!(copied.result["sourceDate"], "2026-10-21");
+    let copy = meals_of(&copied.state, "2026-10-22", "breakfast")[0].clone();
+    assert_eq!(copy["foodVersionId"], "food-version-copy-food-seed");
+    assert_eq!(copy["nutrition"], original["nutrition"]);
+    assert_eq!(copy["foodSnapshot"], original["foodSnapshot"]);
+    assert_eq!(copy["nutrition"]["calories"]["value"].as_f64(), Some(200.0));
+}
+
+#[test]
 fn copy_meal_replay_is_idempotent() {
     let mut connection = connection();
     execute_with_connection(

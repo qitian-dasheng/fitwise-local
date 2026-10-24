@@ -17,7 +17,7 @@ import type {
 import { enqueueDomainCommand, executeDomainCommand, type DomainCommandKind } from "../data/domainCommands";
 import { appStorage, flushAppStorageWrites, isTauriRuntime, reportStorageFailure, suppressNextAppStorageWrite } from "../data/storage";
 import { foodMealEntries, saveFoodInState } from "../domain/foodLibrary";
-import { mealCopySource, mealLabels } from "../domain/meals";
+import { mealCopySource, mealCopySourceOn, mealLabels } from "../domain/meals";
 import { diaryToday } from "../domain/diary";
 import {
   BODY_FAT_MAX_PERCENT,
@@ -253,21 +253,19 @@ export const useAppStore = create<AppStore>()(
         if (input.sourceDate) payload.sourceDate = input.sourceDate;
         if (isTauriRuntime()) return submit("copy_meal", payload, commandId);
 
-        // 预览分支与 Rust 同口径：目标餐次必须空着、来源取最近一天、批次引用不跟过来。
+        // 预览分支与 Rust 同口径：目标餐次必须空着；来源默认取最近一天，
+        // 用户显式选了历史日期时按选定日期取（旧实现固定取最近再比对，选历史日期必错）。
         if (input.date > diaryToday()) return { error: "不能照搬到未来的日期。" };
         const state = get();
         const targetHasEntry = activeMeals(state.meals).some(
           (entry) => entry.date === input.date && entry.type === input.type,
         );
         if (targetHasEntry) return { error: `${mealLabels[input.type]}已有记录，先编辑或作废再照搬。` };
-        const source = mealCopySource(state.meals, input.type, input.date);
-        if (input.sourceDate) {
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(input.sourceDate)) return { error: "来源日期必须为有效的 YYYY-MM-DD。" };
-          if (!source || source.date !== input.sourceDate) {
-            return { error: `${input.sourceDate} 没有${mealLabels[input.type]}记录。` };
-          }
-        }
-        if (!source) return { error: `之前还没有${mealLabels[input.type]}记录，先记一次再照搬。` };
+        if (input.sourceDate && !/^\d{4}-\d{2}-\d{2}$/.test(input.sourceDate)) return { error: "来源日期必须为有效的 YYYY-MM-DD。" };
+        const source = input.sourceDate
+          ? mealCopySourceOn(state.meals, input.type, input.sourceDate)
+          : mealCopySource(state.meals, input.type, input.date);
+        if (!source) return { error: input.sourceDate ? `${input.sourceDate} 没有${mealLabels[input.type]}记录。` : `之前还没有${mealLabels[input.type]}记录，先记一次再照搬。` };
 
         const now = new Date().toISOString();
         const entryIds: string[] = [];

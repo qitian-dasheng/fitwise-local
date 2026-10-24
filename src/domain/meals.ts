@@ -34,19 +34,14 @@ export interface MealCopySource {
 }
 
 /**
- * 「照搬上次」的来源：目标日期之前、同餐次、仍然有效的记录里，取最近的一天。
+ * 显式来源日期的照搬来源：目标日期之前不再隐含“取最近”，
+ * 由调用方把用户选定的日期传进来；当天没有有效记录返回 null。
  *
  * 只看有效记录：作废或已被更正的条目不能被抄成新记录，否则一次误操作会顺着复制扩散。
  */
-export function mealCopySource(
-  meals: MealEntry[],
-  type: MealType,
-  before: string,
-): MealCopySource | null {
-  const candidates = activeMeals(meals).filter((entry) => entry.type === type && entry.date < before);
-  if (!candidates.length) return null;
-  const date = candidates.reduce((latest, entry) => (entry.date > latest ? entry.date : latest), candidates[0].date);
-  const entries = candidates.filter((entry) => entry.date === date);
+export function mealCopySourceOn(meals: MealEntry[], type: MealType, date: string): MealCopySource | null {
+  const entries = activeMeals(meals).filter((entry) => entry.type === type && entry.date === date);
+  if (!entries.length) return null;
   let calories: number | null = 0;
   for (const entry of entries) {
     const value = entry.nutrition.calories;
@@ -57,4 +52,14 @@ export function mealCopySource(
     calories += value.value * entryRatio(entry);
   }
   return { date, entries, calories: calories === null ? null : Math.round(calories) };
+}
+
+/**
+ * 「照搬上次」的来源：目标日期之前、同餐次、仍然有效的记录里，取最近的一天。
+ */
+export function mealCopySource(meals: MealEntry[], type: MealType, before: string): MealCopySource | null {
+  const candidates = activeMeals(meals).filter((entry) => entry.type === type && entry.date < before);
+  if (!candidates.length) return null;
+  const date = candidates.reduce((latest, entry) => (entry.date > latest ? entry.date : latest), candidates[0].date);
+  return mealCopySourceOn(meals, type, date);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mealCopySource } from "../src/domain/meals";
+import { mealCopySource, mealCopySourceOn } from "../src/domain/meals";
 import { nutrition } from "../src/domain/calculations";
 import type { MealEntry } from "../src/domain/types";
 
@@ -84,5 +84,34 @@ describe("mealCopySource 照搬来源", () => {
     const source = mealCopySource([unknown], "breakfast", "2026-10-22");
     expect(source?.calories).toBeNull();
     expect(source?.entries).toHaveLength(1);
+  });
+});
+
+describe("mealCopySourceOn 显式来源日期", () => {
+  const meals = [
+    entry({ id: "a", date: "2026-10-18" }),
+    entry({ id: "b", date: "2026-10-20" }),
+    entry({ id: "c", date: "2026-10-21" }),
+  ];
+
+  it("按选定日期取，不默认取最近", () => {
+    const source = mealCopySourceOn(meals, "breakfast", "2026-10-18");
+    expect(source?.date).toBe("2026-10-18");
+    expect(source?.entries.map((item) => item.id)).toEqual(["a"]);
+  });
+
+  it("当天没有有效记录时返回 null", () => {
+    expect(mealCopySourceOn(meals, "breakfast", "2026-10-19")).toBeNull();
+    expect(mealCopySourceOn(meals, "breakfast", "2026-10-22")).toBeNull();
+    expect(mealCopySourceOn(meals, "lunch", "2026-10-20")).toBeNull();
+  });
+
+  it("跳过作废与被更正的条目", () => {
+    const source = mealCopySourceOn(
+      [entry({ id: "void", date: "2026-10-20", status: "void" })],
+      "breakfast",
+      "2026-10-20",
+    );
+    expect(source).toBeNull();
   });
 });
