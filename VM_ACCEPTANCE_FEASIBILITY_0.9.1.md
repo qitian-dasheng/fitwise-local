@@ -10,7 +10,7 @@
 
 | 问题 | 结论 |
 |---|---|
-| 宿主机具备完整 Windows 虚拟机条件吗？ | **具备，且 Hyper-V 平台已安装**：`vmms` 服务运行中、PowerShell 模块 2.0.0.0、Hyper-V 管理器 GUI、全部来宾集成服务、WMI 提供程序均可用。**当前没有任何虚拟机和虚拟交换机**。 |
+| 宿主机具备完整 Windows 虚拟机条件吗？ | **具备，且 Hyper-V 平台已安装**：`vmms` 服务运行中、PowerShell 模块 2.0.0.0、Hyper-V 管理器 GUI、全部来宾集成服务、WMI 提供程序均可用。**当前没有任何虚拟机**；有 1 个系统原有 **Default Switch（Internal）**，属既有组件，严禁修改、删除或连接（第 8 节回执）。 |
 | 虚拟机验收可行吗？ | **可行，且是当前隔离强度最高的路线**（可同时覆盖 MSI 安装验收，这是免安装路线做不到的）。 |
 | 是宿主机零改动吗？ | **不是**。创建 VM 本身就是新增系统配置（见第 4 节完整清单）；虚拟交换机、内存分配、（若发现平台组件不全时的）功能启用+重启都是实际改动。 |
 | Sandbox 失败会影响完整 VM 吗？ | **不构成失败证据**（故障层不同：沙盒客户端类 RDP 会话 vs Gen2 VM 固件启动路径），但共享层故障无法排除 → 先用「无盘启动冒烟」降险，失败即停。 |
@@ -30,7 +30,7 @@
 | 管理组件 | Hyper-V PowerShell 模块 | 已安装 **2.0.0.0**（Get-VM 报权限错误=平台在位但需管理员，非未安装） | `Get-Module -ListAvailable` |
 | | Hyper-V 管理器 / vmconnect | `virtmgmt.msc`、`vmconnect.exe` 均存在 | `Test-Path` |
 | 已有虚拟机 | 数量 | **0**（WMI `Msvm_ComputerSystem` 仅 1 条=宿主自身「JR」；早前误显示的「JR」是本机计算机名，不是 VM） | `Get-CimInstance root\virtualization\v2` |
-| 虚拟交换机 | 数量 | **0** | `Msvm_VirtualEthernetSwitch` 计数 0 |
+| 虚拟交换机 | 数量 | **1**：`Default Switch`（Internal，**系统原有组件**） | 提权 `Get-VMSwitch` 实测（2026-10-24 第 1 步回执，第 8 节）；此前非提权 WMI `Msvm_VirtualEthernetSwitch` 计数 0，与该枚举途径不显示 Default Switch 有关，**以提权实测为准** |
 | 虚拟化状态 | HypervisorPresent | **True**；systeminfo：「已检测到虚拟机监控程序」 | `Win32_ComputerSystem` / systeminfo |
 | | VBS（基于虚拟化的安全性） | **状态：正在运行**；SecurityServicesRunning=2（内存完整性/HVCI） | systeminfo / DeviceGuard WMI |
 | | hypervisorlaunchtype | bcdedit 无覆盖行（默认行为） | `bcdedit /enum` |
@@ -54,14 +54,14 @@
 
 ### 3.2 管理组件、虚拟化服务、已有 VM 与交换机状态 —— 见第 2 节表
 
-要点：平台在位；**VM 数=0、交换机数=0**；默认 VM 存储路径为 `C:\ProgramData\Microsoft\Windows\Hyper-V\`（尚未创建，建议改用自选路径便于识别与清理）。
+要点：平台在位；**VM 数=0**；**交换机数=1（`Default Switch`，Internal，系统原有组件，严禁修改/删除/连接）**；默认 VM 存储路径为 `C:\ProgramData\Microsoft\Windows\Hyper-V\`（尚未创建，建议改用自选路径便于识别与清理）。
 
 ### 3.3 创建测试 VM 需要改变宿主机什么 —— 明确非零改动清单
 
 | # | 改动 | 说明 | 可逆性 |
 |---|---|---|---|
 | 1 | 创建 VM 定义 + VHDX | 写入默认或自选路径（建议 `D:\HyperV-QH-Test`，D: 928 GB 可用） | 删 VM+VHDX 即还原 |
-| 2 | 新建 1 个虚拟交换机 | **只建 Internal 或 Private**（不碰物理网卡）；**严禁 External**（会绑定宿主网卡、改宿主网络） | 删除交换机即还原 |
+| 2 | 新建 1 个虚拟交换机 | **只建 Internal 或 Private**（不碰物理网卡）；**严禁 External**（会绑定宿主网卡、改宿主网络）；**严禁触碰现有 `Default Switch`**（系统原有组件，第 8 节） | 删除自建交换机即还原 |
 | 3 | 资源分配 | Gen2、4 vCPU、动态内存（启动 2048 MB / 最小 1024 MB / 最大 6144 MB） | 随 VM 删除消失 |
 | 4 | （条件性）启用功能 + 重启 | **仅当**提权确认发现平台组件不完整时；当前证据倾向已完整，大概率不需要 | 禁用+重启还原 |
 | 5 | （不采用）增强会话模式 | 默认不开启（避免改 Hyper-V 主机设置）；用 vmconnect 标准会话 | 若误开可关 |
@@ -158,7 +158,8 @@
 | 评估版 90 天有效期 | 低 | 测试周期足够；记录安装日期；到期删 VM |
 | 宿主 TPM 只读未确认 | 低 | vTPM 不需宿主 TPM；若 Win11 评估版装不上再退回 Win10 评估版 |
 | VM 内误操作（挂入宿主磁盘/映射真实目录） | 中 | 3.6 节硬性禁止清单；所有 VM 配置命令 AI 预审后交你执行 |
-| Default Switch 阶段来宾可经网关到达宿主 IP | 低 | 全程不开宿主文件共享；隔离阶段一律 Private |
+| 现有 `Default Switch` 被误改/误删/误连 | 中 | **硬性规则：严禁修改、删除或连接 `Default Switch`**（系统原有组件，非本轮创建；后续如需联网阶段另建自建交换机，与此开关无关） |
+| Default Switch 阶段来宾可经网关到达宿主 IP | 低 | 全程不开宿主文件共享；隔离阶段一律 Private（且不得改用/连接 Default Switch 替代） | 
 
 ---
 
@@ -177,3 +178,28 @@
 ## 7. 边界声明
 
 本轮全程：未创建虚拟机、未启用任何系统功能、未安装软件、未下载镜像、未启动候选程序、未修改源码、未执行 MSI、未读取/复制/修改真实数据库、未操作正式版 0.9.0、未推送 GitHub/未创建 tag 或 Release。所有宿主机状态均为只读查询所得；「已验证事实」均给出处，无法只读确认的项已明确标注（第 2 节末）。
+
+---
+
+## 8. 阶段 1 第 1 步实测回执（2026-10-24，用户管理员终端执行）
+
+**结论：GO**（脚本 `%TEMP%\fitwise-hyperv-phase1-confirm.ps1` 输出，用户回贴）：
+
+| 核查项 | 结果 |
+|---|---|
+| Hyper-V 平台功能 | **Enabled**（4 项 feature 全部启用，无需再启用功能/重启） |
+| 虚拟机管理服务 | 正常 |
+| 同名测试 VM | **无冲突** |
+| 现有虚拟机 | **VM count = 0** |
+| 虚拟交换机 | **1 个：`Default Switch`（Internal）——系统原有组件** |
+| 测试目录 | `D:\HyperV-QH-Test` 当前**不存在**（第 2 步脚本自动创建） |
+| D: 可用空间 | **928.5 GB**（充足） |
+| 脚本判定 | **GO**：平台 Enabled、服务正常、无名称冲突、空间充足 |
+
+**宿主机事实记录更新（据此修订第 2 节表）**：
+
+1. **`Default Switch` 已存在，类型 Internal，属系统原有组件，严禁修改、删除或连接**。此前非提权 WMI `Msvm_VirtualEthernetSwitch` 计数为 0，该枚举途径不显示 Default Switch；以本次提权 `Get-VMSwitch` 实测为准。
+2. VM 数仍为 0；`D:\HyperV-QH-Test` 尚不存在（冒烟脚本会创建）；D: 928.5 GB 可用。
+3. Hyper-V 平台组件已完整 Enabled → 第 3.3 节改动清单第 4 行（条件性启用功能+重启）**确认不需要**。
+
+**冒烟脚本相应调整（第 2 步，用户 2026-10-24 要求）**：取消「固定 25 秒后自动强制关机」；改为创建并启动后**等待用户自行观察固件画面**（脚本内 `Read-Host` 阻塞等待），观察确认并截图后按回车记录证据；**VM 保持运行，由用户单独执行关机命令**；第 3 步受控清理脚本不变（含「非 Off 状态先强制关机」守卫）。其余隔离边界（Gen2、无盘、无网卡、无交换机连接、无映射、无增强会话）不变。

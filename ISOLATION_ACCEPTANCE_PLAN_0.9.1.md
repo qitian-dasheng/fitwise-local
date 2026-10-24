@@ -1,6 +1,6 @@
 # 轻衡 0.9.1｜候选版本完整性检查与隔离安装验收方案
 
-日期：2026-10-24｜范围：只读核查 + 隔离方案设计｜状态：**等待审核，尚未执行任何安装**；Sandbox 路线已判定失败并停止（见 `SANDBOX_DIAGNOSIS_0.9.1.md` 第九节）；路线 D（免安装+环境变量隔离）经只读分析判定不可行（环境变量不改变 `SHGetKnownFolderPath` 解析，见 `ROUTE_D_NO_INSTALL_FEASIBILITY_0.9.1.md`），已按用户决定正式停止；**当前评估对象＝完整 Windows 虚拟机路线**（只读评估完成，见 `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md》，等待用户批准阶段 1 冒烟验证）。
+日期：2026-10-24｜范围：只读核查 + 隔离方案设计｜状态：**尚未执行任何安装**；Sandbox 路线已判定失败并停止（见 `SANDBOX_DIAGNOSIS_0.9.1.md` 第九节）；路线 D（免安装+环境变量隔离）经只读分析判定不可行（环境变量不改变 `SHGetKnownFolderPath` 解析，见 `ROUTE_D_NO_INSTALL_FEASIBILITY_0.9.1.md`），已按用户决定正式停止；**当前评估对象＝完整 Windows 虚拟机路线**（只读评估完成，见 `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md`）。**阶段 1 第 1 步（提权只读确认）已执行，结果 GO**：VM=0、系统原有 `Default Switch`（Internal，严禁修改/删除/连接）、`D:\HyperV-QH-Test` 不存在、D: 928.5 GB 可用、平台 Enabled（回执见 VM 评估报告第 8 节）。**阶段 1 第 2 步冒烟脚本已按用户要求修订为交互式观察版（不自动关机，VM 留待用户单独关机），等待用户执行。**
 
 ---
 
