@@ -1,6 +1,6 @@
 # 轻衡 0.9.1｜阶段 2：Windows 虚拟机环境准备方案
 
-日期：2026-10-24｜状态：**阶段 2.1 已完成；阶段 2.2 脚本已按 rev.5 复审修订为 rev.6（create/verify 的查询严格区分「成功返回零项」与「查询失败」，失败一律 GAP/FAIL；Phase 8.2 改为真实回读磁盘记录；cleanup 本轮未改），未执行任何创建/启动/停止/删除/安装动作，待最终复审后单独批准实际创建**；2.3 安装 Windows、轻衡 MSI 均未批准；不访问真实数据库。前置事实：Hyper-V 阶段 1 冒烟**已通过**（回执见 `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md` 第 8.1/8.2 节）。
+日期：2026-10-24｜状态：**阶段 2.1 已完成；静态修订已结束（脚本 rev.6）；现转入阶段 2.2 受控实机执行，第一步＝只读预检（`fitwise-hyperv-phase2b-preflight.ps1`，零写入，§17）——预检通过后创建仍需单独批准**；未执行任何创建/启动/停止/删除/安装动作；2.3 安装 Windows、轻衡 MSI 均未批准；不访问真实数据库。前置事实：Hyper-V 阶段 1 冒烟**已通过**（回执见 `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md` 第 8.1/8.2 节）。
 
 ---
 
@@ -758,4 +758,80 @@ verify rev.4 覆盖：名称 / **唯一 Id vs creation-record** / Generation / S
 历史差异：rev.4 → rev.5 见 14.17，rev.3 → rev.4 见 14.16。
 
 **未改动**：轻衡源码、数据库、0.9.0 安装产物、`Fitwise-091-Smoke`、`Default Switch`、宿主机功能/网络/驱动/组策略、应答文件模板、GitHub 远端（本地提交不推送）。
+
+---
+
+## 17. 阶段 2.2 受控实机执行｜第一步：只读预检（2026-10-24 交付）
+
+### 17.1 这一步做什么、不做什么
+
+| 项 | 内容 |
+|---|---|
+| 交付物 | `%TEMP%\fitwise-hyperv-phase2b-preflight.ps1`（13,865 B，SHA-256 `6487CCC6F007F1BFF733A422E5441EFD902EF6D827C7865A5FBA3C89D1B0947B`） |
+| 性质 | **纯只读**。不创建/修改/删除任何 VM、VHDX、目录、文件、transcript、日志 |
+| 与 create.ps1 的关系 | 阈值与目标常量与 `create.ps1 rev.6` 的 PHASE 0 **完全一致**；唯一差别是：create 遇首个失败即停（它马上要改动系统），预检则**跑完全部检查并汇总所有问题** |
+| 为什么单独做一步 | 预检通过 ⇒ create 的 PHASE 0 必然通过；把「发现问题」与「开始改动」彻底分开，避免因环境问题产生半个 VM |
+| 执行者 | 你本人，在**管理员** Windows PowerShell 5.1 中运行（AI 会话无提权） |
+
+### 17.2 运行方式
+
+```powershell
+# 1) 开始菜单搜索 Windows PowerShell → 右键"以管理员身份运行"（窗口标题应含"管理员"）
+
+# 2) 运行只读预检（可选加 -HashMedia 复算两个媒体的 SHA-256，约 1-2 分钟）
+& "$env:TEMP\fitwise-hyperv-phase2b-preflight.ps1"
+
+#    若要留一份报告（这是你自己的动作，只写到你的 TEMP，不写测试树）：
+& "$env:TEMP\fitwise-hyperv-phase2b-preflight.ps1" *> "$env:TEMP\phase2b-preflight.txt"
+```
+
+### 17.3 预检的 11 组检查与期望值
+
+| # | 检查 | 通过条件（预期） |
+|---|---|---|
+| 1 | 权限与模块 | 管理员身份；Hyper-V 模块存在；`vmms` 服务 Running |
+| 2 | VM 清单 | `Get-VM` 查询**成功**（逐台打印名称/代次/状态/Id） |
+| 3 | 目标 VM 不存在 | `Fitwise-091-Test` 匹配数 = 0 |
+| 4 | 目标路径空闲 | `D:\HyperV-QH-Test\Fitwise-091-Test` 与其下 `.vhdx` 均不存在 |
+| 5 | 测试树现状（信息项） | 列出 `D:\HyperV-QH-Test` 内容；`Evidence\phase2` 应为**不存在**（由 PHASE 0W 创建） |
+| 6 | 媒体文件 | ISO 8,548,628,480 B；WebView2 214,823,632 B（`-HashMedia` 时再比对 SHA-256） |
+| 7 | 冒烟 VM 原状 | `Fitwise-091-Smoke` 恰好 1 台、Gen2、Off、**0 网卡 / 0 硬盘 / 0 DVD**（三项查询均须成功） |
+| 8 | 交换机与隔离 | 恰好 1 个交换机＝`Default Switch`（Internal）；**全机无任何 VM 网卡连接交换机** |
+| 9 | 磁盘空间 | D: 可用 ≥ 100 GB |
+| 10 | 宿主机证书存储 | 可读，记录张数与 guardian 相关张数（vTPM 前后 delta 的基线） |
+| 11 | 汇总 | `passed / failed / verification gaps` + 逐条 `[GAP]` / `[FAIL]` |
+
+### 17.4 结果判读
+
+| 结果 | 含义与下一步 |
+|---|---|
+| `RESULT: PREFLIGHT PASS`（退出码 0） | 环境就绪。把输出贴回来；随后**需你单独批准**创建，我才会给执行指令 |
+| 出现 `[GAP]` | 某项查询失败（多为没在管理员窗口运行，或 Hyper-V 服务异常）→ **不视为通过**，按 GAP 行排查 |
+| 出现 `[FAIL]` | 该项实际不符合条件（目标 VM 已存在／媒体尺寸不符／D: 空间不足／冒烟 VM 被改等）→ 报告后逐项处理，**不要自行绕过** |
+
+### 17.5 AI 侧非提权预演（2026-10-24 23:15，仅证明脚本可运行，**不是预检结果**）
+
+本会话无提权，Hyper-V 查询必然失败，因此这次运行只用于确认「脚本能完整跑完并正确判读」。可采集到的环境事实：
+
+| 项 | 观察值 |
+|---|---|
+| PowerShell | 5.1.26100.9711 |
+| Hyper-V 模块 / vmms | 2.0.0.0 已安装 / Running |
+| 测试树 `D:\HyperV-QH-Test` | 已存在，含 `Evidence`、`Media`、`Fitwise-091-Smoke`（冒烟 VM 的配置目录） |
+| `Evidence\phase2` | **不存在**（符合预期，由 PHASE 0W 创建） |
+| 目标 VM 目录 / VHDX | 均**不存在**（符合预期） |
+| ISO / WebView2 字节数 | 8,548,628,480 / 214,823,632 —— 与预期**完全一致** |
+| D: 可用 | **920.3 GB**（≥100 GB 门已满足） |
+| 宿主机证书存储 | 可读，**0 张**（vTPM 启用后预期 +2 张 guardian 证书） |
+| 汇总 | `passed 9 / failed 8 / gaps 2`；8 个 FAIL 与 2 个 GAP **全部来自未提权导致的 Hyper-V 查询失败** |
+
+### 17.6 预检之后的顺序（尚未授权）
+
+1. 你提权运行预检 → 把输出贴回；
+2. 我核对每项实际值，给出「可创建／需先修复」结论；
+3. **你单独批准创建** → 才执行 `fitwise-hyperv-phase2b-create.ps1`（PHASE 0/0W/1–8；Phase 7 全门 + Phase 8 预验收/提交/确认全过才算完成）；
+4. 创建后立即只读复核 `fitwise-hyperv-phase2b-verify.ps1`；
+5. 停在「等待 2.3 授权」——安装 Windows 与轻衡 MSI 仍未批准。
+
+**本步边界**：预检不写任何文件、不建目录、不起 VM；AI 侧未创建/启动/停止/删除任何 VM 或 VHDX，未向 `D:\HyperV-QH-Test` 写入任何内容。
 
