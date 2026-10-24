@@ -321,3 +321,21 @@ rev.4 复审确认了脚本来源（SHA-256 对照），但指出 3 组问题。
 **脚本哈希（rev.5）**：create 51,149 B `D1EB24F4…EEB341C1`；verify 22,140 B `8F3BB71B…EC85C754`（本轮未改）；cleanup 29,886 B `307F5935…D9097A8F`。Parser 0 错误、纯 ASCII。
 
 **未执行（本轮停止点）**：未创建/启动/停止/删除任何 VM 或 VHDX、未安装 Windows/WebView2/轻衡、未执行清理脚本、未删文件、未改宿主机功能/交换机/驱动/组策略/网络、未写删证书、未读真实库、未改 0.9.0/源码、未推送 GitHub、**未向 `D:\HyperV-QH-Test` 写入任何内容**（测试仅在 `%TEMP%`）。**等待最终复审。**
+
+### 8.7 阶段 2.2 rev.6 只读查询失败门控回执（2026-10-24，仍未执行）
+
+rev.5 复审确认三项主要修复已落实，本轮只处理"查询失败被当作空结果"这一遗留问题，**未重构创建/清理流程、未降低 BootOrder 控制器身份检查、未改清理白名单**：
+
+| 审查条目 | rev.6 落实 |
+|---|---|
+| 1 排查 create/verify 中的 `SilentlyContinue` 查询 | create 21 处、verify 14 处全部清除；正文 **0 处**（仅头部注释提及该词） |
+| 2 四个 cmdlet 及其他影响 PASS/FAIL 的查询须区分「零项」与「失败」 | 统一包装器：`Get-CheckedList`/`Find-VmChecked`/`Get-CheckedOne`（create）与 `Invoke-CheckedQuery`/`Invoke-CheckedOne`（verify），用 `Ok` 标志与 `Items`/`Item` 显式区分；包装器**不向管道写字符串**，避免返回值被污染（本轮实测发现并修正） |
+| 3 查询失败必须 GAP/FAIL | create：catch 即 `Fail`；verify：`Ok=False` → GAP 计数 + 所有依赖门显式要求 `$q.Ok`；汇总打印 gap 清单 |
+| 4 Smoke VM 0/0/0 同规则 | 三项查询经 `Get-CheckedList`，失败即停；成功且各 0 项才判通过 |
+| 5 Phase 8.2 须真实回读磁盘记录 | 改为 `Get-Content + ConvertFrom-Json` 回读并断言 `completionStatus=incomplete`/`vmId` 一致/`finalizedUtc` 为空；内存标志标注「MEMORY STATE ONLY, not evidence」 |
+| 6 保持四阶段流程 / BootOrder 严格度 / 清理白名单 | 均未改动；**cleanup 文件哈希与 rev.5 完全相同** |
+| 7 查询异常与正常零结果的离机测试 | 三份脚手架（create 包装器、verify 包装器、磁盘回读）均已运行：零结果不停止/不失败、异常使进程退出码 1、同为 Count=0 时 `Ok` 决定门结论、磁盘篡改后回读门=False 而内存判断仍=True |
+
+**脚本哈希（rev.6）**：create 57,608 B `E073FD94…23F3DCC2`；verify 27,153 B `F517B540…7B3F5132`；cleanup 29,886 B `307F5935…D9097A8F`（未改）。Parser 0 错误、纯 ASCII。
+
+**未执行（本轮停止点）**：未创建/启动/停止/删除任何 VM 或 VHDX、未安装任何软件、未执行清理脚本、未删文件、未改宿主机任何设置、未写删证书、未读真实库、未改 0.9.0/源码、未推送 GitHub；离机测试仅在 `%TEMP%` 完成并清理。**等待最终复审。**

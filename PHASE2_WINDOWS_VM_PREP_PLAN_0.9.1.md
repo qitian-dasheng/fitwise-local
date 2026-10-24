@@ -1,6 +1,6 @@
 # 轻衡 0.9.1｜阶段 2：Windows 虚拟机环境准备方案
 
-日期：2026-10-24｜状态：**阶段 2.1 已完成；阶段 2.2 三个脚本已按 rev.4 实码复审修订为 rev.5（最终状态一致性：记录 `complete` 只在预验收通过后提交、transcript 失败即停、清理查询异常即停），verify 本轮未改动；未执行任何创建/启动/停止/删除/安装动作，待最终复审后单独批准实际创建**；2.3 安装 Windows、轻衡 MSI 均未批准；不访问真实数据库。前置事实：Hyper-V 阶段 1 冒烟**已通过**（回执见 `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md` 第 8.1/8.2 节）。
+日期：2026-10-24｜状态：**阶段 2.1 已完成；阶段 2.2 脚本已按 rev.5 复审修订为 rev.6（create/verify 的查询严格区分「成功返回零项」与「查询失败」，失败一律 GAP/FAIL；Phase 8.2 改为真实回读磁盘记录；cleanup 本轮未改），未执行任何创建/启动/停止/删除/安装动作，待最终复审后单独批准实际创建**；2.3 安装 Windows、轻衡 MSI 均未批准；不访问真实数据库。前置事实：Hyper-V 阶段 1 冒烟**已通过**（回执见 `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md` 第 8.1/8.2 节）。
 
 ---
 
@@ -120,6 +120,18 @@
 | 6 | 报告**日志路径与收尾结果**（`transcript CLOSED: <path>` / `CLOSE FAILED` / 未启动） | §2 |
 | 7 | 清理脚本中所有参与删除判断的 Hyper-V 查询改经 `Get-CheckedList`（`-ErrorAction Stop` + try/catch）：`Get-VM`（枚举）、`Get-VMHardDiskDrive`、`Get-VMDvdDrive`、`Get-VMNetworkAdapter`、`Get-VMSnapshot`，事后核对用 `Get-VMSwitch`；**查询异常即停，绝不当作 0 盘 / 0 网卡 / 0 检查点 / VM 不存在** | §3 |
 | 8 | 删除前打印显式边界：「ALL SAFETY CHECKS COMPLETE … Nothing has been deleted yet」——检查未完成前不执行任何删除 | §3 |
+
+**rev.6 修订（2026-10-24 rev.5 复审，只读查询失败门控补强）**：
+
+| # | rev.6 修订 | 对应审查条目 |
+|---|---|---|
+| 1 | create 内新增 `Get-CheckedList` / `Find-VmChecked` / `Get-CheckedOne`，verify 内新增 `Invoke-CheckedQuery` / `Invoke-CheckedOne`：**「查询成功返回零项」= 空数组（门按 0 判定）**；**「查询本身失败」= 硬停 / GAP（门必失败）** | §1 §2 §3 |
+| 2 | create 与 verify 中 `-ErrorAction SilentlyContinue` **全部清除**（脚本正文 0 处，仅头部注释提及该词）；所有影响 PASS/FAIL 的 Hyper-V 查询改经上述包装器 | §1 |
+| 3 | **Smoke VM 的零网卡/零硬盘/零 DVD 检查**改经 `Get-CheckedList`：三项查询必须成功且各返回 0 项，才判「0/0/0」 | §4 |
+| 4 | 顺带堵住几处「失败即假装通过」：**删除网卡后的 `NIC=0` 复核**、Phase 7 的 `NIC=0` 门、全机适配器扫描、`Get-VMSnapshot`、`Get-VMSwitch`、boot 身份里的固件/DVD 查询（后两者失败时返回 `GAP: …` 而非「空」） | §2 §3 |
+| 5 | **Phase 8.2 改为真实回读磁盘记录**：`Get-Content + ConvertFrom-Json` 读回 `phase2b-creation-record.json`，断言 `completionStatus=incomplete`、`vmId` 一致、`finalizedUtc` 为空；内存标志那一行**明确标注为「MEMORY STATE ONLY, not evidence」** | §5 |
+| 6 | Phase 8 四阶段流程、BootOrder 控制器四道门、cleanup 白名单与全部清理逻辑**未改动**（cleanup 文件哈希与 rev.5 相同） | §6 |
+| 7 | verify 汇总新增 `verification gaps: N` 与逐条 `[GAP]` 清单，便于复盘「哪些查询没查到」 | §3 |
 
 人工分步执行时的等价命令（**已不再是推荐路径**：手敲单条命令无法复现 rev.3 的计数门与设备身份验证，仅供理解命令语义；**推荐直接用交付脚本**）：
 
@@ -461,7 +473,7 @@ Select-String -LiteralPath $src -Pattern "__FITWISE_TEST_PASSWORD__"   # 必须�
 
 ---
 
-## 14. 阶段 2.2 交付清单（2026-10-24：rev.5 已按 rev.4 实码复审修订，**未执行创建**，待最终复审 + 单独批准）
+## 14. 阶段 2.2 交付清单（2026-10-24：rev.6 已按 rev.5 复审修订，**未执行创建**，待最终复审 + 单独批准）
 
 ### 14.1 交付文件（rev.3，均在 `%TEMP%`，管理员 Windows PowerShell 5.1 执行）
 
@@ -471,16 +483,19 @@ Select-String -LiteralPath $src -Pattern "__FITWISE_TEST_PASSWORD__"   # 必须�
 | `fitwise-hyperv-phase2b-verify.ps1` | rev.3：只读全量复核（含 VM 唯一 Id 与 creation-record 比对、BootOrder 设备身份 dump、证书存储只读清单、AVHDX/检查点检查）；`-HashMedia` 可选重算两个媒体 SHA-256 并与已知值比对。**不写任何文件** | 只读 |
 | `fitwise-hyperv-phase2b-cleanup.ps1` | rev.3：受控回滚。**无参数**（`-IncludeMedia` 已删除）、**无任何关机命令**、创建记录 Id 校验、设备/检查点校验、文件清单白名单、显式路径删除、删后只读复核+报告 | 变更类（仅单独授权后，本轮不得执行） |
 
-脚本自检结果（2026-10-24 **rev.5**，AI 侧只读核实）：PowerShell Parser 三脚本**均 0 错误**（create 51,149 B / verify 22,140 B **本轮未修改** / cleanup 29,886 B）；**纯 ASCII（0 个非 ASCII 字节、无 BOM）**；命令行级扫描：create 含 `New-VM`×1、`Set-VMKeyProtector`×1、`Enable-VMTPM`×1、`Set-VMFirmware`×2、`Set-VMMemory`×1、`Set-VMProcessor`×1、`Add-VMDvdDrive`×1、`$nics[0] | Remove-VMNetworkAdapter`×1，**0 处 `Start-VM`/`Stop-VM`/`Remove-VM`/`Remove-Item`**；`Start-Transcript` **1 处**（失败即 `Fail`，且校验日志文件存在）、`Stop-Transcript` **1 处**（在 `Stop-LogIfStarted` 内，受 `$script:transcriptStarted` 保护）；`Save-Record "complete"` **全脚本仅 1 处**，位于预验收之后；verify **0 处变更类命令、0 文件写入**；cleanup 含 `Remove-VM`×1、`Remove-Item`×2（逐文件 + 逐目录），**`Remove-Item -Recurse` 实际调用 0 处**（仅头部注释提及）、`Stop-VM`/`Restart-VM` 0 处、**无 `param` 块**；`Get-CheckedList` **7 处**调用（VM 枚举 ×2、硬盘、DVD、网卡、检查点、交换机）；三脚本通配符删除 0；cleanup 与 verify 内 `Get-ChildItem` **无一处 `SilentlyContinue`**。
+脚本自检结果（2026-10-24 **rev.6**，AI 侧只读核实）：PowerShell Parser 三脚本**均 0 错误**（create 57,608 B / verify 27,153 B / cleanup 29,886 B **本轮未修改**）；**纯 ASCII（0 个非 ASCII 字节、无 BOM）**；`-ErrorAction SilentlyContinue` **三脚本正文 0 处**（仅 create/verify 头部注释提到该词）；create 仍 0 处 `Start-VM`/`Stop-VM`/`Remove-VM`/`Remove-Item`、`Save-Record "complete"` 仅 1 处（预验收之后）、`Start-Transcript` 1 处（失败即 Fail）、`Stop-Transcript` 1 处（守卫内）；verify 仍 **0 变更命令、0 文件写入**；cleanup 仍 `Remove-VM`×1、`Remove-Item`×2、实际 `-Recurse` 0、`Stop-VM`/`Restart-VM` 0、无 `param` 块；查询包装器调用点：create 32 处、verify 16 处、cleanup 9 处。
 
-离机自检（不接触 Hyper-V、不接触测试树；脚本内的函数由 AST 从源文件原样提取执行，保证与交付代码同源）：
+离机自检（不接触 Hyper-V、不接触测试树；脚本内函数由 AST 从源文件**原样提取**执行，保证与交付代码同源）：
 
 | 自检 | 结果 |
 |---|---|
-| **记录状态顺序**（模拟预验收失败） | 初始记录 `incomplete` → 预验收失败后仍为 `incomplete` + 原因，文件中**不存在** `"completionStatus": "complete"` 字面量；指纹自洽 |
-| **提交后可回退**（模拟读回确认失败） | 先写 `complete` 成功，再模拟确认失败 → 回退写 `incomplete` 成功，磁盘上**不残留错误的 complete** |
-| **损坏记录不可信** | 截断的 JSON 无法解析（清理端会拒绝）；篡改 `gateFailCount` 后指纹不匹配（可检出） |
-| **查询异常即停** | 四个 cmdlet（VMHardDiskDrive / VMDvdDrive / VMNetworkAdapter / VMSnapshot）在真实权限异常下**全部路由到 `Fail`**，消息含 cmdlet 名 + "stopping BEFORE any deletion"；真实 `Fail` 使进程退出码 = 1；非抛错查询与空结果分别正常返回 3 / 0 项（空结果不被误判为异常） |
+| **create：成功查询 + 零结果** | `Get-CheckedList` 返回 0 项、`Find-VmChecked` 返回 0 匹配，脚本**继续执行**（零结果是真实数据，不是异常）；带 1/2/3 项的查询分别返回 1/1/3，`Get-CheckedOne` 正常返回 42 |
+| **create：查询抛异常** | `Find-VmChecked` 立即 `Fail`，进程**退出码 1**，且 `UNREACHABLE` 分支未被执行（失败值**没有**以空数组泄漏出去） |
+| **verify：零结果 vs 查询失败** | 同为 `Items.Count=0` 的两种情况：查询成功时门表达式 `(Ok -and Count -eq 0)` = **True**；查询失败时 `Ok=False` → 同一门表达式 = **False**（GAP 不会被当成 0 通过）；gap 计数正确累加为 2，单对象包装器失败时 `Item=$null` |
+| **记录状态顺序（rev.5 复测保留）** | 预验收失败后磁盘记录仍 `incomplete`；提交成功后模拟确认失败可回退为 `incomplete`；截断不可解析、篡改字段指纹不匹配 |
+| **Phase 8.2 磁盘回读（本轮新增）** | 回读门读到 `incomplete` → True；把**磁盘文件**里的状态改成 `complete`（内存仍为 `incomplete`）后，回读门变 False，而「仅看内存」的判断仍会是 True——证明该门确实读盘、不是看内存 |
+| **查询异常即停（cleanup，rev.5 复测保留）** | 四个 cmdlet 在真实权限异常下全部路由到 `Fail`，真实 `Fail` 退出码 1 |
+| **白名单逻辑（rev.4 复测保留）** | 正常结构通过；`stray.log`、`Snapshots\`、`<vmId>.vmcx.bak` 均被拒 |
 
 ### 14.2 vTPM 与 Secure Boot 配置依据
 
@@ -568,9 +583,9 @@ Select-String -LiteralPath $src -Pattern "__FITWISE_TEST_PASSWORD__"   # 必须�
 5. 若 A（应答文件）失败 → **停止报告**，B/C/D 各需单独授权后才可尝试；
 6. 若全部路径不可行 → 停止并报告，不自行切换第三方镜像（既定边界）。
 
-### 14.10 本轮停止点声明（2026-10-24 rev.5 修订轮）
+### 14.10 本轮停止点声明（2026-10-24 rev.6 修订轮）
 
-仅修改/交付 create 与 cleanup 两个脚本及文档（verify 本轮未改）。**未**创建 VM/VHDX、**未**启动/停止/删除任何 VM、**未**安装 Windows、**未**运行 WebView2/MSI、**未**执行清理脚本、**未**删除任何文件、**未**访问真实数据库、**未**修改宿主机 Hyper-V 功能/驱动/组策略/网络/交换机、**未**触碰 `Default Switch` 与 `Fitwise-091-Smoke`、**未**写/删宿主机证书、**未**修改轻衡源码与 0.9.0、**未**推送 GitHub/建 tag/Release。AI 侧离机自检共 4 类：Parser/ASCII 校验、记录状态顺序（预验收失败/提交回退/截断/篡改）、查询异常路由与退出码、白名单逻辑（前一轮）。所有测试均在 `%TEMP%` 临时目录内完成并已清理，未向 `D:\HyperV-QH-Test` 写入任何内容。等待最终复审并**单独批准**实际创建 `Fitwise-091-Test`。
+仅修改/交付 create 与 verify 两个脚本及文档（cleanup 本轮未改）。**未**创建 VM/VHDX、**未**启动/停止/删除任何 VM、**未**安装 Windows、**未**运行 WebView2/MSI、**未**执行清理脚本、**未**删除任何文件、**未**访问真实数据库、**未**修改宿主机 Hyper-V 功能/驱动/组策略/网络/交换机、**未**触碰 `Default Switch` 与 `Fitwise-091-Smoke`、**未**写/删宿主机证书、**未**修改轻衡源码与 0.9.0、**未**推送 GitHub/建 tag/Release。AI 侧离机自检共 7 类（见 §14.1 表），其中本轮新增 3 类：create 查询包装器（零结果 vs 异常）、verify 查询包装器（同为 Count=0 时 Ok 决定门结论）、Phase 8.2 磁盘回读 vs 内存状态。全部在 `%TEMP%` 完成并清理，**未向 `D:\HyperV-QH-Test` 写入任何内容**。等待最终复审并**单独批准**实际创建 `Fitwise-091-Test`。
 
 ### 14.11 修订回执：密码管理（对应审核 §6）
 
@@ -662,6 +677,18 @@ verify rev.4 覆盖：名称 / **唯一 Id vs creation-record** / Generation / S
 | 检查完成前不执行任何删除 | 所有查询、清单、TOCTOU 均在删除序列之前；删除前打印「ALL SAFETY CHECKS COMPLETE … Nothing has been deleted yet」 | 源码顺序 + 该边界输出 |
 | 不降低 BootOrder 控制器身份检查标准 | `Get-BootIdentity` 四道门未改动（控制器三元组缺失仍判 GAP → FAIL） | create 与 verify 两侧函数体保持一致 |
 
+### 14.18 修订回执：rev.6（rev.5 复审：只读查询失败门控）
+
+| 审查要求 | rev.6 落实 | 证明方式 |
+|---|---|---|
+| §1 检查 create/verify 中参与安全门与验收的 `SilentlyContinue` 查询 | 全量排查并清除：create 21 处、verify 14 处 → **正文 0 处**（仅头部注释提及该词） | `grep -n "ErrorAction SilentlyContinue"` 仅命中两行注释 |
+| §2 四个 cmdlet 及影响 PASS/FAIL 的查询须区分「零项」与「失败」 | 统一包装器：create 的 `Get-CheckedList`/`Find-VmChecked`/`Get-CheckedOne`、verify 的 `Invoke-CheckedQuery`/`Invoke-CheckedOne`（`Ok` 标志 + `Items`/`Item`） | 离机测试：同为 `Count=0`，`Ok=True` 与 `Ok=False` 产生相反的门的结论 |
+| §3 查询失败必须 GAP 或 FAIL，不得靠空集合/空对象/默认值 PASS | create：包装器 catch 直接 `Fail`（硬停）；verify：`Ok=False` → 记录 GAP + 所有依赖门显式要求 `$q.Ok`，汇总打印 `verification gaps: N` 与逐条 `[GAP]` | 离机测试 A2（退出码 1、无值泄漏）、B3（门=False）、B4（`Item=$null`） |
+| §4 Smoke VM 0/0/0 检查同规则 | 三项查询改经 `Get-CheckedList`，查询失败即停；成功且各为 0 才判通过，输出明确写「queries succeeded, zero items each」 | 源码 + 门文案 |
+| §5 Phase 8.2 须真实回读磁盘记录 | 新增 `Get-Content + ConvertFrom-Json` 回读，断言 `completionStatus=incomplete`、`vmId` 一致、`finalizedUtc` 为空；内存标志那行改标 **MEMORY STATE ONLY, not evidence** | 离机测试：磁盘被篡改为 complete 后回读门=False，而内存判断仍=True |
+| §6 保持四阶段流程 / BootOrder 严格验证 / 清理白名单不变 | Phase 8 结构、`Get-BootIdentity`、cleanup 全文未改（cleanup 哈希与 rev.5 完全相同） | 哈希对比 |
+| §7 查询异常与正常零结果分别做离机模拟 | 三份测试脚手架（create 包装器 / verify 包装器 / 磁盘回读）全部在 `%TEMP%` 运行后删除 | 见 §14.1 自检表 |
+
 
 
 ---
@@ -697,38 +724,38 @@ verify rev.4 覆盖：名称 / **唯一 Id vs creation-record** / Generation / S
 
 ## 16. 本轮改动文件与本地提交（交付第 7 项）
 
-| 文件 | 本轮（rev.5）变更 |
+| 文件 | 本轮（rev.6）变更 |
 |---|---|
-| `%TEMP%\fitwise-hyperv-phase2b-create.ps1` | rev.5：Phase 8 四段化（快照→预验收→提交→读回确认）；预验收失败写 incomplete 并停在预验收；`complete` 只在预验收后提交；提交/确认失败回退写 incomplete 并 `[WARN]` 提示记录不可信；`Start-Transcript` 失败在 `New-VM` 前 `Fail` 并校验日志文件；`Stop-LogIfStarted` 报告日志路径与收尾结果 |
-| `%TEMP%\fitwise-hyperv-phase2b-verify.ps1` | **本轮未修改**（本轮 3 组问题不涉及 verify；启动序四道门与记录完整性 13 项门保持 rev.4） |
-| `%TEMP%\fitwise-hyperv-phase2b-cleanup.ps1` | rev.5：新增 `Get-CheckedList`（`-ErrorAction Stop` + try/catch → `Fail`）；`Get-VM` 改枚举+名称过滤；`Get-VMHardDiskDrive`/`Get-VMDvdDrive`/`Get-VMNetworkAdapter`/`Get-VMSnapshot` 全部改经它，事后核对用 `Get-VMSwitch`；删除前打印安全检查完成边界 |
+| `%TEMP%\fitwise-hyperv-phase2b-create.ps1` | rev.6：新增 `Get-CheckedList`/`Find-VmChecked`/`Get-CheckedOne`；Phase 0 冒烟 VM（含 0/0/0 三项查询）、Phase 1–7 全部查询改经包装器；删除网卡后的 `NIC=0` 复核与 Phase 7 的 `NIC=0` 门不再可能被查询失败误判为通过；boot 身份内的固件/DVD 查询失败返回 `GAP:`；Phase 8.2 改为真实回读磁盘记录并把内存检查标注为 memory-only |
+| `%TEMP%\fitwise-hyperv-phase2b-verify.ps1` | rev.6：新增 `Invoke-CheckedQuery`/`Invoke-CheckedOne`（`Ok`+`Items`/`Item`，且**不向管道写字符串**以免污染返回值）；Get-VM 改枚举、固件/安全/Key Protector/硬盘/DVD/网卡/快照/交换机/全机适配器扫描全部改经包装器；媒体 stat 与哈希也改为失败即 GAP；汇总输出 gap 清单 |
+| `%TEMP%\fitwise-hyperv-phase2b-cleanup.ps1` | **本轮未修改**（哈希与 rev.5 相同） |
 | `PHASE2_AUTOUNATTEND_TEMPLATE_0.9.1.xml` | 无变更（仍为 rev.3） |
-| `PHASE2_WINDOWS_VM_PREP_PLAN_0.9.1.md` | 状态行、§5（+8 条 rev.5 修订表）、§9（+查询异常处理/记录提交顺序 2 行）、§14.1（自检数据与 4 项离机自检）、**新增 §14.17 rev.5 逐条回执**、§15（期望文案）、§16（新哈希 + rev.4→rev.5 差异） |
+| `PHASE2_WINDOWS_VM_PREP_PLAN_0.9.1.md` | 状态行、§5（+7 条 rev.6 修订表）、§14.1（自检数据 + 7 行离机自检表）、**新增 §14.18 rev.6 逐条回执**、§14.10（停止点）、§16（新哈希 + rev.5→rev.6 差异） |
 | `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md` | 新增 §8.4 修订回执 |
 | `ISOLATION_ACCEPTANCE_PLAN_0.9.1.md` | 第 3 行状态指针更新为「rev.3 已修订，待重新审核」 |
 
-**脚本哈希（§15 第 4 步核对用；rev.5，2026-10-24）**：
+**脚本哈希（§15 第 4 步核对用；rev.6，2026-10-24）**：
 
 | 文件 | 大小 | SHA-256 |
 |---|---|---|
-| `fitwise-hyperv-phase2b-create.ps1` | 51,149 B | `D1EB24F45E195545BA6C5B1096B894829D949D90E42C60EBEC14F856EEB341C1` |
-| `fitwise-hyperv-phase2b-verify.ps1` | 22,140 B | `8F3BB71B0ABD787C2E67FCEF7348F583148C1A6053944D47F32ED387EC85C754`（与 rev.4 相同，本轮未改） |
-| `fitwise-hyperv-phase2b-cleanup.ps1` | 29,886 B | `307F59356253954EE24F897CFA452028735B58A6530F7E24A975F332D9097A8F` |
+| `fitwise-hyperv-phase2b-create.ps1` | 57,608 B | `E073FD94244773110C3FB81610CAB84242B67B6EDE0A0D808A1E8BD823F3DCC2` |
+| `fitwise-hyperv-phase2b-verify.ps1` | 27,153 B | `F517B540A856EE985A18E7884F7976DFF209670449D111E9BA1BFDB37B3F5132` |
+| `fitwise-hyperv-phase2b-cleanup.ps1` | 29,886 B | `307F59356253954EE24F897CFA452028735B58A6530F7E24A975F332D9097A8F`（与 rev.5 相同，本轮未改） |
 
-**rev.4 → rev.5 修改前后差异摘要（只动审查指出的 3 组）**：
+**rev.5 → rev.6 修改前后差异摘要（只动查询门控与 Phase 8.2 回读）**：
 
-| 位置 | rev.4 | rev.5 |
+| 位置 | rev.5 | rev.6 |
 |---|---|---|
-| Phase 8 顺序 | 先 `Save-Record "complete"` 再做 15 项最终验收 → 验收失败时磁盘已是 complete | **四段化**：8.1 快照(写) → 8.2 预验收(只读，记录仍 incomplete 并被断言) → 8.3 提交 `complete`（唯一写入点，位于预验收之后）→ 8.4 读回确认(只读) |
-| 失败时记录状态 | 预验收路径可能留下 complete | 8.2 失败 → 写 incomplete + 原因；8.3/8.4 失败 → 回退写 incomplete + 原因；回退也失败则 `[WARN]` 记录不可信 |
-| 循环依赖 | 验收项依赖 complete 记录 | 拆成「配置与证据预验收」（不依赖记录状态）与「最终记录提交确认」（只校验刚写入内容） |
-| transcript 失败 | 打印提示后继续创建 | **在 `New-VM` 之前 `Fail`**；并校验日志文件存在；`PHASE 0W` 明确「nothing has been created yet」 |
-| transcript 收尾报告 | 只报「已关闭/未启动」 | 明确输出路径与结果：`transcript CLOSED: <path>` / `CLOSE FAILED (...) - file: <path>` / `was NOT started (intended path: <path>)` |
-| 清理的磁盘/网卡/检查点查询 | `-ErrorAction SilentlyContinue`（异常会被读成 0） | 全部经 `Get-CheckedList`（`-ErrorAction Stop` + try/catch → `Fail`），异常即停 |
-| 清理的 VM 存在性查询 | `Get-VM -Name ... -ErrorAction SilentlyContinue`（异常会被读成「VM 不存在」） | 枚举 `Get-VM -ErrorAction Stop` + 名称过滤：枚举失败即停，找不到才视为不存在；同名多台也停 |
-| 删除前边界 | 无显式声明 | 打印「ALL SAFETY CHECKS COMPLETE … Nothing has been deleted yet」 |
+| 查询写法 | 21 处（create）/14 处（verify）`-ErrorAction SilentlyContinue` | 全部改经包装器或 `-ErrorAction Stop` + try/catch；正文 **0 处** `SilentlyContinue` |
+| 删除网卡后的 `NIC=0` 复核 | 查询失败 → 0 项 → **判定通过** | 查询失败 → `Fail` 停止（`Get-CheckedList`），不再可能假通过 |
+| Phase 7 的 `NIC=0` 门 / 全机适配器扫描 | 查询失败 → 0 项 → **门通过** | 包装器失败即停；verify 侧改为 `Ok=False` → 门必失败 |
+| Smoke VM 0/0/0（§4） | 三项查询 `SilentlyContinue`，失败 = 0 = 通过 | 三项查询经 `Get-CheckedList`；必须成功且各 0 项才通过 |
+| `Get-VMSnapshot` / `Get-VMSwitch` | `SilentlyContinue` | 包装器；verify 里 enumerations 失败报 GAP |
+| boot 身份内的固件/DVD 查询 | `SilentlyContinue`（失败被描述为「返回 nothing」） | try/catch + `GAP: ... query failed` 明确区分 |
+| Phase 8.2 的记录状态断言 | 只查内存 `$record.completionStatus`，标签却写 on-disk | `Get-Content + ConvertFrom-Json` **真实回读磁盘**并断言；内存那行改标「MEMORY STATE ONLY, not evidence」 |
+| verify 输出 | 只有 passed/failed | 追加 `verification gaps: N` + 逐条 `[GAP]` 清单 |
 
-历史差异（rev.3 → rev.4）见 14.16，此处不重复。
+历史差异：rev.4 → rev.5 见 14.17，rev.3 → rev.4 见 14.16。
 
 **未改动**：轻衡源码、数据库、0.9.0 安装产物、`Fitwise-091-Smoke`、`Default Switch`、宿主机功能/网络/驱动/组策略、应答文件模板、GitHub 远端（本地提交不推送）。
 
