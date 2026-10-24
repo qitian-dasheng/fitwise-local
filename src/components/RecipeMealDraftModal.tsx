@@ -168,6 +168,7 @@ export function RecipeMealDraftModal({
         <button className="button primary wide" disabled={action.busy || !ready || !date || date > diaryToday()} onClick={confirm}>
           <UtensilsCrossed size={15} /> {action.busy ? "正在保存…" : `确认写入 ${included} 项食物`}
         </button>
+        <p className="form-hint">保存失败会保留草稿，可直接重试。若应用异常终止，重开后请先核对目标餐次再决定是否重记；万一重复，用条目「作废」移除并留痕。</p>
         {!ready && <p className="form-hint">至少保留一项可带入的原料，并修正数量后才能确认。</p>}
       </div>
     </Modal>

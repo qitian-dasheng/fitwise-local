@@ -86,8 +86,9 @@ export function RecipeEditor({ recipe, copyMode = false, onClose, onSaved }: {
             {rows.map((row, index) => {
               const version = state.foodDefinitionVersions.find(v => v.id === row.foodVersionId);
               const food = state.foodDefinitions.find(f => f.id === version?.foodId);
+              // 新选原料不列归档食材；本行已选的历史版本即使所属食材已归档也保留可选。
               const versions = state.foodDefinitionVersions.filter(v => state.foodDefinitions.some(f =>
-                f.id === v.foodId && (f.activeVersionId === v.id || v.id === row.foodVersionId)));
+                f.id === v.foodId && ((f.activeVersionId === v.id && !f.archived) || v.id === row.foodVersionId)));
               return <section className="recipe-ingredient-editor" key={row.key}>
                 <div className="card-heading compact">
                   <h3>原料 {index + 1}{food?.name || row.sourceName ? ` · ${food?.name ?? row.sourceName}` : ""}</h3>

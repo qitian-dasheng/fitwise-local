@@ -1,6 +1,6 @@
 import { diaryToday, type DiaryDateProps } from "../domain/diary";
 import { DiaryDateControl } from "../components/DiaryDateControl";
-import { BookOpen, ChefHat, Plus, ShieldCheck, UtensilsCrossed } from "lucide-react";
+import { BookOpen, ChefHat, Library, Plus, ShieldCheck, UtensilsCrossed } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { MealEntry, RecipeVersion, MealType } from "../domain/types";
 import { useAppStore } from "../store/appStore";
@@ -31,6 +31,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
   const [copyRecipe,setCopyRecipe]=useState(false);
   const [recipeDrawer,setRecipeDrawer]=useState(false);
   const [recipeMealOpen,setRecipeMealOpen]=useState(false);
+  const [libraryOpen,setLibraryOpen]=useState(false);
   const [showSodium,setShowSodium]=useState(readDiaryShowSodium);
   const [mealOpen, setMealOpen] = useState(false);
   const [copyTarget, setCopyTarget] = useState<{ type: MealType; source: MealCopySource } | null>(null);
@@ -70,7 +71,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
 
   return (
     <div className="page food-page">
-      <PageHeader eyebrow="实际摄入" title="饮食日记" description="新食物确认一次规格，以后选择食物、填写吃了多少，自动计算营养。" action={<button className="button primary" onClick={() => openMeal()}><Plus size={17} /> 添加食物</button>} />
+      <PageHeader eyebrow="实际摄入" title="饮食日记" description="新食物确认一次规格，以后选择食物、填写吃了多少，自动计算营养。" action={<div className="card-heading-actions"><button className="button primary" onClick={() => openMeal()}><Plus size={17} /> 添加食物</button><button className="button secondary" onClick={() => setLibraryOpen(true)}><Library size={17} /> 食材库管理</button></div>} />
       <DiaryDateControl date={date} onChange={onDateChange}/>
       <p className="form-hint">补录或新增餐食会把该日重新标为待核对，请在日报再次确认完成。</p>
       <MealDiaryTable
@@ -142,6 +143,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
       />}
 
       {recipeMealOpen && recipe && <RecipeMealDraftModal recipe={recipe} initialType="breakfast" initialDate={date} onClose={() => setRecipeMealOpen(false)} onRecorded={onDateChange} />}
+      {libraryOpen && <FoodLibraryModal catalogOnly onClose={() => setLibraryOpen(false)} onManual={() => undefined} />}
 
       {correction&&<MealCorrectionModal meal={correction.meal} mode={correction.mode} onClose={()=>setCorrection(null)} onSaved={onDateChange}/>}
       {copyTarget && <CopyMealModal date={today} type={copyTarget.type} source={copyTarget.source} onClose={() => setCopyTarget(null)} />}

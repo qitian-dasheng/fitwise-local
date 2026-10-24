@@ -76,6 +76,10 @@ struct Definition {
     measurement_basis: String,
     active_version_id: String,
     favorite: bool,
+    /// 归档：从日常挑选入口隐藏，历史记录与菜谱快照不受影响。
+    /// 旧数据缺省 false；0.9.0 读取时忽略该字段、回写时原样保留。
+    #[serde(default)]
+    archived: bool,
     created_at: String,
 }
 
@@ -208,6 +212,58 @@ fn portion(version: &Version, quantity: f64, unit: FoodUnit) -> Result<Value, St
     Ok(json!({"nutrition":nutrition,"factor":factor,"basisQuantity":basis_quantity}))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FoodIdentityInput {
+    name: String,
+    brand: Option<String>,
+    measurement_basis: String,
+}
+
+/// 全量引用扫描：餐食（含作废/被更正条目）+ 菜谱（全部版本）。
+/// 「当前日记看不到」不等于没有引用——作废条目和旧菜谱版本都带引用。
+fn food_references(state: &Map<String, Value>, food_id: &str) -> Result<Vec<String>, String> {
+    let version_ids: BTreeSet<String> = array(state, "foodDefinitionVersions")?
+        .iter()
+        .filter(|version| version["foodId"].as_str() == Some(food_id))
+        .filter_map(|version| version["id"].as_str().map(str::to_owned))
+        .collect();
+    let mut references = Vec::new();
+    for meal in array(state, "meals")? {
+        let hit = meal["foodDefinitionId"].as_str() == Some(food_id)
+            || meal["foodSnapshot"]["definition"]["id"].as_str() == Some(food_id)
+            || meal["foodVersionId"]
+                .as_str()
+                .is_some_and(|id| version_ids.contains(id));
+        if hit {
+            references.push(format!(
+                "餐食 {} {}",
+                meal["date"].as_str().unwrap_or("未知日期"),
+                meal["name"].as_str().unwrap_or("未命名")
+            ));
+        }
+    }
+    for recipe in array(state, "recipes")? {
+        let name = recipe["name"].as_str().unwrap_or("未命名菜谱");
+        let number = recipe["version"].as_u64().unwrap_or(0);
+        let hit = recipe["ingredients"]
+            .as_array()
+            .ok_or("菜谱原料缺失。")?
+            .iter()
+            .any(|ingredient| {
+                ingredient["foodId"].as_str() == Some(food_id)
+                    || ingredient["foodSnapshot"]["definition"]["id"].as_str() == Some(food_id)
+                    || ingredient["foodVersionId"]
+                        .as_str()
+                        .is_some_and(|id| version_ids.contains(id))
+            });
+        if hit {
+            references.push(format!("菜谱 {name} v{number}"));
+        }
+    }
+    Ok(references)
+}
+
 fn selected(state: &Map<String, Value>, version_id: &str) -> Result<(Definition, Version), String> {
     let raw = array(state, "foodDefinitionVersions")?
         .iter()
@@ -318,6 +374,7 @@ pub(crate) fn apply(
                     measurement_basis: input.measurement_basis,
                     active_version_id: version_id.clone(),
                     favorite: false,
+                    archived: false,
                     created_at: now.clone(),
                 };
                 array_mut(state, "foodDefinitions")?
@@ -345,6 +402,104 @@ pub(crate) fn apply(
                 .ok_or("找不到食物。")?;
             definition["favorite"] = json!(favorite);
             json!({})
+        }
+        "set_food_archived" => {
+            let food_id = payload_str(payload, "foodId")?;
+            let archived = payload
+                .get("archived")
+                .and_then(Value::as_bool)
+                .ok_or("必须指定归档状态。")?;
+            let definition = array_mut(state, "foodDefinitions")?
+                .iter_mut()
+                .find(|food| food["id"] == food_id)
+                .ok_or("找不到食物。")?;
+            // 只翻归档开关：不动营养版本、收藏与任何历史记录（同 set_food_favorite 模式）。
+            definition["archived"] = json!(archived);
+            json!({"foodId": food_id, "archived": archived})
+        }
+        "delete_food" => {
+            let food_id = payload_str(payload, "foodId")?;
+            let definition = array(state, "foodDefinitions")?
+                .iter()
+                .find(|food| food["id"] == food_id)
+                .ok_or("找不到食物。")?
+                .clone();
+            let references = food_references(state, food_id)?;
+            if !references.is_empty() {
+                return Err(format!(
+                    "该食物仍被 {} 处记录引用（如 {}），不能永久删除；可改用归档，从日常挑选中隐藏但保留历史。",
+                    references.len(),
+                    references[0]
+                ));
+            }
+            let versions: Vec<Value> = array(state, "foodDefinitionVersions")?
+                .iter()
+                .filter(|version| version["foodId"].as_str() == Some(food_id))
+                .cloned()
+                .collect();
+            if versions.is_empty() {
+                return Err("食材缺少营养版本，数据异常，已终止删除。".into());
+            }
+            // 同一事务内完成删除与级联；被删完整内容放进 result，经审计与导出可手工恢复。
+            array_mut(state, "foodDefinitions")?
+                .retain(|food| food["id"] != food_id);
+            array_mut(state, "foodDefinitionVersions")?
+                .retain(|version| version["foodId"].as_str() != Some(food_id));
+            json!({
+                "foodId": food_id,
+                "deletedDefinition": definition,
+                "deletedVersions": versions,
+            })
+        }
+        "correct_food_identity" => {
+            let food_id = payload_str(payload, "foodId")?;
+            let input: FoodIdentityInput = serde_json::from_value(
+                payload.get("input").cloned().ok_or("缺少食材身份资料。")?,
+            )
+            .map_err(|error| format!("食材身份资料无效：{error}"))?;
+            if input.name.trim().is_empty()
+                || input.name.chars().count() > 120
+                || input
+                    .brand
+                    .as_ref()
+                    .is_some_and(|brand| brand.chars().count() > 120)
+            {
+                return Err("食物名称不能为空，名称和品牌最多 120 个字符。".into());
+            }
+            let definition = array(state, "foodDefinitions")?
+                .iter()
+                .find(|food| food["id"] == food_id)
+                .ok_or("找不到食物。")?
+                .clone();
+            // 生熟状态/计量基准纠错会改写历史版本的证明口径，本版不支持：
+            // 与定义不一致一律引导「新建正确食材 + 归档旧项」。
+            if definition["measurementBasis"].as_str() != Some(input.measurement_basis.as_str()) {
+                return Err(
+                    "生熟状态纠错暂不支持：请新建正确食材并归档旧项，避免改写历史版本口径。".into(),
+                );
+            }
+            let references = food_references(state, food_id)?;
+            if !references.is_empty() {
+                return Err(format!(
+                    "该食物仍被 {} 处记录引用（如 {}），名称/品牌纠错暂不支持；请新建正确食材并归档旧项。",
+                    references.len(),
+                    references[0]
+                ));
+            }
+            let definition = array_mut(state, "foodDefinitions")?
+                .iter_mut()
+                .find(|food| food["id"] == food_id)
+                .ok_or("找不到食物。")?;
+            definition["name"] = json!(input.name.trim());
+            match input.brand.map(|brand| brand.trim().to_owned()).filter(|brand| !brand.is_empty()) {
+                Some(brand) => definition["brand"] = json!(brand),
+                None => {
+                    if let Some(map) = definition.as_object_mut() {
+                        map.remove("brand");
+                    }
+                }
+            }
+            json!({"foodId": food_id, "name": input.name.trim()})
         }
         "record_food_meal" => {
             let date = payload
@@ -390,7 +545,7 @@ pub(crate) fn search_state(
     query: &str,
     mode: &str,
 ) -> Result<Vec<Value>, String> {
-    if !["all", "recent", "favorites"].contains(&mode) {
+    if !["all", "recent", "favorites", "archived"].contains(&mode) {
         return Err("食材库筛选条件无效。".into());
     }
     let query = query.trim().to_lowercase();
@@ -398,6 +553,10 @@ pub(crate) fn search_state(
     for raw in array(state, "foodDefinitions")? {
         let definition: Definition =
             serde_json::from_value(raw.clone()).map_err(|error| error.to_string())?;
+        // 归档项只出现在「已归档」视图，其余模式一律隐藏。
+        if definition.archived != (mode == "archived") {
+            continue;
+        }
         let searchable = format!(
             "{} {}",
             definition.name,

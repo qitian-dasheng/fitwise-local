@@ -6,7 +6,7 @@ import { useAppStore } from "../store/appStore";
 import { enqueueDomainCommand } from "./domainCommands";
 import { isTauriRuntime } from "./storage";
 
-export function useFoodLibrarySearch(query: string, mode: "all" | "recent" | "favorites") {
+export function useFoodLibrarySearch(query: string, mode: "all" | "recent" | "favorites" | "archived") {
   const state = useAppStore();
   const [remote, setRemote] = useState<{ key: string; data: FoodLibraryItem[]; error: string }>({ key: "", data: [], error: "" });
   const key = JSON.stringify([query, mode]);

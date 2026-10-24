@@ -46,6 +46,8 @@ export interface FoodDefinition {
   measurementBasis: FoodMeasurementBasis;
   activeVersionId: string;
   favorite: boolean;
+  /** 归档：从日常挑选入口隐藏；历史记录与菜谱快照不受影响。旧数据缺省为未归档。 */
+  archived?: boolean;
   createdAt: string;
 }
 export interface FoodDefinitionVersion {

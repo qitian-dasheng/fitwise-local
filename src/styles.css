@@ -56,6 +56,9 @@
 .draft-row-controls input { width: 90px; }
 .draft-row-controls small { color: var(--muted); min-width: 84px; }
 .card-heading-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.delete-confirm { border: 1px solid #d9a0a0; border-radius: 12px; padding: 12px 14px; margin: 0 0 8px; background: #fdf3f3; display: grid; gap: 8px; }
+.delete-confirm strong { font-size: 13.5px; }
+.delete-confirm span { font-size: 12.5px; color: var(--muted); line-height: 1.7; }
 .library-fields { display: grid; gap: 18px; border: 0; padding: 0; margin: 0; min-width: 0; }
 .library-conversions { display: grid; gap: 10px; }
 .conversion-row { display: grid; grid-template-columns: minmax(60px, 1fr) minmax(75px, 1fr) auto minmax(60px, 1fr) auto auto; align-items: center; gap: 8px; }

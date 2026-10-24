@@ -85,9 +85,11 @@ export function foodMealEntries(state: AppState, input: FoodMealInput, commandId
   });
 }
 
-export function searchFoodState(state: AppState, query: string, mode: "all" | "recent" | "favorites"): FoodLibraryItem[] {
+export function searchFoodState(state: AppState, query: string, mode: "all" | "recent" | "favorites" | "archived"): FoodLibraryItem[] {
   const needle = query.trim().toLowerCase();
   return state.foodDefinitions.flatMap((definition) => {
+    // 归档项只出现在「已归档」模式，其余模式一律隐藏（与 Rust search_state 同口径）。
+    if ((definition.archived === true) !== (mode === "archived")) return [];
     if (!`${definition.name} ${definition.brand ?? ""}`.toLowerCase().includes(needle) || (mode === "favorites" && !definition.favorite)) return [];
     const version = state.foodDefinitionVersions.find((item) => item.id === definition.activeVersionId);
     if (!version) return [];

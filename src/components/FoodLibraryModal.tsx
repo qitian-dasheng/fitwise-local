@@ -1,5 +1,5 @@
 import { diaryToday } from "../domain/diary";
-import { ArrowLeft, Check, PencilLine, Plus, Search, Star, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, Check, PencilLine, Plus, Search, Star, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useFoodLibrarySearch, useFoodPortionPreview } from "../data/foodLibrary";
 import { calculateFoodPortion, findFoodItem, foodBasisLabels, foodUnitLabels, nutrientLabel } from "../domain/foodLibrary";
@@ -18,7 +18,7 @@ type BasketEntry = FoodMealInput["entries"][number] & { name: string; facts: Nut
 
 export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast", initialDate = diaryToday(), onRecorded, catalogOnly = false }: { onClose: () => void; onManual: () => void; initialType?: FoodMealInput["type"]; initialDate?: string; onRecorded?: (date: string) => void; catalogOnly?: boolean }) {
   const [query, setQuery] = useState("");
-  const [mode, setMode] = useState<"all" | "recent" | "favorites">("all");
+  const [mode, setMode] = useState<"all" | "recent" | "favorites" | "archived">("all");
   const [selected, setSelected] = useState<FoodLibraryItem | null>(null);
   const [quantity, setQuantity] = useState("100");
   const [unit, setUnit] = useState<FoodUnit>("g");
@@ -27,6 +27,8 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
   const [basket, setBasket] = useState<BasketEntry[]>([]);
   const [editingBasket, setEditingBasket] = useState<number | null>(null);
   const [editing, setEditing] = useState<FoodLibraryItem | "new" | null>(null);
+  const [identity, setIdentity] = useState<FoodLibraryItem | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [displayUnit] = useEnergyUnit();
   const state = useAppStore();
@@ -54,7 +56,7 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
     setSelected(item); setQuantity(String(item.version.basis.quantity)); setUnit(item.version.basis.unit); action.setMessage("");
   }
 
-  return <Modal title={editing ? editing === "new" ? "新建食物" : "修订营养规格" : catalogOnly ? "管理食材营养资料" : "从食材库记录饮食"} onClose={() => { if (!action.busy) onClose(); }}><div className="food-library">
+  return <Modal title={editing ? editing === "new" ? "新建食物" : "修订营养规格" : identity ? "纠错名称 / 品牌" : catalogOnly ? "管理食材营养资料" : "从食材库记录饮食"} onClose={() => { if (!action.busy) onClose(); }}><div className="food-library">
     {editing ? <FoodEditor action={action} key={editing === "new" ? "new" : editing.version.id} item={editing === "new" ? undefined : editing} onCancel={() => { action.setMessage(""); setEditing(null); }} onSaved={(foodId) => {
       setEditing(null); setMode("all"); setQuery("");
       const item = findFoodItem(useAppStore.getState(), foodId);
@@ -62,17 +64,32 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
       const oldVersionIds = new Set(useAppStore.getState().foodDefinitionVersions.filter((version) => version.foodId === foodId).map((version) => version.id));
       setBasket((items) => items.filter((entry) => !oldVersionIds.has(entry.foodVersionId)));
       setNotice(catalogOnly ? "食物资料已保存。关闭本窗口返回菜谱，无须记餐。" : "食物资料已保存。填写吃了多少并确认后，才会记入饮食。");
-    }} /> : <fieldset className="library-fields" disabled={action.busy}>
+    }} /> : identity ? <FoodIdentityEditor item={identity} action={action} onCancel={() => { action.setMessage(""); setIdentity(null); }} onSaved={() => { setIdentity(null); setNotice("名称/品牌已纠错。营养规格与历史记录未改动。"); }} /> : <fieldset className="library-fields" disabled={action.busy}>
       <p className="form-hint">首次确认规格，以后只填吃了多少。这里使用营养资料，记餐不会重复扣减制作批次的库存。</p>
       {notice && <p className="library-notice" role="status">{notice}</p>}
       <div className="library-toolbar"><label className="library-search"><Search size={17}/><input aria-label="搜索食物或品牌" placeholder="搜索食物名称或品牌" value={query} onChange={(event) => setQuery(event.target.value)}/></label><button className="button primary small" onClick={() => setEditing("new")}><Plus size={15}/> 新建食物</button></div>
-      <div className="library-tabs" role="group" aria-label="食材筛选">{([["all", "全部"], ["recent", "最近使用"], ["favorites", "常用收藏"]] as const).map(([value, label]) => <button key={value} className={mode === value ? "active" : ""} onClick={() => setMode(value)}>{label}</button>)}{!catalogOnly&&<button onClick={onManual}>仅记录本次</button>}</div>
+      <div className="library-tabs" role="group" aria-label="食材筛选">{([["all", "全部"], ["recent", "最近使用"], ["favorites", "常用收藏"]] as const).map(([value, label]) => <button key={value} className={mode === value ? "active" : ""} onClick={() => setMode(value)}>{label}</button>)}{catalogOnly&&<button className={mode === "archived" ? "active" : ""} onClick={() => { setMode("archived"); setPendingDelete(null); }}>已归档</button>}{!catalogOnly&&<button onClick={onManual}>仅记录本次</button>}</div>
       {search.error && <p className="form-error" role="alert">{search.error}</p>}
       <div className="library-body"><div className="library-results">
-        {search.loading ? <p className="form-hint">正在读取食材库…</p> : search.items.length ? search.items.map((item) => <div className={`library-item ${item.definition.id === selected?.definition.id ? "selected" : ""}`} key={item.definition.id}>
-          <button className="library-select" onClick={() => choose(item)}><strong>{item.definition.name}</strong><span>{item.definition.brand || "无品牌"} · {foodBasisLabels[item.definition.measurementBasis]}</span><small>每 {item.version.basis.quantity}{foodUnitLabels[item.version.basis.unit]} · {nutrientLabel(item.version.nutrition, "calories", 1, displayUnit)} {energyUnitLabels[displayUnit]} · v{item.version.version}</small></button>
-          <button className={`icon-button ${item.definition.favorite ? "favorite" : ""}`} aria-label={`${item.definition.favorite ? "取消收藏" : "收藏"}${item.definition.name}`} disabled={action.busy} onClick={() => { void action.run(`favorite:${item.definition.id}:${!item.definition.favorite}`, (id) => state.setFoodFavorite(item.definition.id, !item.definition.favorite, id)); }}><Star size={17} fill={item.definition.favorite ? "currentColor" : "none"}/></button>
-        </div>) : <div className="library-empty"><strong>{mode === "recent" ? "尚无食材库记餐记录" : mode === "favorites" ? "还没有收藏食物" : "没有找到食物"}</strong><p>新食物先保存一次规格，之后就可以直接选择。</p><button className="button secondary small" onClick={() => setEditing("new")}>新建食物</button></div>}
+        {search.loading ? <p className="form-hint">正在读取食材库…</p> : search.items.length ? search.items.map((item) => <div key={item.definition.id}>
+          <div className={`library-item ${item.definition.id === selected?.definition.id ? "selected" : ""}`}>
+            <button className="library-select" onClick={() => choose(item)}><strong>{item.definition.name}</strong><span>{item.definition.brand || "无品牌"} · {foodBasisLabels[item.definition.measurementBasis]}</span><small>每 {item.version.basis.quantity}{foodUnitLabels[item.version.basis.unit]} · {nutrientLabel(item.version.nutrition, "calories", 1, displayUnit)} {energyUnitLabels[displayUnit]} · v{item.version.version}</small></button>
+            <button className={`icon-button ${item.definition.favorite ? "favorite" : ""}`} aria-label={`${item.definition.favorite ? "取消收藏" : "收藏"}${item.definition.name}`} disabled={action.busy} onClick={() => { void action.run(`favorite:${item.definition.id}:${!item.definition.favorite}`, (id) => state.setFoodFavorite(item.definition.id, !item.definition.favorite, id)); }}><Star size={17} fill={item.definition.favorite ? "currentColor" : "none"}/></button>
+            {catalogOnly&&<>
+              <button className={`icon-button ${item.definition.archived ? "favorite" : ""}`} aria-label={`${item.definition.archived ? "取消归档" : "归档"}${item.definition.name}`} title={item.definition.archived ? "取消归档后重新出现在日常挑选" : "归档后从日常挑选隐藏，历史记录不受影响"} disabled={action.busy} onClick={() => { const archived = item.definition.archived === true; void action.run(`archive:${item.definition.id}:${!archived}`, async (id) => { const result = await state.setFoodArchived(item.definition.id, !archived, id); if (!result.error) setNotice(archived ? `已取消归档「${item.definition.name}」。` : `已归档「${item.definition.name}」，日常挑选将不再显示。`); return result; }); }}>{item.definition.archived ? <ArchiveRestore size={16}/> : <Archive size={16}/>}</button>
+              <button className="icon-button" aria-label={`纠错${item.definition.name}的名称或品牌`} title="纠错名称/品牌（未引用食材）" disabled={action.busy} onClick={() => { action.setMessage(""); setPendingDelete(null); setIdentity(item); }}><PencilLine size={16}/></button>
+              <button className="icon-button" aria-label={`永久删除${item.definition.name}`} title="永久删除（仅无引用食材）" disabled={action.busy} onClick={() => { action.setMessage(""); setPendingDelete(item.definition.id); }}><Trash2 size={16}/></button>
+            </>}
+          </div>
+          {catalogOnly&&pendingDelete === item.definition.id&&<div className="delete-confirm" role="alert">
+            <strong>永久删除「{item.definition.name}」？</strong>
+            <span>仅当没有任何餐食或菜谱引用时才允许删除。删除后可在导出 JSON 的审计记录中找到完整内容手工恢复，但没有一键恢复。</span>
+            <div className="button-row">
+              <button className="button danger small" disabled={action.busy} onClick={() => { void action.run(`delete:${item.definition.id}`, async (id) => { const result = await state.deleteFood(item.definition.id, id); if (!result.error) { setPendingDelete(null); setNotice(`已永久删除「${item.definition.name}」。`); } return result; }); }}>确认永久删除</button>
+              <button className="button secondary small" disabled={action.busy} onClick={() => setPendingDelete(null)}>取消</button>
+            </div>
+          </div>}
+        </div>) : <div className="library-empty"><strong>{mode === "recent" ? "尚无食材库记餐记录" : mode === "favorites" ? "还没有收藏食物" : mode === "archived" ? "没有已归档的食材" : "没有找到食物"}</strong><p>新食物先保存一次规格，之后就可以直接选择。</p><button className="button secondary small" onClick={() => setEditing("new")}>新建食物</button></div>}
       </div><div className="library-portion">{selected ? <>
         <div className="card-heading compact"><div><h3>{selected.definition.name}</h3><p className="form-hint">{selected.definition.brand} · {foodBasisLabels[selected.definition.measurementBasis]} · v{selected.version.version}</p></div><button className="text-button" onClick={() => setEditing(selected)}>修订规格</button></div>
         <p className="form-hint">参考：每 {selected.version.basis.quantity}{foodUnitLabels[selected.version.basis.unit]}；原始能量 {selected.version.labelNutrients.calories ?? "未知"} {selected.version.energyUnit}</p>
@@ -105,6 +122,7 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
         <div className="form-grid"><label><span>日期</span><input type="date" required max={diaryToday()} value={date} onChange={(event) => setDate(event.target.value)}/></label><label><span>餐次</span><select value={type} onChange={(event) => setType(event.target.value as FoodMealInput["type"])}>{Object.entries(mealLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
         {action.message && <p className="form-error" role="alert">{action.message}</p>}
         <button className="button primary wide" disabled={action.busy || !basket.length || !date || date > diaryToday()} onClick={async () => { const input: FoodMealInput = { date, type, entries: basket.map(({ foodVersionId, quantity, unit }) => ({ foodVersionId, quantity, unit })) }; const result = await action.run(JSON.stringify(input), (id) => state.recordFoodMeal(input, id)); if (!result.error) { onRecorded?.(date); onClose(); } }}>{action.busy ? "正在保存…" : `确认写入 ${basket.length} 项食物`}</button>
+        <p className="form-hint">保存失败会保留本次待确认内容，可直接重试。若应用异常终止，重开后请先核对目标餐次再决定是否重记；万一重复，用条目「作废」移除并留痕。</p>
       </div>}
       {catalogOnly&&<p className="library-notice">这里只保存营养资料，不写入饮食；完成后关闭此窗口返回菜谱，原输入会保留。</p>}
     </fieldset>}
@@ -113,6 +131,35 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
 
 function NutritionPreview({ facts, energyUnit = "kcal" }: { facts: NutritionFacts; energyUnit?: "kcal" | "kJ" }) {
   return <div className="food-nutrition-preview" aria-label="本次营养换算">{nutrientKeys.map((key) => <div key={key}><span>{nutrientLabels[key]}</span><strong>{nutrientLabel(facts, key, 1, energyUnit)}{facts[key].state === "unknown" ? "" : ` ${key === "calories" ? energyUnitLabels[energyUnit] : facts[key].unit}`}</strong></div>)}</div>;
+}
+
+/** 未引用食材的名称/品牌纠错：生熟状态只读，历史版本口径不被改写。 */
+function FoodIdentityEditor({ item, action, onSaved, onCancel }: { item: FoodLibraryItem; action: ReturnType<typeof useConfirmedAction>; onSaved: () => void; onCancel: () => void }) {
+  const correctFoodIdentity = useAppStore((state) => state.correctFoodIdentity);
+  const [name, setName] = useState(item.definition.name);
+  const [brand, setBrand] = useState(item.definition.brand ?? "");
+  return (
+    <form className="form" onSubmit={async (event) => {
+      event.preventDefault();
+      const result = await action.run(
+        JSON.stringify({ foodId: item.definition.id, name, brand }),
+        (id) => correctFoodIdentity({ foodId: item.definition.id, name, brand: brand || undefined, measurementBasis: item.definition.measurementBasis }, id),
+      );
+      if (!result.error) onSaved();
+    }}>
+      <fieldset className="library-fields" disabled={action.busy}>
+        <p className="form-hint">只更正名称与品牌；营养规格、历史记录与菜谱快照都不改动。若该食材已被餐食或菜谱引用，请改用「新建正确食材 + 归档旧项」。</p>
+        <label><span>食物名称</span><input required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} /></label>
+        <label><span>品牌（可留空）</span><input maxLength={120} value={brand} onChange={(event) => setBrand(event.target.value)} /></label>
+        <p className="form-hint">生熟状态：{foodBasisLabels[item.definition.measurementBasis]}（暂不支持原地更改——更改生熟状态会改写历史版本的证明口径，请新建正确食材并归档旧项）。</p>
+        {action.message && <p className="form-error" role="alert">{action.message}</p>}
+        <div className="button-row">
+          <button className="button primary small" type="submit" disabled={action.busy || !name.trim()}>保存纠错</button>
+          <button type="button" className="button secondary small" disabled={action.busy} onClick={onCancel}>取消</button>
+        </div>
+      </fieldset>
+    </form>
+  );
 }
 
 function FoodEditor({ item, action, onSaved, onCancel }: { item?: FoodLibraryItem; action: ReturnType<typeof useConfirmedAction>; onSaved: (foodId: string) => void; onCancel: () => void }) {

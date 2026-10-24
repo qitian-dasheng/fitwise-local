@@ -11,6 +11,7 @@ import type {
   WorkoutSession,
   FoodDefinitionInput,
   FoodMealInput,
+  FoodMeasurementBasis,
   RecipeMealInput,
   MealCorrectionInput, RecipeInput, MeasurementCondition, BodyMeasurement,
 } from "../domain/types";
@@ -137,6 +138,9 @@ interface AppActions {
   saveRecipe: (input: RecipeInput, commandId?: string) => Promise<ActionResult>;
   saveFoodDefinition: (input: FoodDefinitionInput, foodId?: string, expectedVersionId?: string, commandId?: string) => Promise<ActionResult>;
   setFoodFavorite: (foodId: string, favorite: boolean, commandId?: string) => Promise<ActionResult>;
+  setFoodArchived: (foodId: string, archived: boolean, commandId?: string) => Promise<ActionResult>;
+  deleteFood: (foodId: string, commandId?: string) => Promise<ActionResult>;
+  correctFoodIdentity: (input: { foodId: string; name: string; brand?: string; measurementBasis: FoodMeasurementBasis }, commandId?: string) => Promise<ActionResult>;
   recordFoodMeal: (input: FoodMealInput, commandId?: string) => Promise<ActionResult>;
   recordRecipeMeal: (input: RecipeMealInput, commandId?: string) => Promise<ActionResult>;
   addMeal: (input: {
@@ -205,6 +209,21 @@ export const useAppStore = create<AppStore>()(
         if (!get().foodDefinitions.some((item) => item.id === foodId)) return { error: "找不到食物。" };
         set((state) => ({ foodDefinitions: state.foodDefinitions.map((item) => item.id === foodId ? { ...item, favorite } : item) }));
         return {};
+      },
+      async setFoodArchived(foodId, archived, commandId = uid()) {
+        // 归档只翻开关，但写入仍需桌面事务；预览环境明确不支持。
+        if (!isTauriRuntime()) return { error: "食材归档需要桌面版写入，浏览器预览不模拟正式保存。" };
+        return submit("set_food_archived", { foodId, archived }, commandId);
+      },
+      async deleteFood(foodId, commandId = uid()) {
+        // 永久删除依赖 Rust 同事务引用检查；预览环境不模拟，避免误判安全。
+        if (!isTauriRuntime()) return { error: "永久删除需要桌面版在同一事务中完成引用检查，浏览器预览不模拟正式保存。" };
+        return submit("delete_food", { foodId }, commandId);
+      },
+      async correctFoodIdentity(input, commandId = uid()) {
+        // 身份纠错依赖 Rust 引用检查与生熟状态守卫；预览环境不模拟。
+        if (!isTauriRuntime()) return { error: "食材身份纠错需要桌面版引用检查，浏览器预览不模拟正式保存。" };
+        return submit("correct_food_identity", { foodId: input.foodId, input: { name: input.name, brand: input.brand, measurementBasis: input.measurementBasis } }, commandId);
       },
       async recordFoodMeal(input, commandId = uid()) {
         if (isTauriRuntime()) return submit("record_food_meal", { ...input }, commandId);

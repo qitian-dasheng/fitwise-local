@@ -141,6 +141,9 @@ fn execute_with_connection(
         "save_food_definition"
             | "revise_food_definition"
             | "set_food_favorite"
+            | "set_food_archived"
+            | "delete_food"
+            | "correct_food_identity"
             | "record_food_meal"
             | "save_recipe_version"
             | "record_recipe_meal"
@@ -223,6 +226,9 @@ fn execute_with_connection(
         "save_food_definition"
         | "revise_food_definition"
         | "set_food_favorite"
+        | "set_food_archived"
+        | "delete_food"
+        | "correct_food_identity"
         | "record_food_meal" => crate::food_library::apply(
             &mut state,
             &request.kind,
@@ -341,6 +347,7 @@ mod tests {
     include!("meal_copy_tests.rs");
     include!("workout_command_tests.rs");
     include!("recipe_meal_command_tests.rs");
+    include!("food_management_command_tests.rs");
 
     fn connection() -> Connection {
         let connection = Connection::open_in_memory().unwrap();

@@ -12,8 +12,7 @@ beforeEach(() => {
   useAppStore.setState(structuredClone(initialState));
 });
 
-describe("amount label normalization", () => {
-  it("localizes legacy English units in old correction labels for display only", () => {
+describe("amount label normalization", () => {  it("localizes legacy English units in old correction labels for display only", () => {
     expect(normalizeAmountLabel("50 g · 已纠错（沿用原营养版本）")).toBe("50 克 · 已纠错（沿用原营养版本）");
     expect(normalizeAmountLabel("1.5 piece · 已纠错（沿用原营养版本）")).toBe("1.5 个 · 已纠错（沿用原营养版本）");
     expect(normalizeAmountLabel("200 ml · 已纠错（沿用原营养版本）")).toBe("200 毫升 · 已纠错（沿用原营养版本）");
@@ -92,5 +91,19 @@ describe("food library", () => {
     expect(migrated.foodDefinitions).toEqual([]);
     expect(migrated.foodDefinitionVersions).toEqual([]);
     for (const key of ["meals", "recipes", "measurements"] as const) expect(migrated[key]).toEqual(state[key]);
+  });
+
+  it("hides archived foods from pickers and lists them only in the archived mode", async () => {
+    const saved = saveFoodInState(initialState, oats, "test-food");
+    const archivedState = { ...saved.state, foodDefinitions: saved.state.foodDefinitions.map((item) => ({ ...item, archived: true })) };
+    expect(searchFoodState(archivedState, "", "all")).toHaveLength(0);
+    expect(searchFoodState(archivedState, "", "recent")).toHaveLength(0);
+    expect(searchFoodState(archivedState, "", "favorites")).toHaveLength(0);
+    const archived = searchFoodState(archivedState, "", "archived");
+    expect(archived).toHaveLength(1);
+    expect(archived[0].definition.archived).toBe(true);
+    // 未归档（缺省字段）不受影响。
+    expect(searchFoodState(saved.state, "", "all")).toHaveLength(1);
+    expect(searchFoodState(saved.state, "", "archived")).toHaveLength(0);
   });
 });
