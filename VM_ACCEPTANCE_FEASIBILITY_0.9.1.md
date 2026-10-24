@@ -305,3 +305,19 @@
 **机器自检**：三脚本 Parser 0 错误、纯 ASCII 0 非 ASCII 字节无 BOM；create 0 处 Start/Stop/Remove-VM/Remove-Item 且 `Stop-Transcript` 仅 1 处受守卫；verify 0 变更命令、0 文件写入；cleanup 0 处 `Remove-Item -Recurse`、0 处 Stop-VM、无 param 块、无 `Get-ChildItem ... SilentlyContinue`。离机自检另含：指纹在哈希表与 JSON 回读间一致、篡改可检出；白名单模拟目录测试中 `.vmcx.bak`（前缀伪装）、`stray.log`、`Snapshots\` 均被拒。
 
 **未执行（本轮停止点）**：未创建/启动/停止/删除任何 VM 或 VHDX、未安装 Windows/WebView2/轻衡、未执行清理脚本、未删任何文件、未改宿主机功能/交换机/驱动/组策略/网络、未写删宿主机证书、未读真实数据库、未改 0.9.0/源码、未推送 GitHub。**等待最终复审并单独批准实际创建。**
+
+### 8.6 阶段 2.2 rev.5 最终状态一致性修复回执（2026-10-24，仍未执行）
+
+rev.4 复审确认了脚本来源（SHA-256 对照），但指出 3 组问题。本轮**只修这 3 组**，不扩大范围、不降低 BootOrder 控制器身份检查标准：
+
+| 审查组 | 缺陷（rev.4） | rev.5 落实 |
+|---|---|---|
+| 1 记录完成状态与验收顺序 | `Save-Record "complete"` 在 15 项最终验收之前执行 → 验收失败时磁盘记录仍是 complete | Phase 8 拆四段：快照(写) → **预验收(只读，断言记录仍为 incomplete)** → **提交(唯一写 complete 的点)** → **读回确认(只读)**。预验收失败写 incomplete+原因；提交/确认失败回退写 incomplete；回退亦失败则 `[WARN]` 记录不可信。明确区分「配置与证据预验收」与「最终记录提交确认」，消除循环依赖 |
+| 2 transcript 失败停止 | `Start-Transcript` 失败仅提示后继续创建 | 失败即 `Fail`，且发生在 `New-VM` **之前**；额外校验日志文件存在；`Stop-Transcript` 仍受成功标志保护；报告日志路径与收尾结果（CLOSED / CLOSE FAILED / 未启动） |
+| 3 清理查询遇错停止 | `Get-VMHardDiskDrive`/`Get-VMDvdDrive`/`Get-VMNetworkAdapter`/`Get-VMSnapshot` 用 `-ErrorAction SilentlyContinue`，异常会被读成 0 盘/0 网卡/0 检查点 | 新增 `Get-CheckedList`（`-ErrorAction Stop` + try/catch → `Fail`），四个 cmdlet 及 `Get-VM` 枚举、事后 `Get-VMSwitch` 全部改经它；异常即停、绝不当作空结果；删除前打印「所有安全检查已完成、尚未删除任何东西」 |
+
+**离机自检结果**（脚本函数由 AST 从源文件原样提取执行，保证同源；全部在 `%TEMP%` 临时目录完成并清理）：① 记录状态顺序——预验收失败后记录仍 `incomplete` 且文件中无 `"completionStatus": "complete"`；提交成功后被模拟的确认失败可回退为 `incomplete`；截断文件不可解析、篡改字段指纹不匹配。② 查询异常——四个 cmdlet 在真实权限异常下**全部路由到 `Fail`**（消息含 cmdlet 名 + "stopping BEFORE any deletion"），真实 `Fail` 退出码 1；正常查询与空结果分别返回 3 / 0 项，空结果不被误判为异常。
+
+**脚本哈希（rev.5）**：create 51,149 B `D1EB24F4…EEB341C1`；verify 22,140 B `8F3BB71B…EC85C754`（本轮未改）；cleanup 29,886 B `307F5935…D9097A8F`。Parser 0 错误、纯 ASCII。
+
+**未执行（本轮停止点）**：未创建/启动/停止/删除任何 VM 或 VHDX、未安装 Windows/WebView2/轻衡、未执行清理脚本、未删文件、未改宿主机功能/交换机/驱动/组策略/网络、未写删证书、未读真实库、未改 0.9.0/源码、未推送 GitHub、**未向 `D:\HyperV-QH-Test` 写入任何内容**（测试仅在 `%TEMP%`）。**等待最终复审。**
