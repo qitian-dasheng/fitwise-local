@@ -11,6 +11,7 @@ import type {
   WorkoutSession,
   FoodDefinitionInput,
   FoodMealInput,
+  RecipeMealInput,
   MealCorrectionInput, RecipeInput, MeasurementCondition, BodyMeasurement,
 } from "../domain/types";
 import { enqueueDomainCommand, executeDomainCommand, type DomainCommandKind } from "../data/domainCommands";
@@ -137,6 +138,7 @@ interface AppActions {
   saveFoodDefinition: (input: FoodDefinitionInput, foodId?: string, expectedVersionId?: string, commandId?: string) => Promise<ActionResult>;
   setFoodFavorite: (foodId: string, favorite: boolean, commandId?: string) => Promise<ActionResult>;
   recordFoodMeal: (input: FoodMealInput, commandId?: string) => Promise<ActionResult>;
+  recordRecipeMeal: (input: RecipeMealInput, commandId?: string) => Promise<ActionResult>;
   addMeal: (input: {
     name: string;
     type: MealType;
@@ -211,6 +213,11 @@ export const useAppStore = create<AppStore>()(
           set((state) => ({ checkIns: reopenedCheckIns(state, input.date), meals: [...state.meals, ...entries], auditEvents: [...state.auditEvents, { id: `${commandId}:audit`, eventType: "record_food_meal", entityType: "food_library", payload: { commandId, mealIds: entries.map((item) => item.id) }, createdAt: new Date().toISOString() }] }));
           return { mealIds: entries.map((item) => item.id) };
         } catch (cause) { return { error: String(cause) }; }
+      },
+      async recordRecipeMeal(input, commandId = uid()) {
+        // 菜谱入餐依赖 Rust 的版本钉住与菜谱校验，预览环境明确不支持，不模拟写入。
+        if (!isTauriRuntime()) return { error: "菜谱入餐需要桌面版：由 Rust 钉住菜谱内的食材版本并校验条目归属；浏览器预览不模拟正式写入。" };
+        return submit("record_recipe_meal", { ...input }, commandId);
       },
       async addMeal(input, commandId = uid()) {
         if (isTauriRuntime()) return submit("add_meal", input, commandId);

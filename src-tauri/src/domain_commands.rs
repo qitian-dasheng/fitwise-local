@@ -143,6 +143,7 @@ fn execute_with_connection(
             | "set_food_favorite"
             | "record_food_meal"
             | "save_recipe_version"
+            | "record_recipe_meal"
             | "revise_meal"
             | "void_meal"
             | "add_meal"
@@ -216,6 +217,9 @@ fn execute_with_connection(
         "save_recipe_version" => {
             crate::recipes::apply(&mut state, &request.payload, &request.command_id)?
         }
+        "record_recipe_meal" => {
+            crate::recipe_meal_commands::apply(&mut state, &request.payload, &request.command_id)?
+        }
         "save_food_definition"
         | "revise_food_definition"
         | "set_food_favorite"
@@ -266,7 +270,7 @@ fn execute_with_connection(
     // changes require another explicit confirmation before joining weekly averages.
     if matches!(
         request.kind.as_str(),
-        "add_meal" | "copy_meal" | "record_food_meal"
+        "add_meal" | "copy_meal" | "record_food_meal" | "record_recipe_meal"
     ) {
         let date = crate::record_commands::date(&request.payload)?;
         let mut reopened = false;
@@ -336,6 +340,7 @@ mod tests {
     include!("body_command_tests.rs");
     include!("meal_copy_tests.rs");
     include!("workout_command_tests.rs");
+    include!("recipe_meal_command_tests.rs");
 
     fn connection() -> Connection {
         let connection = Connection::open_in_memory().unwrap();

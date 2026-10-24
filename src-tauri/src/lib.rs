@@ -8,6 +8,7 @@ mod food_library;
 mod meal_corrections;
 mod recipes;
 mod record_commands;
+mod recipe_meal_commands;
 mod workout_commands;
 
 #[cfg(test)]

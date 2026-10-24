@@ -100,9 +100,9 @@ struct Version {
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct PortionRequest {
-    food_version_id: String,
-    quantity: f64,
-    unit: FoodUnit,
+    pub(crate) food_version_id: String,
+    pub(crate) quantity: f64,
+    pub(crate) unit: FoodUnit,
 }
 
 fn positive(value: f64) -> Result<f64, String> {

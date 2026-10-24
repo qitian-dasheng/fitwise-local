@@ -67,6 +67,13 @@ export interface FoodMealInput {
   type: MealType;
   entries: { foodVersionId: string; quantity: number; unit: FoodUnit }[];
 }
+/** 菜谱快速入餐：entries 必须来自 recipeVersionId 的原料快照，由后端逐项校验。 */
+export interface RecipeMealInput {
+  date: string;
+  type: MealType;
+  recipeVersionId: string;
+  entries: { foodVersionId: string; quantity: number; unit: FoodUnit }[];
+}
 export interface FoodLibraryItem {
   definition: FoodDefinition;
   version: FoodDefinitionVersion;
@@ -113,6 +120,8 @@ export interface MealEntry {
   copiedFromId?: string;
   foodDefinitionId?: string;
   foodVersionId?: string;
+  /** 菜谱快速入餐产生的条目指回菜谱版本，便于回溯这次记录来自哪个配方。 */
+  recipeVersionId?: string;
   foodSnapshot?: {
     definition: FoodDefinition;
     version: FoodDefinitionVersion;
