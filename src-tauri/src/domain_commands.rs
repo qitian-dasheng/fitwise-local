@@ -348,6 +348,7 @@ mod tests {
     include!("workout_command_tests.rs");
     include!("recipe_meal_command_tests.rs");
     include!("food_management_command_tests.rs");
+    include!("upgrade_compat_command_tests.rs");
 
     fn connection() -> Connection {
         let connection = Connection::open_in_memory().unwrap();
