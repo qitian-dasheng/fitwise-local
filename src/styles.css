@@ -35,6 +35,14 @@
 .basket-row { justify-content: space-between; margin-bottom: 12px; }
 .basket-row div { display: grid; gap: 5px; }
 .library-basket .form-grid { margin: 14px 0; }
+.basket-summary { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; background: var(--green-pale); }
+.basket-summary strong { font-size: 13px; }
+.basket-summary-grid { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.basket-summary-grid b { color: inherit; font-size: 13px; }
+.basket-summary .basket-unknown { color: #a77818; }
+.basket-row .basket-actions { display: flex; gap: 4px; }
+.basket-edit { display: inline-flex; align-items: center; gap: 6px; }
+.basket-edit input { width: 90px; }
 .library-fields { display: grid; gap: 18px; border: 0; padding: 0; margin: 0; min-width: 0; }
 .library-conversions { display: grid; gap: 10px; }
 .conversion-row { display: grid; grid-template-columns: minmax(60px, 1fr) minmax(75px, 1fr) auto minmax(60px, 1fr) auto auto; align-items: center; gap: 8px; }

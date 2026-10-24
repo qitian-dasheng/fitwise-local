@@ -1,9 +1,11 @@
 import { diaryToday } from "../domain/diary";
-import { ArrowLeft, Plus, Search, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, PencilLine, Plus, Search, Star, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useFoodLibrarySearch, useFoodPortionPreview } from "../data/foodLibrary";
-import { findFoodItem, foodBasisLabels, foodUnitLabels, nutrientLabel } from "../domain/foodLibrary";
-import { nutrientKeys, type FoodDefinitionInput, type FoodLibraryItem, type FoodMealInput, type FoodMeasurementBasis, type FoodUnit, type NutritionFacts } from "../domain/types";
+import { calculateFoodPortion, findFoodItem, foodBasisLabels, foodUnitLabels, nutrientLabel } from "../domain/foodLibrary";
+import { missingNutrientKeys, summarizeMeals } from "../domain/calculations";
+import { totalNutrient } from "../domain/nutritionDisplay";
+import { nutrientKeys, type FoodDefinitionInput, type FoodLibraryItem, type FoodMealInput, type FoodMeasurementBasis, type MealEntry, type FoodUnit, type NutritionFacts } from "../domain/types";
 import { useAppStore } from "../store/appStore";
 import { Modal } from "./Modal";
 import { useConfirmedAction } from "./useConfirmedAction";
@@ -23,6 +25,7 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
   const [type, setType] = useState(initialType);
   const [date, setDate] = useState(initialDate);
   const [basket, setBasket] = useState<BasketEntry[]>([]);
+  const [editingBasket, setEditingBasket] = useState<number | null>(null);
   const [editing, setEditing] = useState<FoodLibraryItem | "new" | null>(null);
   const [notice, setNotice] = useState("");
   const [displayUnit] = useEnergyUnit();
@@ -31,6 +34,21 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
   const action = useConfirmedAction();
   const request = selected && Number(quantity) > 0 && Number.isFinite(Number(quantity)) ? { foodVersionId: selected.version.id, quantity: Number(quantity), unit } : null;
   const preview = useFoodPortionPreview(request);
+  // 批次合计与行内改量：直接复用日记同口径的计算函数，未知营养永不按 0 计入。
+  const basketMealEntries: MealEntry[] = basket.map((entry, index) => ({ id: `basket-${index}`, date, type, name: entry.name, amountLabel: "", nutrition: entry.facts, consumedRatio: 1, source: "manual", confidence: "high", createdAt: "" }));
+  const basketSummary = summarizeMeals(basketMealEntries);
+  const basketMissing = missingNutrientKeys(basketMealEntries);
+  function updateBasketQuantity(index: number, raw: string) {
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value <= 0) return;
+    const entry = basket[index];
+    const version = state.foodDefinitionVersions.find((item) => item.id === entry.foodVersionId);
+    if (!version) return;
+    try {
+      const facts = calculateFoodPortion(version, value, entry.unit).nutrition;
+      setBasket((items) => items.map((item, itemIndex) => (itemIndex === index ? { ...item, quantity: value, facts } : item)));
+    } catch { /* 换算失败保留原值，不静默写入错误营养 */ }
+  }
 
   function choose(item: FoodLibraryItem) {
     setSelected(item); setQuantity(String(item.version.basis.quantity)); setUnit(item.version.basis.unit); action.setMessage("");
@@ -66,7 +84,24 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
         {preview.data && <><NutritionPreview facts={preview.data.nutrition} energyUnit={displayUnit}/>{!catalogOnly&&<button className="button secondary wide" disabled={action.busy || basket.length >= 50} onClick={() => { if (!request || !preview.data) return; const facts = preview.data.nutrition; setBasket((items) => [...items, { ...request, name: selected.definition.name, facts }]); setNotice(`已把 ${selected.definition.name} 加入待确认餐食，可继续选择其他食物。`); }}><Plus size={15}/> 加入本餐</button>}</>}
         <p className="form-hint">缺少“个／份／包装”换算时，先修订规格；生重、熟重及可食部分分别建档。</p>
       </> : <p className="form-hint">选择一个食物，查看营养和摄入量换算。</p>}</div></div>
-      {!catalogOnly&&<div className="library-basket"><h3>本次待确认 · {basket.length} 项</h3>{basket.map((entry, index) => <div className="basket-row" key={index}><div><strong>{entry.name}</strong><span>{entry.quantity}{foodUnitLabels[entry.unit]} · {nutrientLabel(entry.facts, "calories", 1, displayUnit)} {energyUnitLabels[displayUnit]}</span></div><button className="icon-button" aria-label={`移除${entry.name}`} onClick={() => setBasket((items) => items.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={16}/></button></div>)}
+      {!catalogOnly&&<div className="library-basket"><h3>本次待确认 · {basket.length} 项</h3>
+        {basket.length > 0 && <div className="basket-summary" aria-label="本批营养合计">
+          <strong>本批合计 · {basket.length} 项</strong>
+          <div className="basket-summary-grid">{nutrientKeys.map((key) => {
+            const display = totalNutrient(basketSummary, key, { entryCount: basket.length, missing: basketMissing.includes(key) }, displayUnit);
+            const unit = key === "calories" ? energyUnitLabels[displayUnit] : key === "sodium" ? "mg" : "g";
+            return <span key={key}>{nutrientLabels[key]} <b className={display.state === "unknown" ? "basket-unknown" : ""} title={display.title}>{display.text}</b>{display.state === "unknown" ? "" : ` ${unit}`}</span>;
+          })}</div>
+          <p className="form-hint">「未知」不按 0 计入；「≥」为已知项小计，仍有食物未提供该营养。</p>
+        </div>}
+        {basket.map((entry, index) => <div className="basket-row" key={index}><div><strong>{entry.name}</strong>
+          {editingBasket === index
+            ? <span className="basket-edit"><input type="number" min="0" step="any" aria-label={`修改${entry.name}的数量`} defaultValue={entry.quantity} onChange={(event) => updateBasketQuantity(index, event.target.value)} /><button className="icon-button" aria-label="完成修改" onClick={() => setEditingBasket(null)}><Check size={15}/></button></span>
+            : <span>{entry.quantity}{foodUnitLabels[entry.unit]} · {nutrientLabel(entry.facts, "calories", 1, displayUnit)} {energyUnitLabels[displayUnit]}</span>}
+        </div><span className="basket-actions">
+          {editingBasket !== index && <button className="icon-button" aria-label={`修改${entry.name}数量`} disabled={action.busy} onClick={() => setEditingBasket(index)}><PencilLine size={15}/></button>}
+          <button className="icon-button" aria-label={`移除${entry.name}`} disabled={action.busy} onClick={() => { setBasket((items) => items.filter((_, itemIndex) => itemIndex !== index)); if (editingBasket === index) setEditingBasket(null); }}><Trash2 size={16}/></button>
+        </span></div>)}
         <div className="form-grid"><label><span>日期</span><input type="date" required max={diaryToday()} value={date} onChange={(event) => setDate(event.target.value)}/></label><label><span>餐次</span><select value={type} onChange={(event) => setType(event.target.value as FoodMealInput["type"])}>{Object.entries(mealLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
         {action.message && <p className="form-error" role="alert">{action.message}</p>}
         <button className="button primary wide" disabled={action.busy || !basket.length || !date || date > diaryToday()} onClick={async () => { const input: FoodMealInput = { date, type, entries: basket.map(({ foodVersionId, quantity, unit }) => ({ foodVersionId, quantity, unit })) }; const result = await action.run(JSON.stringify(input), (id) => state.recordFoodMeal(input, id)); if (!result.error) { onRecorded?.(date); onClose(); } }}>{action.busy ? "正在保存…" : `确认写入 ${basket.length} 项食物`}</button>

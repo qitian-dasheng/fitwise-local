@@ -116,6 +116,25 @@ it("retains a multi-food basket on recording failure and retries it once", async
   expect(closed).toHaveBeenCalledTimes(1);
 });
 
+it("previews the batch total and corrects a basket quantity in place", async () => {
+  await enterFood(); await submit();
+  await fill(container.querySelector<HTMLInputElement>('[aria-label="摄入数量"]')!, "50");
+  await click("加入本餐");
+  await fill(container.querySelector<HTMLInputElement>('[aria-label="摄入数量"]')!, "25");
+  await click("加入本餐");
+  // 50g=200kcal/6g 蛋白 + 25g=100kcal/3g 蛋白 → 300 kcal / 9 g；纤维未知，不得按 0 显示。
+  const summary = container.querySelector('[aria-label="本批营养合计"]')!;
+  expect(summary.textContent).toContain("300");
+  expect(summary.textContent).toContain("9");
+  expect(summary.textContent).toContain("未知");
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="修改原味燕麦数量"]')!.click());
+  await fill(container.querySelector<HTMLInputElement>('[aria-label="修改原味燕麦的数量"]')!, "100");
+  expect(container.querySelector('[aria-label="本批营养合计"]')!.textContent).toContain("500");
+  await click("确认写入 2 项食物");
+  expect(useAppStore.getState().meals.map((item) => item.nutrition.calories.value)).toEqual([400, 100]);
+  expect(closed).toHaveBeenCalledTimes(1);
+});
+
 it("invalidates only the revised food in the basket and preserves historical meals", async () => {
   await enterFood(); await submit();
   await click("加入本餐");
