@@ -1,6 +1,6 @@
 import { diaryToday, type DiaryDateProps } from "../domain/diary";
 import { DiaryDateControl } from "../components/DiaryDateControl";
-import { BookOpen, ChefHat, Plus, ShieldCheck } from "lucide-react";
+import { BookOpen, ChefHat, Plus, ShieldCheck, UtensilsCrossed } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { MealEntry, RecipeVersion, MealType } from "../domain/types";
 import { useAppStore } from "../store/appStore";
@@ -12,6 +12,7 @@ import { FoodLibraryModal } from "../components/FoodLibraryModal";
 import { MealCorrectionModal } from "../components/MealCorrectionModal";
 import { RecipeEditor } from "../components/RecipeEditor";
 import { RecipeManagerDrawer } from "../components/RecipeManagerDrawer";
+import { RecipeMealDraftModal } from "../components/RecipeMealDraftModal";
 import { latestRecipes } from "../domain/recipes";
 import { MealDiaryTable } from "../components/MealDiaryTable";
 import { CopyMealModal } from "../components/CopyMealModal";
@@ -29,6 +30,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
   const [showHistory,setShowHistory]=useState(false);
   const [copyRecipe,setCopyRecipe]=useState(false);
   const [recipeDrawer,setRecipeDrawer]=useState(false);
+  const [recipeMealOpen,setRecipeMealOpen]=useState(false);
   const [showSodium,setShowSodium]=useState(readDiaryShowSodium);
   const [mealOpen, setMealOpen] = useState(false);
   const [copyTarget, setCopyTarget] = useState<{ type: MealType; source: MealCopySource } | null>(null);
@@ -91,7 +93,10 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
               <p className="eyebrow">标准菜谱</p>
               <h2>今日下厨</h2>
             </div>
-            <button className="button secondary small" onClick={() => setRecipeDrawer(true)}><BookOpen size={15} /> 管理菜谱</button>
+            <div className="card-heading-actions">
+              <button className="button primary small" disabled={!recipe} onClick={() => setRecipeMealOpen(true)}><UtensilsCrossed size={15} /> 加入餐次</button>
+              <button className="button secondary small" onClick={() => setRecipeDrawer(true)}><BookOpen size={15} /> 管理菜谱</button>
+            </div>
           </div>
 
           {recipe ? (
@@ -132,8 +137,11 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
         onNew={() => openRecipeEditor("new", false)}
         onRevise={() => { if (recipe) openRecipeEditor(recipe, false); }}
         onCopy={() => { if (recipe) openRecipeEditor(recipe, true); }}
+        onAddToMeal={() => setRecipeMealOpen(true)}
         onClose={() => setRecipeDrawer(false)}
       />}
+
+      {recipeMealOpen && recipe && <RecipeMealDraftModal recipe={recipe} initialType="breakfast" initialDate={date} onClose={() => setRecipeMealOpen(false)} onRecorded={onDateChange} />}
 
       {correction&&<MealCorrectionModal meal={correction.meal} mode={correction.mode} onClose={()=>setCorrection(null)} onSaved={onDateChange}/>}
       {copyTarget && <CopyMealModal date={today} type={copyTarget.type} source={copyTarget.source} onClose={() => setCopyTarget(null)} />}

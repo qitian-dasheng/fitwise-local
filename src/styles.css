@@ -43,6 +43,19 @@
 .basket-row .basket-actions { display: flex; gap: 4px; }
 .basket-edit { display: inline-flex; align-items: center; gap: 6px; }
 .basket-edit input { width: 90px; }
+.recipe-draft { display: grid; gap: 16px; }
+.recipe-draft-scale { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.recipe-draft-scale > span { font-size: 13px; color: var(--muted); }
+.recipe-draft-scale label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.recipe-draft-scale input { width: 80px; }
+.recipe-draft-rows { display: grid; gap: 8px; }
+.draft-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+.draft-row.excluded { opacity: .55; }
+.draft-row .checkbox-label { display: flex; align-items: center; gap: 8px; }
+.draft-row-controls { display: flex; align-items: center; gap: 8px; }
+.draft-row-controls input { width: 90px; }
+.draft-row-controls small { color: var(--muted); min-width: 84px; }
+.card-heading-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .library-fields { display: grid; gap: 18px; border: 0; padding: 0; margin: 0; min-width: 0; }
 .library-conversions { display: grid; gap: 10px; }
 .conversion-row { display: grid; grid-template-columns: minmax(60px, 1fr) minmax(75px, 1fr) auto minmax(60px, 1fr) auto auto; align-items: center; gap: 8px; }

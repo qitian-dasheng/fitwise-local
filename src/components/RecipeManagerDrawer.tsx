@@ -1,4 +1,4 @@
-import { Copy, Plus, PencilLine } from "lucide-react";
+import { Copy, PencilLine, Plus, UtensilsCrossed } from "lucide-react";
 import type { RecipeVersion } from "../domain/types";
 import { Drawer } from "./Drawer";
 import { useEnergyUnit } from "../hooks/useEnergyUnit";
@@ -20,6 +20,8 @@ interface RecipeManagerDrawerProps {
   /** 仅在当前选中最新版本时可用。 */
   onRevise: () => void;
   onCopy: () => void;
+  /** 把当前菜谱按实际份量加入餐次（R1 草稿入口）。 */
+  onAddToMeal: () => void;
   onClose: () => void;
 }
 
@@ -34,6 +36,7 @@ export function RecipeManagerDrawer({
   onNew,
   onRevise,
   onCopy,
+  onAddToMeal,
   onClose,
 }: RecipeManagerDrawerProps) {
   const isLatest = recipe ? latest.some((item) => item.id === recipe.id) : false;
@@ -50,6 +53,9 @@ export function RecipeManagerDrawer({
         </button>
         <button className="button secondary" disabled={!recipe} onClick={onCopy}>
           <Copy size={15} /> 另存为新菜谱
+        </button>
+        <button className="button secondary" disabled={!recipe} onClick={onAddToMeal}>
+          <UtensilsCrossed size={15} /> 加入餐次
         </button>
       </div>
 
