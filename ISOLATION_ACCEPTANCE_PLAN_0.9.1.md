@@ -1,6 +1,6 @@
 # 轻衡 0.9.1｜候选版本完整性检查与隔离安装验收方案
 
-日期：2026-10-24｜范围：只读核查 + 隔离方案设计｜状态：**尚未执行任何安装**；Sandbox 路线已判定失败并停止（见 `SANDBOX_DIAGNOSIS_0.9.1.md` 第九节）；路线 D（免安装+环境变量隔离）经只读分析判定不可行（环境变量不改变 `SHGetKnownFolderPath` 解析，见 `ROUTE_D_NO_INSTALL_FEASIBILITY_0.9.1.md`），已按用户决定正式停止；**当前评估对象＝完整 Windows 虚拟机路线**（只读评估完成，见 `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md`）。**阶段 1 第 1 步（提权只读确认）已执行，结果 GO**：VM=0、系统原有 `Default Switch`（Internal，严禁修改/删除/连接）、`D:\HyperV-QH-Test` 不存在、D: 928.5 GB 可用、平台 Enabled（回执见 VM 评估报告第 8 节）。**阶段 1 第 2 步冒烟脚本已按用户要求修订为交互式观察版（不自动关机，VM 留待用户单独关机），等待用户执行。**
+日期：2026-10-24｜范围：只读核查 + 隔离方案设计｜状态：**尚未执行任何安装**；Sandbox 路线已判定失败并停止（见 `SANDBOX_DIAGNOSIS_0.9.1.md` 第九节）；路线 D（免安装+环境变量隔离）经只读分析判定不可行（环境变量不改变 `SHGetKnownFolderPath` 解析，见 `ROUTE_D_NO_INSTALL_FEASIBILITY_0.9.1.md`），已按用户决定正式停止；**当前评估对象＝完整 Windows 虚拟机路线**（只读评估完成，见 `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md`）。**阶段 1 第 1 步（提权只读确认）已执行，结果 GO**：VM=0、系统原有 `Default Switch`（Internal，严禁修改/删除/连接）、`D:\HyperV-QH-Test` 不存在、D: 928.5 GB 可用、平台 Enabled（回执见 VM 评估报告第 8 节）。**阶段 1 第 2 步**：临时 VM `Fitwise-091-Smoke` 已创建（Gen2/512MB/Off，尚未启动）；`New-VM` 默认附带 1 块未连接网卡，0 网卡安全门正确触发 FAIL（**不能认定为 Hyper-V 启动失败**）；已批准最小修正（仅删该网卡，不重建 VM）并交付 rev.3 创建脚本（`New-VM` 后显式移除默认网卡再跑 0/0/0 安全门，**不得为测试 rev.3 再建 VM**）；等待用户执行：修正 → 复核 → 启动现有 VM → 无时限观察固件画面 → 单独关机 → 回贴证据（回执见 VM 评估报告第 8.1 节）。
 
 ---
 

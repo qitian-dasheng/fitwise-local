@@ -29,7 +29,7 @@
 | | 平台版本 | 注册表 Version `10.0.26100.1`，CurrentVmVersion `12.0`，ListenerPort 2179 | `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization` |
 | 管理组件 | Hyper-V PowerShell 模块 | 已安装 **2.0.0.0**（Get-VM 报权限错误=平台在位但需管理员，非未安装） | `Get-Module -ListAvailable` |
 | | Hyper-V 管理器 / vmconnect | `virtmgmt.msc`、`vmconnect.exe` 均存在 | `Test-Path` |
-| 已有虚拟机 | 数量 | **0**（WMI `Msvm_ComputerSystem` 仅 1 条=宿主自身「JR」；早前误显示的「JR」是本机计算机名，不是 VM） | `Get-CimInstance root\virtualization\v2` |
+| 已有虚拟机 | 数量 | **1**：`Fitwise-091-Smoke`（Gen2/512MB/Off，本轮阶段 1 创建，尚未启动，待修正网卡后冒烟、之后受控清理） | 用户执行 rev.2 脚本回执（第 8.1 节）；此前为 0 |
 | 虚拟交换机 | 数量 | **1**：`Default Switch`（Internal，**系统原有组件**） | 提权 `Get-VMSwitch` 实测（2026-10-24 第 1 步回执，第 8 节）；此前非提权 WMI `Msvm_VirtualEthernetSwitch` 计数 0，与该枚举途径不显示 Default Switch 有关，**以提权实测为准** |
 | 虚拟化状态 | HypervisorPresent | **True**；systeminfo：「已检测到虚拟机监控程序」 | `Win32_ComputerSystem` / systeminfo |
 | | VBS（基于虚拟化的安全性） | **状态：正在运行**；SecurityServicesRunning=2（内存完整性/HVCI） | systeminfo / DeviceGuard WMI |
@@ -54,7 +54,7 @@
 
 ### 3.2 管理组件、虚拟化服务、已有 VM 与交换机状态 —— 见第 2 节表
 
-要点：平台在位；**VM 数=0**；**交换机数=1（`Default Switch`，Internal，系统原有组件，严禁修改/删除/连接）**；默认 VM 存储路径为 `C:\ProgramData\Microsoft\Windows\Hyper-V\`（尚未创建，建议改用自选路径便于识别与清理）。
+要点：平台在位；**VM 数=1**（本轮创建的 `Fitwise-091-Smoke`，Off，尚未启动，见第 8.1 节）；**交换机数=1（`Default Switch`，Internal，系统原有组件，严禁修改/删除/连接）**；默认 VM 存储路径为 `C:\ProgramData\Microsoft\Windows\Hyper-V\`（尚未使用，本轮 VM 用自选路径 `D:\HyperV-QH-Test`）。
 
 ### 3.3 创建测试 VM 需要改变宿主机什么 —— 明确非零改动清单
 
@@ -177,7 +177,7 @@
 
 ## 7. 边界声明
 
-本轮全程：未创建虚拟机、未启用任何系统功能、未安装软件、未下载镜像、未启动候选程序、未修改源码、未执行 MSI、未读取/复制/修改真实数据库、未操作正式版 0.9.0、未推送 GitHub/未创建 tag 或 Release。所有宿主机状态均为只读查询所得；「已验证事实」均给出处，无法只读确认的项已明确标注（第 2 节末）。
+本轮全程（截至第 8.1 节回执时点）：未启用任何系统功能、未安装软件、未下载镜像、未启动候选程序、未修改源码、未执行 MSI、未读取/复制/修改真实数据库、未操作正式版 0.9.0、未推送 GitHub/未创建 tag 或 Release。宿主机状态均为只读查询所得；临时 VM `Fitwise-091-Smoke` 由**用户本人**执行 AI 提供的脚本创建（Gen2、无盘、512MB、当前 Off、尚未启动），全程未连接任何交换机、未映射宿主目录。「已验证事实」均给出处，无法只读确认的项已明确标注（第 2 节末）。
 
 ---
 
@@ -203,3 +203,26 @@
 3. Hyper-V 平台组件已完整 Enabled → 第 3.3 节改动清单第 4 行（条件性启用功能+重启）**确认不需要**。
 
 **冒烟脚本相应调整（第 2 步，用户 2026-10-24 要求）**：取消「固定 25 秒后自动强制关机」；改为创建并启动后**等待用户自行观察固件画面**（脚本内 `Read-Host` 阻塞等待），观察确认并截图后按回车记录证据；**VM 保持运行，由用户单独执行关机命令**；第 3 步受控清理脚本不变（含「非 Off 状态先强制关机」守卫）。其余隔离边界（Gen2、无盘、无网卡、无交换机连接、无映射、无增强会话）不变。
+
+### 8.1 第 2 步首次执行异常回执（2026-10-24）与最小修正授权
+
+**VM 创建成功**（脚本 rev.2 执行结果，用户回贴）：
+
+| 项 | 值 |
+|---|---|
+| 名称 | `Fitwise-091-Smoke` |
+| Generation | 2 |
+| 启动内存 | 512 MB |
+| 配置目录 | `D:\HyperV-QH-Test\Fitwise-091-Smoke` |
+| 当前状态 | **Off**（安全门触发时尚未启动） |
+| 虚拟硬盘 | 0 |
+| DVD 驱动器 | 0 |
+| 虚拟网卡 | **1**（计划为 0） |
+
+**异常事实**：`New-VM` 默认附带 1 块合成网卡（Name＝「网络适配器」），rev.2 脚本的 0 网卡安全门据此正确触发 FAIL——**VM 未启动，不能认定为 Hyper-V 启动失败**。用户只读核查确认：该网卡 `SwitchName` 为空、`MacAddress=000000000000`、未连接任何交换机；`Default Switch` 未被触碰。
+
+**最小修正授权（用户 2026-10-24 批准，仅此一项）**：仅删除 `Fitwise-091-Smoke` 上这一块未连接网卡；不删除/重建 VM；不连接任何交换机。修正后复核 0 硬盘 / 0 网卡 / 0 DVD、Gen2、State=Off，任一不满足即停止。
+
+**修正通过后的续行（用户批准）**：启动**现有** VM（不再运行创建脚本）→ Hyper-V 管理器连接观察固件画面（无时间限制）→ 用户确认后单独执行关机命令 → 保留 VM 与文件清单等待受控清理授权。
+
+**脚本修订（rev.3，已交付未运行）**：`New-VM` 后显式移除默认网卡（带「未连接交换机」守卫，经对象管道删除，名称随对象取本地化值），再执行 0/0/0 安全门。**不得为测试 rev.3 而再次创建 VM。**
