@@ -1,6 +1,6 @@
 # 轻衡 0.9.1｜阶段 2：Windows 虚拟机环境准备方案
 
-日期：2026-10-24｜状态：**阶段 2.1 已完成；脚本 rev.6 定稿；只读预检已通过（2026-10-24 23:18:41，passed=21 / failed=0 / gaps=0，见 §17）；用户已批准阶段 2.2 受控创建，执行手册见 §18（脚本 rev.6 禁止修改，执行者＝用户本人，管理员 PS 5.1）——创建尚未执行**；未启动 VM；未安装 Windows / WebView2 / 轻衡；不访问真实数据库。前置事实：Hyper-V 阶段 1 冒烟**已通过**（回执见 `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md` 第 8.1/8.2 节）。
+日期：2026-10-24｜状态：**阶段 2.1 已完成；脚本 rev.6 定稿；只读预检已通过（2026-10-24 23:18:41，passed=21 / failed=0 / gaps=0，见 §17）；用户已批准阶段 2.2 受控创建（手册见 §18）；首次创建尝试 23:22:44 在 PHASE 0W 因 `Start-Transcript` 启动失败而按设计停止，`New-VM` 未执行、未产生任何 VM/VHDX/记录（事件记录与最小恢复方案见 §19），待用户确认后按 §19 恢复**；未启动 VM；未安装 Windows / WebView2 / 轻衡；不访问真实数据库。前置事实：Hyper-V 阶段 1 冒烟**已通过**（回执见 `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md` 第 8.1/8.2 节）。
 
 ---
 
@@ -954,4 +954,117 @@ if (Test-Path 'D:\HyperV-QH-Test\Evidence\phase2\phase2b-creation-record.json') 
 ### 18.8 本轮明确不做（授权边界）
 
 不启动 VM（创建后保持 Off）；不安装 Windows / WebView2 / 轻衡；**不执行 `cleanup.ps1`**；不删除任何文件；不改 `Default Switch`、不改 `Fitwise-091-Smoke`、不动 0.9.0 安装与真实数据库；不做 GitHub 推送 / tag / Release；不修改或替换任何脚本。
+
+---
+
+## 19. 运行事件记录：2026-10-24 23:22:44 创建尝试在 PHASE 0W 因 Transcript 启动失败而停止
+
+### 19.1 事实（用户回执 + 脚本行为）
+
+| 项 | 值 |
+|---|---|
+| 哈希门 | PASS (4/4)，脚本与 rev.6 记录一致 → 脚本未被改动 |
+| 基线 | VMs=1（`Fitwise-091-Smoke/Off`）、目标 VM 不存在、仅 `Default Switch`(Internal)、D: 920.3 GB、证书 0 |
+| 失败点 | **PHASE 0W**（`Start-Transcript`），`Fail` 在 `New-VM` 之前执行 |
+| 遗留物 | `Evidence\phase2\phase2b-create-20261024-232244.log`，**0 字节**；目录 `Evidence\phase2` 由本次 PHASE 0W 创建 |
+| 终端末行 | `transcript: was NOT started (intended path: …) - nothing to close`（来自 `Stop-LogIfStarted`，说明 `$script:transcriptStarted = $false`） |
+
+### 19.2 直接原因（脚本侧已确定的部分）
+
+`create.ps1` 的 PHASE 0W 顺序是：`New-Item` 目录 → `Start-Transcript -Path … -Force -ErrorAction Stop` → 成功则置 `$script:transcriptStarted = $true` → 再 `Test-Path` 复核 → 之后才是 PHASE 1 的 `New-VM`。因此：
+
+- 失败**只能**发生在 `Start-Transcript` 这一步（或紧随其后的 `Test-Path` 复核）；
+- `Fail` 在 `New-VM` 之前，**没有任何 VM / VHDX / creation-record 被创建**；目录与 0 字节日志是本次唯一痕迹；
+- `transcriptStarted=false` ⇒ 要么 `Start-Transcript` 抛了异常（异常文本即直接原因），要么它报告成功但 `Test-Path` 未看到文件——两种情形的 `[FAIL]` 文案不同，可区分。
+
+**唯一还缺的证据**：终端里 `[FAIL] Start-Transcript …` 那一行的异常文本。两种可能文案：
+
+| 文案 | 含义 |
+|---|---|
+| `[FAIL] Start-Transcript FAILED (<异常>)…` | `Start-Transcript` 抛异常。异常里若含 `PipelineStopped`/`stopped` → 调用被中断（按键/Ctrl+C）；含 `Access`/`denied`/`拒绝访问`/`being used by another process` → 写入被拒或被占用；其它文本需逐条判断 |
+| `[FAIL] Start-Transcript reported success but the log file does not exist (…)` | 报告成功但 `Test-Path` 未命中（文件系统/过滤驱动层的时序异常，罕见） |
+
+### 19.2.1 本机实验结果（2026-10-24 23:28，非提权会话；只写 `%TEMP%`，文件已删除）
+
+为缩小范围，在同一台机器上用同一条命令做了三个对照：
+
+| 实验 | 结果 | 推论 |
+|---|---|---|
+| 干净会话 `Start-Transcript -Path %TEMP%\x.log -Force` | **成功**，启动后文件**立即 24,479 字节**（头部含命令行历史） | 该机 `Start-Transcript` 本身可用，且**与提权无关**；成功启动必然立刻产生 >0 字节 |
+| 同一会话内**第二次** `Start-Transcript` | **也成功**（24,371 字节），**不抛「already running」** | **排除**「会话已有 transcript 在运行导致抛错」这一最常见猜测（本机 5.1 行为如此） |
+| transcript 运行中尝试删除其日志文件 | 删除失败：*文件正由另一进程使用* | 运行中的 transcript **持有**其日志文件句柄 |
+
+**由实验结果得出的直接原因判定**：既然成功启动会立即写入头部（数十 KB 量级），而本次留下的是 **0 字节**，说明调用在「已创建文件」与「写头部」之间被中断或失败——**不是**前置检查失败。按可能性排序：
+
+1. **调用被中断**（按下按键 / Ctrl+C / 控制台焦点事件）→ `PipelineStoppedException` → 被 catch → `Fail`。文件已建、头部未写，与 0 字节完全吻合；
+2. **该瞬间写入被拒**（安全软件/索引器/EDR 短暂锁定目标文件）→ IO 异常；
+3. 罕见：头部生成阶段异常。
+
+三条都属**环境/瞬态**，脚本逻辑与脚本完整性均无问题（哈希门 4/4 通过）。
+
+### 19.3 最小恢复方案（暂不执行，等用户确认）
+
+**关键结论：不需要清理任何东西即可重试。** `Evidence\phase2` 存在不影响 PHASE 0W（它只确保目录存在）；每次运行用新时间戳命名日志，0 字节日志不会阻塞。已审核的 rev.6 脚本**不需要修改**。
+
+恢复路径按「先探测、再决定」：
+
+| 步 | 动作 | 说明 |
+|---|---|---|
+| R0 | 先只读确认「没有残留」 | 见下方 R0 块；四项必须全部符合预期，否则情形不同、停下报告 |
+| R1 | 关闭当前管理员窗口，**新开一个干净的管理员 PowerShell 5.1** | transcript 是会话级状态；换会话可排除「已有 transcript 在跑」与窗口状态异常 |
+| R2 | 在新窗口跑 §19.4 的探测块（写 `%TEMP%`，不碰测试树） | 回答一个问题：这台机器的 `Start-Transcript` 在新会话里能否正常工作；异常文本会直接指出原因 |
+| R3a | 探测 **成功** | 恢复＝在同一新窗口重跑 `create.ps1`（§18 块 C）。无需删日志、无需改脚本；0 字节日志建议保留为失败痕迹 |
+| R3b | 探测 **失败，异常含 `Access`/`denied`/`拒绝访问`/`being used`** | 属 R3c 一类，先做 §19.5 只读诊断，再决定修 ACL（需单独授权）或走 §19.6 |
+| R3c | 探测 **失败，异常为其它文本** | 把 `PROBE: message` 原文贴回；本机已排除「already running」，故需按实际文本判断（很可能是安全软件/策略） |
+| R3d | 探测在**新窗口仍失败**且非权限类 | 说明该机 `Start-Transcript` 受策略/主机限制 → 只能走 §19.6（需你批准 + 最小复审），或改用「日志外置」的等价手段 |
+
+### 19.4 探测块（只读测试，写你的 `%TEMP%`，不碰 `D:\HyperV-QH-Test`）
+
+```powershell
+$probe = Join-Path $env:TEMP ("tx-probe-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + ".log")
+Write-Output ("probe target: " + $probe)
+try {
+    Start-Transcript -Path $probe -Force -ErrorAction Stop | Out-Null
+    Write-Output "PROBE: Start-Transcript OK"
+    Write-Output ("PROBE: size after start = " + (Get-Item -LiteralPath $probe).Length + " bytes")
+    Stop-Transcript | Out-Null
+    Write-Output ("PROBE: stopped, final size = " + (Get-Item -LiteralPath $probe).Length + " bytes")
+} catch {
+    Write-Output ("PROBE: FAILED -> " + $_.Exception.GetType().FullName)
+    Write-Output ("PROBE: message  -> " + $_.Exception.Message)
+}
+```
+
+判读：`PROBE: Start-Transcript OK` 且最终字节数 > 0 ⇒ **R3a**；异常含 `Access`/`denied`/`being used by another process`/`拒绝访问` ⇒ **R3b**；其它失败文本 ⇒ **R3c**（本机已实测排除 `already running` 这一类）。
+
+> **重跑时的操作纪律（针对最可能的「中断」原因）**：脚本运行期间**不要按键、不要点击控制台窗口、不要切换窗口/最小化**，看到 `PHASE 2.2 COMPLETE` 或 `STATE:` 再操作。Windows 控制台在「快速编辑模式」下点击会选中文本并暂停输出，容易造成中断类异常。
+
+**R0 块（只读，确认无残留）**
+
+```powershell
+Get-VM | Select-Object Name,Generation,State,Id | Format-Table -AutoSize
+Write-Output ("target dir  : " + (Test-Path 'D:\HyperV-QH-Test\Fitwise-091-Test'))
+Write-Output ("target vhdx : " + (Test-Path 'D:\HyperV-QH-Test\Fitwise-091-Test\Virtual Hard Disks\Fitwise-091-Test.vhdx'))
+Write-Output ("record file : " + (Test-Path 'D:\HyperV-QH-Test\Evidence\phase2\phase2b-creation-record.json'))
+Write-Output ("certs in My : " + @(Get-ChildItem Cert:\LocalMachine\My).Count)
+Get-ChildItem -LiteralPath 'D:\HyperV-QH-Test\Evidence\phase2' -Force | Select-Object Name,Length,LastWriteTime | Format-Table -AutoSize
+```
+
+**预期**：VMs 仍只有 `Fitwise-091-Smoke/Off`；`target dir=False`；`target vhdx=False`；`record file=False`；证书 = 0；证据目录只有那 1 个 0 字节日志。四项全对 ⇒ 确实停在 PHASE 0W，可直接走 R1。
+
+### 19.5 只读诊断（仅在 R3c 时用）
+
+```powershell
+Get-Item -LiteralPath 'D:\HyperV-QH-Test\Evidence\phase2' | Select-Object FullName,Attributes
+Get-Acl -LiteralPath 'D:\HyperV-QH-Test\Evidence\phase2' | Format-List
+Get-ChildItem -LiteralPath 'D:\HyperV-QH-Test\Evidence\phase2' -Force | Select-Object Name,Length,Attributes,LastWriteTime
+```
+
+### 19.6 备选：最小脚本降级（**需你单独批准，且要走一次最小复审**）
+
+若 R3d 成立（新会话、有权限、仍无法 `Start-Transcript`），唯一不改脚本的路就没有了。此时可选的最小改动是：把 PHASE 0W 的「transcript 必须成功」降级为「transcript 失败则改用 `Out-File`/`Add-Content` 写一份纯文本运行日志，并在最终验收里记录该降级」。改动约 6–8 行、只涉及 PHASE 0W 与该标记，**不触碰任何其它逻辑**。本轮**不做**，等你决定。
+
+### 19.7 本轮边界
+
+不删除 0 字节日志、不删除 `Evidence\phase2`、不重跑创建脚本、不创建/启动/清理任何 VM、不改宿主机设置、不改脚本。以上恢复动作待你逐项确认后执行。
 
