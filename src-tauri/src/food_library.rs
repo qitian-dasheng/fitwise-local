@@ -27,7 +27,7 @@ pub(crate) enum FoodUnit {
 }
 
 impl FoodUnit {
-    fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Self::G => "克",
             Self::Ml => "毫升",

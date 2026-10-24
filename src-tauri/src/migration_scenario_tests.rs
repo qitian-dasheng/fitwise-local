@@ -107,6 +107,63 @@ fn singleton_keys(connection: &Connection) -> Vec<String> {
     rows
 }
 
+fn object_names(connection: &Connection, kind: &str) -> Vec<String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT name FROM sqlite_master WHERE type = ?1 AND name NOT LIKE 'sqlite_%' ORDER BY name",
+        )
+        .unwrap();
+    let rows = statement
+        .query_map([kind], |row| row.get::<_, String>(0))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    rows
+}
+
+/// 0.9.1 守卫：SQL 对象清单与 user_version 冻结。
+/// 业务数据全部走 JSON 信封；任何新表/视图/索引都必须先改这个测试并说明理由，
+/// 防止“顺手加个投影表”把零迁移承诺悄悄破坏掉。
+#[test]
+fn schema_inventory_stays_frozen_for_0_9_1() {
+    let directory =
+        std::env::temp_dir().join(format!("fitwise-migrate-guard-{}", rand::random::<u64>()));
+    fs::create_dir_all(&directory).unwrap();
+    let path = directory.join("fitwise.db");
+    let connection = Connection::open(&path).unwrap();
+    ensure_repository_schema(&connection).unwrap();
+
+    assert_eq!(user_version(&connection), 14);
+    assert_eq!(
+        object_names(&connection, "table"),
+        vec![
+            "app_kv",
+            "domain_command_payloads",
+            "domain_command_receipts",
+            "domain_entities",
+            "domain_singletons",
+            "domain_state_meta",
+            "domain_upgrade_reports",
+        ]
+    );
+    assert_eq!(
+        object_names(&connection, "view"),
+        vec![
+            "domain_active_meal_projection",
+            "domain_checkin_projection",
+            "domain_measurement_projection",
+            "domain_workout_projection",
+        ]
+    );
+    assert_eq!(
+        object_names(&connection, "index"),
+        vec!["idx_domain_command_receipts_created", "idx_domain_entities_order"]
+    );
+
+    drop(connection);
+    fs::remove_dir_all(&directory).unwrap();
+}
+
 /// 直接重放 0001–0013（不设 user_version），模拟 0.8.1 及更早版本的物理库。
 fn build_legacy_database(path: &Path) -> Connection {
     let connection = Connection::open(path).unwrap();

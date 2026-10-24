@@ -3,7 +3,7 @@ import { Modal } from "./Modal";
 import { useConfirmedAction } from "./useConfirmedAction";
 import { useAppStore } from "../store/appStore";
 import { diaryToday } from "../domain/diary";
-import { calculateFoodPortion, foodUnitLabels, nutrientLabel } from "../domain/foodLibrary";
+import { calculateFoodPortion, foodUnitLabels, normalizeAmountLabel, nutrientLabel } from "../domain/foodLibrary";
 import { nutrientKeys, type FoodUnit, type MealCorrectionInput, type MealEntry, type MealType } from "../domain/types";
 const labels = { calories: "热量 kcal", protein: "蛋白质 g", fat: "脂肪 g", carbohydrates: "碳水化合物 g", fiber: "膳食纤维 g", sugar: "糖 g", sodium: "钠 mg" };
 const mealTypeLabels: Record<MealType, string> = { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", snack: "加餐" };
@@ -22,13 +22,13 @@ export function MealCorrectionModal({ meal, mode = "edit", onClose, onSaved }: {
     diffRows.push({label:"进食日期",from:meal.date,to:date});
     diffRows.push({label:"餐次",from:mealTypeLabels[meal.type],to:mealTypeLabels[type]});
     if(meal.foodSnapshot)diffRows.push({label:"摄入数量",from:`${meal.foodSnapshot.quantity} ${foodUnitLabels[meal.foodSnapshot.unit]}`,to:`${quantity} ${foodUnitLabels[unit]}`});
-    if(!meal.foodSnapshot&&!meal.foodVersionId)diffRows.push({label:"食物 / 份量",from:`${meal.name} · ${meal.amountLabel}`,to:`${name} · ${amount}`});
+    if(!meal.foodSnapshot&&!meal.foodVersionId)diffRows.push({label:"食物 / 份量",from:`${meal.name} · ${normalizeAmountLabel(meal.amountLabel)}`,to:`${name} · ${amount}`});
   }
   return <Modal title={voided?"作废餐食记录":"更正餐食记录"} onClose={()=>{if(!action.busy)onClose();}}><form className="form" onSubmit={async e=>{
     e.preventDefault();const input:MealCorrectionInput={mealId:meal.id,reason,...(!voided?{date,type}:{}),...(!voided&&meal.foodSnapshot?{quantity:Number(quantity),unit}:{}),...(!voided&&!meal.foodVersionId?{name,amountLabel:amount,nutrients:Object.fromEntries(nutrientKeys.filter(k=>values[k]!=="").map(k=>[k,Number(values[k])]))}:{})};
     const result=await action.run(JSON.stringify({voided,input}),id=>correct(input,voided,id));if(!result.error){onSaved?.(result.date??date);onClose();}
   }}><fieldset className="library-fields" disabled={action.busy}>
-    <div className="ratio-summary"><div><strong>{meal.name}</strong><span>原记录：{meal.date} · {meal.amountLabel} · 来源 {meal.source}{meal.foodVersionId?` · ${meal.foodVersionId}`:""}</span></div></div>
+    <div className="ratio-summary"><div><strong>{meal.name}</strong><span>原记录：{meal.date} · {normalizeAmountLabel(meal.amountLabel)} · 来源 {meal.source}{meal.foodVersionId?` · ${meal.foodVersionId}`:""}</span></div></div>
     <p className="form-hint">保留原始营养与来源，保存修订或作废原因；不硬删除。受影响日期需重新确认饮食完整。</p>
     <label className="checkbox-label"><input type="checkbox" checked={voided} onChange={e=>{setVoided(e.target.checked);setConfirmed(false);}}/><span>作废此条记录（不计入摄入，不可一键撤销）</span></label>
     {voided&&<p className="library-notice">作废只把这条进食移出有效汇总：不删除食材库、不返还生鲜、不撤销已记录的浪费，也不能一键恢复。原始记录与原因会保留在修订历史。</p>}

@@ -561,6 +561,11 @@ mod tests {
             result.state["meals"][1]["foodSnapshot"]["definition"],
             original["foodSnapshot"]["definition"]
         );
+        // OBS-011：纠错文案的单位必须是中文，历史 "50 g" 写法不再产生新记录。
+        assert_eq!(
+            result.state["meals"][1]["amountLabel"],
+            "50 克 · 已纠错（沿用原营养版本）"
+        );
         assert_eq!(
             crate::domain_queries::period_summary(&c, &today, &today).unwrap()["days"][0]["totals"]
                 ["calories"],

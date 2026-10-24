@@ -1,7 +1,7 @@
-import type { DataSource, MealEntry, NutrientKey } from "./types";
+import type { DataSource, MealEntry, NutrientKey, NutritionFacts } from "./types";
 import type { NutritionSummary } from "./calculations";
 import { entryRatio } from "./calculations";
-import { KJ_PER_KCAL, energyUnitLabels } from "./energyDisplay";
+import { KJ_PER_KCAL, energyUnitLabels, toDisplayEnergyMaybe } from "./energyDisplay";
 import type { EnergyUnitPref } from "./preferences";
 
 export interface NutrientColumn {
@@ -66,6 +66,14 @@ export function formatNutrientValue(value: number, key: NutrientKey): string {
   const digits = digitsOf(key);
   const rounded = value.toFixed(digits);
   return digits === 0 ? rounded : String(Number(rounded));
+}
+
+/** 菜谱卡等单值展示：未知不显示 0，已知值走统一取整口径；热量跟随能量单位开关。 */
+export function nutrientText(facts: NutritionFacts, key: NutrientKey, unit: EnergyUnitPref = "kcal"): string {
+  const metric = facts[key];
+  if (metric.state === "unknown" || metric.value === undefined) return "未知";
+  const value = key === "calories" ? toDisplayEnergyMaybe(metric.value, unit) ?? metric.value : metric.value;
+  return formatNutrientValue(value, key);
 }
 
 /** 单条记录的营养：一律乘进食比例；未知永不显示为 0。unit 只影响热量列的显示单位。 */

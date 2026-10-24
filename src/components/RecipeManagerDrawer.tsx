@@ -2,7 +2,8 @@ import { Copy, Plus, PencilLine } from "lucide-react";
 import type { RecipeVersion } from "../domain/types";
 import { Drawer } from "./Drawer";
 import { useEnergyUnit } from "../hooks/useEnergyUnit";
-import { energyUnitLabels, toDisplayEnergyMaybe } from "../domain/energyDisplay";
+import { energyUnitLabels } from "../domain/energyDisplay";
+import { nutrientText } from "../domain/nutritionDisplay";
 
 interface RecipeManagerDrawerProps {
   /** 全部菜谱版本（含历史）。 */
@@ -83,7 +84,7 @@ export function RecipeManagerDrawer({
             {isLatest ? "（最新）" : "（历史）"}
           </strong>
           <span>
-            {toDisplayEnergyMaybe(recipe.nutrition.calories.value, energyUnit) ?? "未知"} {energyUnitLabels[energyUnit]} · {recipe.nutrition.protein.value ?? "未知"} g 蛋白质 ·{" "}
+            {nutrientText(recipe.nutrition, "calories", energyUnit)} {energyUnitLabels[energyUnit]} · {nutrientText(recipe.nutrition, "protein")} g 蛋白质 ·{" "}
             {recipe.ingredients.length} 种原料 · {recipe.totalMinutes} 分钟
           </span>
           <span>共 {recipes.length} 个版本，其中最新版本 {latest.length} 个。</span>

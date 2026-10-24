@@ -5,6 +5,7 @@ import {
   entryNutrient,
   formatNutrientValue,
   mealBrand,
+  nutrientText,
   sourceLabel,
   totalNutrient,
 } from "../src/domain/nutritionDisplay";
@@ -54,6 +55,19 @@ describe("nutrient formatting", () => {
   it("labels data sources in Chinese", () => {
     expect(sourceLabel("fatsecret")).toBe("FatSecret");
     expect(sourceLabel("label")).toBe("包装标签");
+  });
+});
+
+describe("recipe nutrient text", () => {
+  it("formats known values and never renders unknown as zero", () => {
+    const facts = nutrition({ calories: 2015.6, protein: 160.44 });
+    expect(nutrientText(facts, "calories")).toBe("2016");
+    expect(nutrientText(facts, "protein")).toBe("160.4");
+    expect(nutrientText(facts, "fiber")).toBe("未知");
+  });
+
+  it("converts calories for the kJ display preference", () => {
+    expect(nutrientText(nutrition({ calories: 500 }), "calories", "kJ")).toBe("2092");
   });
 });
 

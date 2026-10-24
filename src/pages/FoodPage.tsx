@@ -18,7 +18,9 @@ import { CopyMealModal } from "../components/CopyMealModal";
 import { mealCopySource, mealLabels, mealTypes, type MealCopySource } from "../domain/meals";
 import { readDiaryShowSodium, writeDiaryShowSodium } from "../domain/preferences";
 import { useEnergyUnit } from "../hooks/useEnergyUnit";
-import { energyUnitLabels, toDisplayEnergyMaybe } from "../domain/energyDisplay";
+import { energyUnitLabels } from "../domain/energyDisplay";
+import { foodUnitLabels } from "../domain/foodLibrary";
+import { nutrientText } from "../domain/nutritionDisplay";
 
 export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, autoOpenMealType, onAutoOpenConsumed }: DiaryDateProps & { autoOpenMeal?: boolean; autoOpenMealType?: MealType; onAutoOpenConsumed?: () => void } = {}) {
   const [correction,setCorrection]=useState<{meal:MealEntry;mode:"edit"|"void"}|null>(null);
@@ -103,8 +105,8 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
                 </div>
               </div>
               {!latest.some(r=>r.id===recipe.id)&&<p className="library-notice">正在复用历史 v{recipe.version}：展示沿用原版本的原料和营养，不会替换为最新版。</p>}
-              <div className="recipe-macros"><span><b>{toDisplayEnergyMaybe(recipe.nutrition.calories.value, energyUnit) ?? "未知"}</b> {energyUnitLabels[energyUnit]}</span><span><b>{recipe.nutrition.protein.value ?? "未知"}</b> g 蛋白质</span><span><b>{recipe.totalMinutes}</b> 分钟</span></div>
-              <ul className="ingredient-list">{recipe.ingredients.map((item) => <li key={item.foodId}><span>{item.name}</span><b>{item.nutritionQuantity ?? item.amount} {item.nutritionUnit ?? item.unit}</b></li>)}</ul>
+              <div className="recipe-macros"><span><b>{nutrientText(recipe.nutrition, "calories", energyUnit)}</b> {energyUnitLabels[energyUnit]}</span><span><b>{nutrientText(recipe.nutrition, "protein")}</b> g 蛋白质</span><span><b>{recipe.totalMinutes}</b> 分钟</span></div>
+              <ul className="ingredient-list">{recipe.ingredients.map((item) => <li key={item.foodId}><span>{item.name}</span><b>{item.nutritionQuantity ?? item.amount} {foodUnitLabels[item.nutritionUnit ?? item.unit] ?? item.unit}</b></li>)}</ul>
             </div>
           ) : (
             <div className="kitchen-empty">
@@ -136,7 +138,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
       {correction&&<MealCorrectionModal meal={correction.meal} mode={correction.mode} onClose={()=>setCorrection(null)} onSaved={onDateChange}/>}
       {copyTarget && <CopyMealModal date={today} type={copyTarget.type} source={copyTarget.source} onClose={() => setCopyTarget(null)} />}
       {recipeEditor&&<RecipeEditor copyMode={copyRecipe} recipe={recipeEditor==="new"?undefined:recipeEditor} onClose={()=>setRecipeEditor(null)} onSaved={setSelectedRecipeId}/>}
-      {meals.some(m=>m.date===date&&m.status&&m.status!=="active")&&<details className="card meal-correction-history"><summary>查看所选日修订／作废的原始记录</summary>{meals.filter(m=>m.date===date&&m.status&&m.status!=="active").map(m=><article key={m.id}><strong>{m.name} · {m.status==="void"?"已作废":"已修订"}</strong><p>{m.date} · {m.amountLabel} · 原始营养 {m.nutrition.calories.state==="unknown"?"未知":m.nutrition.calories.value} kcal（参考规格，非重新入账）</p><p>原因：{m.correctionReason}；原记录 ID：{m.id}</p></article>)}</details>}
+      {meals.some(m=>m.date===date&&m.status&&m.status!=="active")&&<details className="card meal-correction-history"><summary>查看所选日修订／作废的原始记录</summary>{meals.filter(m=>m.date===date&&m.status&&m.status!=="active").map(m=><article key={m.id}><strong>{m.name} · {m.status==="void"?"已作废":"已修订"}</strong><p>{m.date} · {m.amountLabel} · 原始营养 {nutrientText(m.nutrition, "calories", energyUnit)} {energyUnitLabels[energyUnit]}（参考规格，非重新入账）</p><p>原因：{m.correctionReason}；原记录 ID：{m.id}</p></article>)}</details>}
       {mealOpen && <><div hidden={manualMeal}><FoodLibraryModal initialType={initialMealType} initialDate={date} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onManual={() => setManualMeal(true)} /></div>{manualMeal && <MealModal initialType={initialMealType} initialDate={date} onBack={() => setManualMeal(false)} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onSave={addMeal}/>}</>}
     </div>
   );

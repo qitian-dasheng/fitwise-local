@@ -5,6 +5,12 @@ import { nutrientKeys, type AppState, type FoodDefinitionInput, type FoodDefinit
 export const foodUnitLabels: Record<FoodUnit, string> = { g: "克", ml: "毫升", piece: "个", serving: "份", package: "包装" };
 export const foodBasisLabels = { raw: "生重", cooked: "熟重", packaged: "包装标示", edible: "可食部分" };
 
+const legacyUnitLabels: Record<string, string> = { g: "克", ml: "毫升", piece: "个", serving: "份", package: "包装" };
+/** 历史纠错文案里的英文单位（如 "50 g · 已纠果"）仅显示层归一化，不改存储。 */
+export function normalizeAmountLabel(label: string): string {
+  return label.replace(/^(\d+(?:\.\d+)?)\s*(g|ml|piece|serving|package)\b/, (_, quantity, unit) => `${quantity} ${legacyUnitLabels[unit] ?? unit}`);
+}
+
 function positive(value: number) {
   if (!Number.isFinite(value) || value <= 0) throw new Error("数量与换算规格必须是大于 0 的有限数值。");
   return value;

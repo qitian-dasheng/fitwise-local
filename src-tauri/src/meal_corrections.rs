@@ -72,7 +72,11 @@ pub(crate) fn apply(
                 fixed_snapshot[key] = snapshot[key].clone();
             }
             next["foodSnapshot"] = fixed_snapshot;
-            next["amountLabel"] = json!(format!("{quantity} {unit} · 已纠错（沿用原营养版本）"));
+            // OBS-011：纠错文案的单位走食材库映射，历史 "50 g" 英文写法不再产生新记录。
+            let unit_label = serde_json::from_value::<crate::food_library::FoodUnit>(json!(unit))
+                .map(|unit| unit.label())
+                .unwrap_or(unit);
+            next["amountLabel"] = json!(format!("{quantity} {unit_label} · 已纠错（沿用原营养版本）"));
         } else {
             let name = payload_str(payload, "name")?.trim();
             let amount = payload_str(payload, "amountLabel")?.trim();

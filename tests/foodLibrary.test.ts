@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { calculateFoodPortion, foodMealEntries, saveFoodInState, searchFoodState, validateFoodInput } from "../src/domain/foodLibrary";
+import { calculateFoodPortion, foodMealEntries, normalizeAmountLabel, saveFoodInState, searchFoodState, validateFoodInput } from "../src/domain/foodLibrary";
 import { initialState } from "../src/domain/seed";
 import type { FoodDefinitionInput, FoodUnit } from "../src/domain/types";
 import { useAppStore } from "../src/store/appStore";
@@ -10,6 +10,20 @@ beforeEach(() => {
   delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
   localStorage.clear();
   useAppStore.setState(structuredClone(initialState));
+});
+
+describe("amount label normalization", () => {
+  it("localizes legacy English units in old correction labels for display only", () => {
+    expect(normalizeAmountLabel("50 g · 已纠错（沿用原营养版本）")).toBe("50 克 · 已纠错（沿用原营养版本）");
+    expect(normalizeAmountLabel("1.5 piece · 已纠错（沿用原营养版本）")).toBe("1.5 个 · 已纠错（沿用原营养版本）");
+    expect(normalizeAmountLabel("200 ml · 已纠错（沿用原营养版本）")).toBe("200 毫升 · 已纠错（沿用原营养版本）");
+  });
+
+  it("leaves Chinese labels and empty strings untouched", () => {
+    expect(normalizeAmountLabel("50 克 · 测试品牌")).toBe("50 克 · 测试品牌");
+    expect(normalizeAmountLabel("")).toBe("");
+    expect(normalizeAmountLabel("半份燕麦")).toBe("半份燕麦");
+  });
 });
 
 describe("food library", () => {

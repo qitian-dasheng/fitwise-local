@@ -2,6 +2,7 @@ import { Copy, Plus } from "lucide-react";
 import type { MealEntry, MealType, NutrientKey } from "../domain/types";
 import { activeMeals, groupMealsByType, missingNutrientKeys, summarizeMeals } from "../domain/calculations";
 import { mealLabels, type MealCopySource } from "../domain/meals";
+import { normalizeAmountLabel } from "../domain/foodLibrary";
 import {
   columnUnit,
   columns,
@@ -176,7 +177,7 @@ export function MealDiaryTable({
                     <div className="diary-row diary-item food-entry" key={entry.id}>
                       <div className="diary-cell-food">
                         <strong>{entry.name}</strong>
-                        <span>{[brand, entry.amountLabel].filter(Boolean).join(" · ")}</span>
+                        <span>{[brand, normalizeAmountLabel(entry.amountLabel)].filter(Boolean).join(" · ")}</span>
                         <small className="diary-item-tags">
                           <span className={`status-pill ${entry.confidence === "high" ? "success" : "neutral"}`}>
                             {entry.confidence === "high" ? "已确认" : "估算"}
