@@ -246,6 +246,6 @@
 
 **本阶段验证边界（防止外推）**：仅验证**基础 VM 创建、启动、控制台与固件显示**。**Windows 来宾系统、MSI 安装、0.9.0→0.9.1 升级保留、备份恢复、数据一致性均未验证**（State=Running 不等于固件画面验收通过，固件画面通过也不等于 Windows 来宾通过）。
 
-**证据**：固件截图由用户持有，建议存档 `D:\HyperV-QH-Test\Evidence\phase1\` 并回贴 SHA-256 补入本记录；transcript 日志在 `%TEMP%\fitwise-hyperv-smoke-*.log`。
+**证据（已归档）**：固件截图存档于 `D:\HyperV-QH-Test\Evidence\phase1\fitwise-091-smoke-firmware-20261024.png`（105,728 字节，SHA-256 `03c3389dfa30ea60cee7355a008929202ff997905ed4968a5f346749b9feacb9`；内容：Microsoft Hyper-V UEFI / Virtual Machine Boot Summary / No boot devices were found / No operating system was loaded / Restart now，窗口标题「JR 上的 Fitwise-091-Smoke - 虚拟机连接」，状态栏「正在运行」）。transcript 日志在 `%TEMP%\fitwise-hyperv-smoke-*.log`。2026-10-24 19:45 由用户提供截图后归档。
 
 **下一步**：仅制定阶段 2（Windows 虚拟机环境准备）方案，见 `PHASE2_WINDOWS_VM_PREP_PLAN_0.9.1.md`；等待用户批准后执行。
