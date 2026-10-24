@@ -1,6 +1,6 @@
 # 轻衡 0.9.1｜阶段 2：Windows 虚拟机环境准备方案
 
-日期：2026-10-24｜状态：**阶段 2.1 已完成；静态修订已结束（脚本 rev.6）；现转入阶段 2.2 受控实机执行，第一步＝只读预检（`fitwise-hyperv-phase2b-preflight.ps1`，零写入，§17）——预检通过后创建仍需单独批准**；未执行任何创建/启动/停止/删除/安装动作；2.3 安装 Windows、轻衡 MSI 均未批准；不访问真实数据库。前置事实：Hyper-V 阶段 1 冒烟**已通过**（回执见 `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md` 第 8.1/8.2 节）。
+日期：2026-10-24｜状态：**阶段 2.1 已完成；脚本 rev.6 定稿；只读预检已通过（2026-10-24 23:18:41，passed=21 / failed=0 / gaps=0，见 §17）；用户已批准阶段 2.2 受控创建，执行手册见 §18（脚本 rev.6 禁止修改，执行者＝用户本人，管理员 PS 5.1）——创建尚未执行**；未启动 VM；未安装 Windows / WebView2 / 轻衡；不访问真实数据库。前置事实：Hyper-V 阶段 1 冒烟**已通过**（回执见 `VM_ACCEPTANCE_FEASIBILITY_0.9.1.md` 第 8.1/8.2 节）。
 
 ---
 
@@ -834,4 +834,124 @@ verify rev.4 覆盖：名称 / **唯一 Id vs creation-record** / Generation / S
 5. 停在「等待 2.3 授权」——安装 Windows 与轻衡 MSI 仍未批准。
 
 **本步边界**：预检不写任何文件、不建目录、不起 VM；AI 侧未创建/启动/停止/删除任何 VM 或 VHDX，未向 `D:\HyperV-QH-Test` 写入任何内容。
+
+---
+
+## 18. 阶段 2.2 受控创建执行手册（2026-10-24，用户已批准；脚本 rev.6，禁止修改）
+
+> **授权范围**：仅本次创建 + 只读验证。完成后等待阶段 2.3 另行批准。
+> **硬规则**：任何 `[FAIL]` / `[GAP]` / `STATE: VM CREATED BUT …` / 红色终止错误 → **立即停止**，不重跑、不手工修补、不清理、不删除；只回报。
+
+### 18.1 前置（一次性）
+
+| 项 | 要求 |
+|---|---|
+| 窗口 | **管理员** Windows PowerShell 5.1（不是 PowerShell 7、不是终端里的非提权会话） |
+| 工作目录 | 全程在同一个窗口内完成，中途不要关闭窗口 |
+| 脚本 | 全部位于 `%TEMP%`，**不允许修改或替换**；下面块 A 会逐份比对 SHA-256 与字节数 |
+| 预检基线 | 2026-10-24 23:18:41 已通过：passed=21 / failed=0 / gaps=0 |
+
+### 18.2 命令块 A｜脚本完整性门（只读，必须先过）
+
+```powershell
+$exp = [ordered]@{
+  'fitwise-hyperv-phase2b-create.ps1'    = @('E073FD94244773110C3FB81610CAB84242B67B6EDE0A0D808A1E8BD823F3DCC2', 57608)
+  'fitwise-hyperv-phase2b-verify.ps1'    = @('F517B540A856EE985A18E7884F7976DFF209670449D111E9BA1BFDB37B3F5132', 27153)
+  'fitwise-hyperv-phase2b-cleanup.ps1'   = @('307F59356253954EE24F897CFA452028735B58A6530F7E24A975F332D9097A8F', 29886)
+  'fitwise-hyperv-phase2b-preflight.ps1' = @('6487CCC6F007F1BFF733A422E5441EFD902EF6D827C7865A5FBA3C89D1B0947B', 13865)
+}
+$bad = 0
+foreach ($k in $exp.Keys) {
+    $p = Join-Path $env:TEMP $k
+    if (-not (Test-Path -LiteralPath $p)) { Write-Output ('MISSING  ' + $k); $bad++; continue }
+    $h = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash
+    $l = (Get-Item -LiteralPath $p).Length
+    if (($h -ceq $exp[$k][0]) -and ($l -eq $exp[$k][1])) { Write-Output ('OK       ' + $k + '  ' + $l + ' B') }
+    else { Write-Output ('MISMATCH ' + $k + '  ' + $l + ' B  ' + $h); $bad++ }
+}
+if ($bad -ne 0) { Write-Output 'HASH GATE: FAILED - stop now, do not run the create script.' } else { Write-Output 'HASH GATE: PASS (4/4)' }
+```
+
+**预期**：4 行 `OK` + `HASH GATE: PASS (4/4)`。
+**停止条件**：任何 `MISSING` / `MISMATCH` → 停，把该行贴回。
+
+### 18.3 命令块 B｜创建前只读基线（只读）
+
+```powershell
+$dFree  = [math]::Round((Get-PSDrive D).Free/1GB,1)
+$vms    = @(Get-VM)
+$sw     = @(Get-VMSwitch)
+$certs  = @(Get-ChildItem Cert:\LocalMachine\My)
+$target = @($vms | Where-Object { $_.Name -eq 'Fitwise-091-Test' })
+Write-Output ("baseline        : " + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
+Write-Output ("  VMs           : " + $vms.Count + "  [" + (($vms | ForEach-Object { $_.Name + '/' + $_.State }) -join ', ') + "]")
+Write-Output ("  target present: " + $target.Count + "   (must be 0)")
+Write-Output ("  switches      : " + $sw.Count + "  [" + (($sw | ForEach-Object { $_.Name + '/' + $_.SwitchType }) -join ', ') + "]")
+Write-Output ("  D: free (GB)  : " + $dFree + "   (must be >= 100)")
+Write-Output ("  certs in My   : " + $certs.Count + "   (baseline, expected 0)")
+Write-Output ("  Evidence\phase2 exists: " + (Test-Path 'D:\HyperV-QH-Test\Evidence\phase2'))
+```
+
+**预期**：VMs = 1（`Fitwise-091-Smoke/Off`）；target = 0；switches = 1（`Default Switch/Internal`）；D: ≥ 100 GB（约 920）；certs = 0；`Evidence\phase2 exists` = **False**。
+**停止条件**：target ≠ 0、switches ≠ 1、D: < 100、或 `Evidence\phase2` 已存在（说明有更早的残留）→ 停，报告，**不要删任何东西**。
+
+### 18.4 命令块 C｜执行创建（唯一的变更步骤）
+
+```powershell
+& "$env:TEMP\fitwise-hyperv-phase2b-create.ps1"
+```
+
+**预期输出形状**（约 30–90 秒，运行中不要按键、不要切窗口）：
+
+| 段 | 预期 |
+|---|---|
+| PHASE 0 | 管理员 / Hyper-V 模块 / 目标 VM 不存在 / 路径空闲 / 冒烟 VM 0-0-0 / 交换机指纹 / D: ≥100 GB / 两个媒体尺寸 / 证书基线 —— 全 `[OK]` |
+| PHASE 0W | `[OK] transcript started: …phase2b-create-<stamp>.log` |
+| PHASE 1 | `New-VM` → Gen2 + 1 个 VHDX 精确路径 → `[OK] VM unique Id recorded: <guid>` → `[OK] initial creation record written (completionStatus=incomplete)` |
+| PHASE 2 | `adapters found after New-VM: 1 (query succeeded)` → `[OK] NIC count = 0 (verified after removal)` |
+| PHASE 3 | key protector + vTPM + 证书 delta（预期 +2 张 guardian） |
+| PHASE 4–5 | SecureBoot On / MicrosoftWindows；内存 4/1/8 GB 动态；vCPU 4 |
+| PHASE 6 | DVD 挂 ISO，启动序按设备身份验证通过 |
+| PHASE 7 | **22 条** `[OK]` 门 + `gate summary: 22 passed / 0 failed / 22 total` |
+| PHASE 8 | 快照写入 → `PRE-ACCEPTANCE PASSED`（33 项）→ `record committed … complete` → `---- commit confirmation (READ-ONLY re-read from disk) ----`（16 项） |
+| 末两行 | `[OK]   ALL FINAL GATES PASSED + PRE-ACCEPTANCE PASSED + COMMIT CONFIRMED`<br>`PHASE 2.2 COMPLETE: VM created, configured, verified, evidence snapshot written, and the creation record committed as completionStatus=complete with a confirmed fingerprint.`<br>`VM unique Id: <guid>  \|  State: Off (never started by this script)`<br>`Evidence: …\phase2b-config-<stamp>.txt` / `Record: …\phase2b-creation-record.json` |
+
+**停止条件（任一命中即停，不重跑）**：出现 `[FAIL]`、`[STOP]`、`STATE: VM CREATED BUT …`（NOT VERIFIED / EVIDENCE SNAPSHOT FAILED / PRE-ACCEPTANCE FAILED / FINAL RECORD COMMIT FAILED / COMMIT CONFIRMATION FAILED）、或任何红色终止错误。→ 直接跳到 18.7 回报，**不要**执行 verify、**不要**跑 cleanup、**不要**手工补配置。
+
+### 18.5 命令块 D｜创建后只读核对（只读）
+
+```powershell
+$rec = Get-Content -LiteralPath 'D:\HyperV-QH-Test\Evidence\phase2\phase2b-creation-record.json' -Raw | ConvertFrom-Json
+$rec | Select-Object schema,vmName,vmId,completionStatus,finalizedUtc,finalState,bootOrderVerified,gatePassCount,gateFailCount,gateTotalCount,integritySha256 | Format-List
+Get-VM -Name 'Fitwise-091-Test' | Select-Object Name,Id,Generation,State,ProcessorCount,ConfigurationLocation | Format-List
+Get-ChildItem -LiteralPath 'D:\HyperV-QH-Test\Evidence\phase2' -Force | Select-Object Name,Length,LastWriteTime | Format-Table -AutoSize
+```
+
+**预期**：`schema=fitwise-phase2b-creation-record/2`；`completionStatus=complete`；`finalizedUtc` 非空；`finalState=Off`；`bootOrderVerified=True`；`gatePassCount=22`、`gateFailCount=0`、`gateTotalCount=22`；`integritySha256` 为 64 位十六进制；VM `State=Off`；证据目录含 **3 个**文件（`.log` / `.txt` / `.json`）。
+
+### 18.6 命令块 E｜只读验证（创建成功后执行；只读、可重复）
+
+```powershell
+& "$env:TEMP\fitwise-hyperv-phase2b-verify.ps1"
+```
+
+**预期**：底部 `RESULT: PASS - VM matches the authorized phase 2.2 target, the creation record is complete and intact, and the VM is still Off.`，且 `passed: N   failed: 0   verification gaps: 0`。
+**停止条件**：出现任何 `[FAIL]`、`verification gaps` > 0、或 `RESULT: FAIL` → 停，把失败行与对应实际值贴回。
+
+### 18.7 异常停止后的回报内容（只读，三块）
+
+```powershell
+Get-ChildItem -LiteralPath 'D:\HyperV-QH-Test\Evidence\phase2' -Force | Select-Object Name,Length,LastWriteTime | Format-Table -AutoSize
+Get-VM | Select-Object Name,Generation,State,Id | Format-Table -AutoSize
+if (Test-Path 'D:\HyperV-QH-Test\Evidence\phase2\phase2b-creation-record.json') {
+  (Get-Content -LiteralPath 'D:\HyperV-QH-Test\Evidence\phase2\phase2b-creation-record.json' -Raw | ConvertFrom-Json) |
+    Select-Object schema,completionStatus,incompleteReason,finalizedUtc,finalState,bootOrderVerified,gatePassCount,gateFailCount,gateTotalCount | Format-List
+}
+```
+
+连同**所有 `[FAIL]` / `STATE:` 行原文**一起贴回；若停在 PHASE 6，再附上脚本打印的 `---- raw BootOrder[0] dump ----` 段。
+
+### 18.8 本轮明确不做（授权边界）
+
+不启动 VM（创建后保持 Off）；不安装 Windows / WebView2 / 轻衡；**不执行 `cleanup.ps1`**；不删除任何文件；不改 `Default Switch`、不改 `Fitwise-091-Smoke`、不动 0.9.0 安装与真实数据库；不做 GitHub 推送 / tag / Release；不修改或替换任何脚本。
 
