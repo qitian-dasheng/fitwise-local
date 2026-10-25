@@ -323,8 +323,8 @@ export function TrendsPage({
         }}
       />
 
-      <section className="card chart-card">
-        <div className="card-heading compact">
+      <section className="ui-card chart-card">
+        <div className="ui-card-heading compact">
           <div>
             <p className="eyebrow">图示摄入 · 完整日计均值</p>
             <h2>{spanDays} 天热量</h2>
@@ -379,8 +379,8 @@ export function TrendsPage({
         </p>
       </section>
 
-      <section className="card review-notes">
-        <div className="card-heading compact">
+      <section className="ui-card review-notes">
+        <div className="ui-card-heading compact">
           <div>
             <p className="eyebrow">确定性规则 · 不接模型</p>
             <h2>复盘提示</h2>
