@@ -1,11 +1,8 @@
-import { diaryToday } from "../domain/diary";
 import { Archive, ArchiveRestore, Check, PencilLine, Plus, Search, Star, Trash2, Utensils } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFoodLibrarySearch, useFoodPortionPreview } from "../data/foodLibrary";
 import { calculateFoodPortion, findFoodItem, foodBasisLabels, foodUnitLabels, nutrientLabel } from "../domain/foodLibrary";
-import { missingNutrientKeys, summarizeMeals } from "../domain/calculations";
-import { totalNutrient } from "../domain/nutritionDisplay";
-import { nutrientKeys, type FoodLibraryItem, type FoodMealInput, type MealEntry, type FoodUnit, type NutritionFacts } from "../domain/types";
+import type { FoodLibraryItem, FoodMealInput, FoodUnit, NutritionFacts } from "../domain/types";
 import { lastPortionForVersion } from "../domain/meals";
 import { useAppStore } from "../store/appStore";
 import { useFoodPicker } from "../store/foodPicker";
@@ -15,22 +12,15 @@ import { useConfirmedAction } from "./useConfirmedAction";
 import { useEnergyUnit } from "../hooks/useEnergyUnit";
 import { energyUnitLabels } from "../domain/energyDisplay";
 
-const mealLabels = { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", snack: "加餐" };
-const nutrientLabels = { calories: "能量", protein: "蛋白质", carbohydrates: "碳水化合物", fat: "脂肪", fiber: "膳食纤维", sugar: "糖", sodium: "钠" };
-type BasketEntry = FoodMealInput["entries"][number] & { name: string; facts: NutritionFacts };
-
-export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast", initialDate = diaryToday(), onRecorded, catalogOnly = false, onOpenEditor, preselectFoodId }: { onClose: () => void; onManual: () => void; initialType?: FoodMealInput["type"]; initialDate?: string; onRecorded?: (date: string) => void; catalogOnly?: boolean; /** 记餐模式下由外部页面接管建档/修订（跳食材库页）；未提供时退回弹窗内嵌编辑器。 */ onOpenEditor?: (target: "new" | FoodLibraryItem) => void; /** 打开时自动选中的食物（从食材库页建档返回场景）。 */ preselectFoodId?: string }) {
+export function FoodLibraryModal({ onClose, onManual, catalogOnly = false, onOpenEditor, preselectFoodId }: { onClose: () => void; onManual: () => void; catalogOnly?: boolean; /** 记餐模式下由外部页面接管建档/修订（跳食材库页）；未提供时退回弹窗内嵌编辑器。 */ onOpenEditor?: (target: "new" | FoodLibraryItem) => void; /** 打开时自动选中的食物（从食材库页建档返回场景）。 */ preselectFoodId?: string }) {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<"all" | "recent" | "favorites" | "archived">("all");
   const [selected, setSelected] = useState<FoodLibraryItem | null>(null);
   const [quantity, setQuantity] = useState("100");
   const [unit, setUnit] = useState<FoodUnit>("g");
-  const [type, setType] = useState(initialType);
-  const [date, setDate] = useState(initialDate);
-  // 篮子放跨页 store：从食材库页建档回来再打开选择器，篮子不丢。
+  // 篮子放跨页 store：0.9.4 第六轮起弹窗只负责「加入」，核对与确认写在饮食页篮子条上。
   const basket = useFoodPicker((picker) => picker.basket);
   const setBasket = useFoodPicker((picker) => picker.setBasket);
-  const [editingBasket, setEditingBasket] = useState<number | null>(null);
   const [lastHint, setLastHint] = useState("");
   const [editing, setEditing] = useState<FoodLibraryItem | "new" | null>(null);
   const [identity, setIdentity] = useState<FoodLibraryItem | null>(null);
@@ -42,22 +32,6 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
   const action = useConfirmedAction();
   const request = selected && Number(quantity) > 0 && Number.isFinite(Number(quantity)) ? { foodVersionId: selected.version.id, quantity: Number(quantity), unit } : null;
   const preview = useFoodPortionPreview(request);
-  // 批次合计与行内改量：直接复用日记同口径的计算函数，未知营养永不按 0 计入。
-  const basketMealEntries: MealEntry[] = basket.map((entry, index) => ({ id: `basket-${index}`, date, type, name: entry.name, amountLabel: "", nutrition: entry.facts, consumedRatio: 1, source: "manual", confidence: "high", createdAt: "" }));
-  const basketSummary = summarizeMeals(basketMealEntries);
-  const basketMissing = missingNutrientKeys(basketMealEntries);
-  function updateBasketQuantity(index: number, raw: string) {
-    const value = Number(raw);
-    if (!Number.isFinite(value) || value <= 0) return;
-    const entry = basket[index];
-    const version = state.foodDefinitionVersions.find((item) => item.id === entry.foodVersionId);
-    if (!version) return;
-    try {
-      const facts = calculateFoodPortion(version, value, entry.unit).nutrition;
-      setBasket((items) => items.map((item, itemIndex) => (itemIndex === index ? { ...item, quantity: value, facts } : item)));
-    } catch { /* 换算失败保留原值，不静默写入错误营养 */ }
-  }
-
   function choose(item: FoodLibraryItem) {
     setSelected(item);
     // 记餐提速：有历史就按「上次吃了多少」预填；上次用的单位必须是本版本仍允许的单位。
@@ -125,32 +99,10 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
         <div className="form-grid"><label><span>{catalogOnly ? "营养换算预览数量（不记餐）" : "实际吃了多少"}</span><input type="number" min="0" step="any" aria-label="摄入数量" value={quantity} onChange={(event) => setQuantity(event.target.value)}/></label><label><span>单位</span><select aria-label="摄入单位" value={unit} onChange={(event) => setUnit(event.target.value as FoodUnit)}>{[selected.version.basis.unit, ...selected.version.conversions.map((conversion) => conversion.unit)].map((value) => <option key={value} value={value}>{foodUnitLabels[value]}</option>)}</select></label></div>
         {lastHint && <p className="form-hint">{lastHint}，改过就按你填的为准。</p>}
         {preview.loading && <p className="form-hint">正在换算…</p>}{preview.error && <p className="form-error" role="alert">{preview.error}</p>}
-        {preview.data && <><NutritionPreview facts={preview.data.nutrition} energyUnit={displayUnit}/>{!catalogOnly&&<button className="button secondary wide" disabled={action.busy || basket.length >= 50} onClick={() => { if (!request || !preview.data) return; const facts = preview.data.nutrition; setBasket((items) => [...items, { ...request, name: selected.definition.name, facts }]); setNotice(`已把 ${selected.definition.name} 加入待确认餐食，可继续选择其他食物。`); }}><Plus size={15}/> 加入本餐</button>}</>}
+        {preview.data && <><NutritionPreview facts={preview.data.nutrition} energyUnit={displayUnit}/>{!catalogOnly&&<button className="button secondary wide" disabled={action.busy || basket.length >= 50} onClick={() => { if (!request || !preview.data) return; const facts = preview.data.nutrition; setBasket((items) => [...items, { ...request, name: selected.definition.name, facts }]); setNotice(`已把 ${selected.definition.name} 加入待确认篮子（共 ${basket.length + 1} 项）；回饮食页展开核对并确认写入。`); }}><Plus size={15}/> 加入本餐</button>}</>}
       </> : <div className="portion-empty"><Utensils size={22} /><strong>选择一个食物</strong><span>左侧挑选后，这里显示营养与摄入量换算。</span></div>}</div>
-      {!catalogOnly&&<div className="library-basket"><h3>本次待确认 · {basket.length} 项</h3>
-        {basket.length > 0 && <div className="basket-summary" aria-label="本批营养合计">
-          <strong>本批合计 · {basket.length} 项</strong>
-          <div className="basket-summary-grid">{nutrientKeys.map((key) => {
-            const display = totalNutrient(basketSummary, key, { entryCount: basket.length, missing: basketMissing.includes(key) }, displayUnit);
-            const unit = key === "calories" ? energyUnitLabels[displayUnit] : key === "sodium" ? "mg" : "g";
-            return <span key={key}>{nutrientLabels[key]} <b className={display.state === "unknown" ? "basket-unknown" : ""} title={display.title}>{display.text}</b>{display.state === "unknown" ? "" : ` ${unit}`}</span>;
-          })}</div>
-          <p className="form-hint">「未知」不按 0 计入；「≥」为已知项小计，仍有食物未提供该营养。</p>
-        </div>}
-        {basket.map((entry, index) => <div className="basket-row" key={index}><div><strong>{entry.name}</strong>
-          {editingBasket === index
-            ? <span className="basket-edit"><input type="number" min="0" step="any" aria-label={`修改${entry.name}的数量`} defaultValue={entry.quantity} onChange={(event) => updateBasketQuantity(index, event.target.value)} /><button className="icon-button" aria-label="完成修改" onClick={() => setEditingBasket(null)}><Check size={15}/></button></span>
-            : <span>{entry.quantity}{foodUnitLabels[entry.unit]} · {nutrientLabel(entry.facts, "calories", 1, displayUnit)} {energyUnitLabels[displayUnit]}</span>}
-        </div><span className="basket-actions">
-          {editingBasket !== index && <button className="icon-button" aria-label={`修改${entry.name}数量`} disabled={action.busy} onClick={() => setEditingBasket(index)}><PencilLine size={15}/></button>}
-          <button className="icon-button" aria-label={`移除${entry.name}`} disabled={action.busy} onClick={() => { setBasket((items) => items.filter((_, itemIndex) => itemIndex !== index)); if (editingBasket === index) setEditingBasket(null); }}><Trash2 size={16}/></button>
-        </span></div>)}
-        <div className="form-grid"><label><span>日期</span><input type="date" required max={diaryToday()} value={date} onChange={(event) => setDate(event.target.value)}/></label><label><span>餐次</span><select value={type} onChange={(event) => setType(event.target.value as FoodMealInput["type"])}>{Object.entries(mealLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
-        {action.message && <p className="form-error" role="alert">{action.message}</p>}
-        <button className="button primary wide" disabled={action.busy || !basket.length || !date || date > diaryToday()} onClick={async () => { const input: FoodMealInput = { date, type, entries: basket.map(({ foodVersionId, quantity, unit }) => ({ foodVersionId, quantity, unit })) }; const result = await action.run(JSON.stringify(input), (id) => state.recordFoodMeal(input, id)); if (!result.error) { useFoodPicker.getState().clearBasket(); onRecorded?.(date); onClose(); } }}>{action.busy ? "正在保存…" : `确认写入 ${basket.length} 项食物`}</button>
-        <p className="form-hint">保存失败会保留待确认内容，可直接重试；万一重复用条目「作废」移除。</p>
-        <button className="text-button" onClick={onManual}>找不到想吃的？仅记录本次（不建档直接记）</button>
-      </div>}</div></div>
+      {!catalogOnly&&<button className="text-button library-manual-link" onClick={onManual}>找不到想吃的？仅记录本次（不建档直接记）</button>}
+      </div></div>
       {catalogOnly&&<p className="library-notice">这里只保存营养资料，不写入饮食；完成后关闭此窗口返回菜谱，原输入会保留。</p>}
     </fieldset>}
   </div></Modal>;

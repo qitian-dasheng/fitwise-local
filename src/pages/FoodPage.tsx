@@ -15,6 +15,7 @@ import { RecipeMealDraftModal } from "../components/RecipeMealDraftModal";
 import { latestRecipes } from "../domain/recipes";
 import { recipeShortage } from "../domain/pantry";
 import { MealDiaryTable } from "../components/MealDiaryTable";
+import { BasketBar } from "../components/BasketBar";
 import { CopyMealModal } from "../components/CopyMealModal";
 import { mealCopySource, mealLabels, mealTypes, frequentFoods, type FrequentFood, type MealCopySource } from "../domain/meals";
 import { readDiaryShowSodium, writeDiaryShowSodium } from "../domain/preferences";
@@ -149,6 +150,8 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
         </section>
       )}
       <p className="ui-chart-foot" style={{ marginTop: 0, paddingTop: 0 }}>补录或新增餐食会把该日重新标为待核对，请在日报再次确认完成。</p>
+      {/* 0.9.4 第六轮分离式：核对与确认从记餐弹窗迁到页面，篮子空则整条隐藏。 */}
+      <BasketBar onRecorded={(recorded) => onDateChange?.(recorded)} />
       <MealDiaryTable
         date={today}
         entries={meals}
@@ -185,7 +188,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
       {copyTarget && <CopyMealModal date={today} type={copyTarget.type} source={copyTarget.source} onClose={() => setCopyTarget(null)} />}
       {recipeEditor&&<RecipeEditor copyMode={copyRecipe} recipe={recipeEditor==="new"?undefined:recipeEditor} onClose={()=>setRecipeEditor(null)} onSaved={setSelectedRecipeId}/>}
       {meals.some(m=>m.date===date&&m.status&&m.status!=="active")&&<details className="card meal-correction-history"><summary>查看所选日修订／作废的原始记录</summary>{meals.filter(m=>m.date===date&&m.status&&m.status!=="active").map(m=><article key={m.id}><strong>{m.name} · {m.status==="void"?"已作废":"已修订"}</strong><p>{m.date} · {m.amountLabel} · 原始营养 {nutrientText(m.nutrition, "calories", energyUnit)} {energyUnitLabels[energyUnit]}（参考规格，非重新入账）</p><p>原因：{m.correctionReason}；原记录 ID：{m.id}</p></article>)}</details>}
-      {mealOpen && <><div hidden={manualMeal}><FoodLibraryModal initialType={initialMealType} initialDate={date} onRecorded={onDateChange} preselectFoodId={preselectFoodId ?? undefined} onClose={() => { setMealOpen(false); setPreselectFoodId(null); }} onManual={() => setManualMeal(true)} onOpenEditor={goTo ? (target) => { useFoodPicker.getState().setEditorTarget(target); goTo("library"); } : undefined} /></div>{manualMeal && <MealModal initialType={initialMealType} initialDate={date} onBack={() => setManualMeal(false)} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onSave={addMeal}/>}</>}
+      {mealOpen && <><div hidden={manualMeal}><FoodLibraryModal preselectFoodId={preselectFoodId ?? undefined} onClose={() => { setMealOpen(false); setPreselectFoodId(null); }} onManual={() => setManualMeal(true)} onOpenEditor={goTo ? (target) => { useFoodPicker.getState().setEditorTarget(target); goTo("library"); } : undefined} /></div>{manualMeal && <MealModal initialType={initialMealType} initialDate={date} onBack={() => setManualMeal(false)} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onSave={addMeal}/>}</>}
     </div>
   );
 }
