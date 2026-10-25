@@ -3,6 +3,7 @@ mod data_diagnostics;
 mod domain_commands;
 mod domain_queries;
 mod domain_store;
+mod food_catalog;
 mod domain_upgrade;
 mod food_library;
 mod meal_corrections;

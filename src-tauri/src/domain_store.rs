@@ -7,8 +7,12 @@ use std::{collections::HashSet, fs, path::PathBuf};
 use tauri::{AppHandle, Manager};
 
 pub(crate) const STORAGE_NAME: &str = "fitwise-app-state-v1";
-const SINGLETONS: [&str; 1] = ["profile"];
-const COLLECTIONS: [&str; 9] = [
+const SINGLETONS: [&str; 2] = [
+    "profile",
+    // 目录墓碑（0.11.0）：用户删除过的内置目录条目 catalogId，升级不复活。
+    "catalogTombstones",
+];
+pub(crate) const COLLECTIONS: [&str; 9] = [
     "foodDefinitions",
     "foodDefinitionVersions",
     "meals",
@@ -39,6 +43,12 @@ fn database_path(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|error| format!("无法定位应用数据目录：{error}"))?;
     fs::create_dir_all(&directory).map_err(|error| format!("无法创建应用数据目录：{error}"))?;
     Ok(directory.join("fitwise.db"))
+}
+
+/// 目录合并前置：仓库 schema 与信封都已就绪（未初始化的新库跳过合并，等首次命令建库）。
+pub(crate) fn is_repository_ready(connection: &Connection) -> bool {
+    // schema 就绪且信封已初始化（新库/未初始化跳过目录合并，等首次业务命令建库）。
+    load_envelope(connection).is_ok_and(|envelope| envelope.is_some())
 }
 
 pub(crate) fn open_database(app: &AppHandle) -> Result<Connection, String> {
@@ -144,12 +154,16 @@ pub(crate) fn persist_envelope(
     let mut envelope: Value =
         serde_json::from_str(raw).map_err(|error| format!("状态 JSON 无效：{error}"))?;
     // 0.9.4 兼容：旧启动状态/旧快照缺 pantryItems 时补空数组——新集合不能卡死旧状态的写入路径。
+    // 0.11.0 兼容：目录墓碑单例（SINGLETONS 新成员）对旧信封补空数组。
     if let Some(state) = envelope.get_mut("state").and_then(Value::as_object_mut) {
         for collection in COLLECTIONS {
             state
                 .entry((*collection).to_owned())
                 .or_insert_with(|| Value::Array(Vec::new()));
         }
+        state
+            .entry("catalogTombstones".to_owned())
+            .or_insert_with(|| Value::Array(Vec::new()));
     }
     let persist_version = envelope
         .get("version")
