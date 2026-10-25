@@ -2,17 +2,16 @@
 <html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="utf-8">
-<title>方向 D · 中性高级（0.9.2 原型）</title>
+<title>方向 D · 中性高级（0.9.2 原型 · 五页全览）</title>
 <style>
   /* 方向 D：shadcn/Linear 式中性高级——zinc 中性系 + 近黑主色 + 1px 发丝边框；语义色（绿/琥珀/红）
-     只出现在数据层。叙事顺序：指标卡行 → 热量环+宏量条 | 14 天趋势 → 餐次明细+常吃。1080p 一屏。 */
+     只出现在数据层。五主页面（今日/饮食/身体/运动/食材库），1080p 一屏、页面不滚。 */
   :root, [data-theme="light"] {
     --bg:#fafafa; --card:#ffffff; --sunken:#f4f4f5;
     --ink:#18181b; --ink-2:#3f3f46; --muted:#71717a; --faint:#a1a1aa;
     --line:#e4e4e7; --line-2:#d4d4d8;
     --primary:#18181b; --primary-ink:#fafafa; --primary-hover:#27272a;
     --ok:#16a34a; --ok-soft:#f0fdf4; --warn:#b45309; --warn-soft:#fffbeb; --danger:#dc2626;
-    --accent:#2563eb; --accent-soft:#eff6ff;
     --ring-track:#e4e4e7; --shadow:0 1px 2px rgba(24,24,27,.04);
   }
   [data-theme="dark"] {
@@ -21,7 +20,6 @@
     --line:#27272a; --line-2:#3f3f46;
     --primary:#fafafa; --primary-ink:#18181b; --primary-hover:#e4e4e7;
     --ok:#4ade80; --ok-soft:#052e16; --warn:#fbbf24; --warn-soft:#451a03; --danger:#f87171;
-    --accent:#60a5fa; --accent-soft:#172554;
     --ring-track:#27272a; --shadow:0 1px 2px rgba(0,0,0,.4);
   }
   * { box-sizing:border-box; margin:0; }
@@ -35,12 +33,14 @@
   .brand b { font-size:14.5px; letter-spacing:-.01em; }
   .brand span { display:block; font-size:10.5px; color:var(--faint); font-weight:400; }
   nav { display:flex; flex-direction:column; gap:1px; }
-  nav .group { font-size:10.5px; color:var(--faint); padding:14px 10px 6px; letter-spacing:.06em; }
+  nav .group { font-size:11px; color:var(--muted); padding:13px 10px 5px; letter-spacing:.05em; font-weight:600; }
   nav button { all:unset; display:flex; align-items:center; gap:9px; padding:7px 10px; border-radius:8px; font-size:13px; color:var(--muted); cursor:pointer; }
   nav button:hover { color:var(--ink); background:var(--sunken); }
   nav button.active { color:var(--ink); background:var(--sunken); font-weight:600; }
-  nav button .dot { width:5px; height:5px; border-radius:50%; background:var(--faint); }
+  nav button .dot { width:5px; height:5px; border-radius:50%; background:var(--faint); flex:none; }
   nav button.active .dot { background:var(--ok); }
+  nav button .glyph { width:16px; text-align:center; font-size:13px; flex:none; opacity:.75; }
+  nav button.active .glyph { opacity:1; }
   .side-foot { margin-top:auto; display:flex; flex-direction:column; gap:8px; padding:0 4px; }
   .theme-toggle { all:unset; display:flex; align-items:center; justify-content:center; gap:8px; height:32px; border:1px solid var(--line); border-radius:8px; font-size:12px; color:var(--muted); cursor:pointer; }
   .theme-toggle:hover { color:var(--ink); border-color:var(--line-2); }
@@ -49,8 +49,10 @@
   .user b { font-size:12px; font-weight:600; display:block; }
   .user span { font-size:10.5px; color:var(--faint); }
 
-  /* ===== 主区 ===== */
-  main { flex:1; min-width:0; display:flex; flex-direction:column; gap:14px; padding:20px 26px 18px; }
+  /* ===== 主区骨架 ===== */
+  main { flex:1; min-width:0; display:flex; flex-direction:column; gap:13px; padding:18px 26px 16px; }
+  .page { display:none; flex:1; min-height:0; flex-direction:column; gap:13px; }
+  .page.active { display:flex; }
   header { display:flex; align-items:flex-end; justify-content:space-between; }
   header .date { font-size:11.5px; color:var(--muted); letter-spacing:.02em; }
   header h1 { font-size:17px; font-weight:600; letter-spacing:-.01em; margin-top:2px; }
@@ -60,38 +62,40 @@
   .btn.primary { background:var(--primary); color:var(--primary-ink); border-color:var(--primary); font-weight:600; }
   .btn.primary:hover { background:var(--primary-hover); }
 
-  /* ===== 指标卡行 ===== */
-  .kpi-row { display:grid; grid-template-columns:1.35fr 1fr 1fr .8fr; gap:12px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; box-shadow:var(--shadow); }
-  .kpi .label { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--muted); }
-  .kpi .value { font-size:30px; font-weight:650; letter-spacing:-.03em; font-variant-numeric:tabular-nums; line-height:1.25; margin-top:3px; }
-  .kpi .value small { font-size:12.5px; font-weight:500; color:var(--muted); letter-spacing:0; margin-left:2px; }
-  .kpi .sub { font-size:11px; color:var(--muted); margin-top:2px; }
+  .panel-head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px; }
+  .panel-head h2 { font-size:13px; font-weight:600; letter-spacing:-.01em; }
+  .panel-head span { font-size:10.5px; color:var(--faint); }
   .badge { display:inline-flex; align-items:center; gap:3px; height:19px; padding:0 6px; border-radius:5px; font-size:10.5px; font-weight:600; font-variant-numeric:tabular-nums; }
   .badge.ok { color:var(--ok); background:var(--ok-soft); }
   .badge.warn { color:var(--warn); background:var(--warn-soft); }
   .badge.flat { color:var(--muted); background:var(--sunken); }
+  .kpi .label { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--muted); }
+  .kpi .value { font-size:30px; font-weight:650; letter-spacing:-.03em; font-variant-numeric:tabular-nums; line-height:1.25; margin-top:3px; }
+  .kpi .value small { font-size:12.5px; font-weight:500; color:var(--muted); letter-spacing:0; margin-left:2px; }
+  .kpi .sub { font-size:11px; color:var(--muted); margin-top:2px; }
   .microbar { height:4px; border-radius:3px; background:var(--ring-track); margin-top:9px; overflow:hidden; }
   .microbar i { display:block; height:100%; border-radius:3px; }
+  .chart-foot { font-size:10.5px; color:var(--faint); margin-top:auto; padding-top:10px; line-height:1.5; }
+
+  /* ===== 今日 ===== */
+  .kpi-row { display:grid; grid-template-columns:1.35fr 1fr 1fr .8fr; gap:12px; }
   .spark { display:flex; align-items:flex-end; gap:2.5px; height:26px; margin-top:8px; }
   .spark b { flex:1; border-radius:2px 2px 0 0; background:var(--line-2); min-height:2px; }
   .spark b.hot { background:var(--ink); }
   .streak-dots { display:flex; gap:4px; margin-top:9px; }
   .streak-dots i { width:8px; height:8px; border-radius:50%; background:var(--ok); }
   .streak-dots i.off { background:var(--ring-track); }
-
-  /* ===== 主图区 ===== */
   .mid { display:grid; grid-template-columns:1.15fr 1fr; gap:12px; flex:1; min-height:0; }
-  .panel-head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px; }
-  .panel-head h2 { font-size:13px; font-weight:600; letter-spacing:-.01em; }
-  .panel-head span { font-size:10.5px; color:var(--faint); }
-  .energy { display:flex; gap:22px; align-items:center; }
+  .mid .card { display:flex; flex-direction:column; min-height:0; }
+  .mid .body { flex:1; min-height:0; display:flex; }
+  .energy { display:flex; gap:22px; align-items:center; flex:1; min-width:0; }
   .donut { position:relative; width:168px; height:168px; flex:none; }
-  .donut svg { transform:rotate(-90deg); }
+  .donut svg { transform:rotate(-90deg); display:block; }
   .donut .center { position:absolute; inset:0; display:grid; place-content:center; text-align:center; }
   .donut .center b { font-size:27px; font-weight:650; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
   .donut .center i { font-style:normal; font-size:10.5px; color:var(--muted); }
-  .macro { flex:1; min-width:0; display:flex; flex-direction:column; gap:10px; }
+  .macro { flex:1; min-width:0; display:flex; flex-direction:column; gap:10px; justify-content:center; }
   .macro-bar { display:flex; height:12px; border-radius:6px; overflow:hidden; background:var(--ring-track); }
   .macro-bar i { height:100%; }
   .macro-legend { display:flex; flex-direction:column; gap:7px; }
@@ -99,15 +103,14 @@
   .macro-legend .sw { width:9px; height:9px; border-radius:3px; flex:none; }
   .macro-legend b { font-variant-numeric:tabular-nums; margin-left:auto; font-weight:600; }
   .macro-legend span { color:var(--muted); font-size:10.5px; }
-  .chart-foot { font-size:10.5px; color:var(--faint); margin-top:10px; line-height:1.5; }
-  .trend-bars { display:flex; align-items:flex-end; gap:5px; height:150px; position:relative; padding-top:6px; }
-  .trend-bars .day { flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; height:100%; justify-content:flex-end; }
-  .trend-bars .day i { width:100%; max-width:22px; border-radius:4px 4px 2px 2px; background:var(--line-2); }
-  .trend-bars .day.hot i { background:var(--primary); }
-  .trend-bars .day em { font-style:normal; font-size:9.5px; color:var(--faint); font-variant-numeric:tabular-nums; }
+  .trend-wrap { flex:1; min-height:0; display:flex; flex-direction:column; }
+  .trend-bars { flex:1; min-height:0; display:flex; align-items:stretch; gap:5px; position:relative; padding-top:4px; }
   .target-band { position:absolute; left:0; right:0; border-top:1.5px dashed var(--faint); opacity:.55; }
-
-  /* ===== 底部：餐次 + 常吃 ===== */
+  .trend-bars .day { flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; justify-content:flex-end; min-width:0; }
+  .trend-bars .day .bar { flex:1; width:100%; max-width:22px; margin:0 auto; }
+  .trend-bars .day .bar i { display:block; width:100%; height:100%; border-radius:4px 4px 2px 2px; background:var(--line-2); }
+  .trend-bars .day.hot .bar i { background:var(--primary); }
+  .trend-bars .day em { font-style:normal; font-size:9.5px; color:var(--faint); font-variant-numeric:tabular-nums; flex:none; }
   .bottom { display:grid; grid-template-columns:1.5fr 1fr; gap:12px; }
   .meal { display:grid; grid-template-columns:64px 1fr auto auto; gap:12px; align-items:center; padding:8px 2px; border-bottom:1px solid var(--line); font-size:12.5px; }
   .meal:last-child { border-bottom:0; }
@@ -121,19 +124,94 @@
   .chip:hover { border-color:var(--line-2); background:var(--sunken); }
   .chip b { font-size:12.5px; font-weight:600; }
   .chip span { font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums; margin-top:1px; }
+
+  /* ===== 饮食 ===== */
+  .datestrip { display:flex; align-items:center; gap:10px; }
+  .datestrip .nav-btn { all:unset; width:28px; height:28px; border:1px solid var(--line); border-radius:7px; display:grid; place-items:center; color:var(--muted); cursor:pointer; }
+  .datestrip .nav-btn:hover { color:var(--ink); border-color:var(--line-2); }
+  .datestrip b { font-size:13.5px; font-weight:600; }
+  .daystats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  .daystats .card { padding:11px 15px; }
+  .daystats .label { font-size:10.5px; color:var(--muted); }
+  .daystats .value { font-size:21px; font-weight:650; letter-spacing:-.02em; font-variant-numeric:tabular-nums; margin-top:1px; }
+  .daystats .value small { font-size:10.5px; font-weight:500; color:var(--muted); margin-left:2px; }
+  .daystats .note { font-size:10px; color:var(--faint); margin-top:1px; }
+  .food-mid { display:grid; grid-template-columns:1.55fr 1fr; gap:12px; flex:1; min-height:0; }
+  .stack { display:flex; flex-direction:column; gap:12px; min-height:0; }
+  .meal-row { display:grid; grid-template-columns:56px 1fr auto; gap:12px; align-items:center; padding:11px 2px; border-bottom:1px solid var(--line); font-size:13px; }
+  .meal-row:last-child { border-bottom:0; }
+  .meal-row .slot { color:var(--muted); font-size:12px; }
+  .meal-row .items { display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .meal-row .items span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-2); font-size:12.5px; }
+  .meal-row .items span small { color:var(--faint); }
+  .meal-row b { font-variant-numeric:tabular-nums; font-weight:600; font-size:14px; }
+  .meal-row b small { font-weight:400; color:var(--muted); font-size:10.5px; }
+
+  /* ===== 身体 ===== */
+  .entry-form { display:grid; grid-template-columns:1.2fr .9fr .9fr .9fr .9fr auto; gap:10px; align-items:end; }
+  .field { display:flex; flex-direction:column; gap:4px; min-width:0; }
+  .field label { font-size:10.5px; color:var(--muted); }
+  .field .box { height:32px; border:1px solid var(--line); border-radius:8px; background:var(--card); display:flex; align-items:center; padding:0 10px; font-size:12.5px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+  .field .box.placeholder { color:var(--faint); }
+  .weight-chart { flex:1; min-height:0; display:flex; flex-direction:column; position:relative; padding-top:4px; }
+  .wline { position:absolute; left:0; right:0; border-top:1.5px dashed var(--faint); opacity:.55; }
+  .wpoints { flex:1; display:flex; align-items:flex-end; gap:8px; }
+  .wpoints .pt { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:5px; }
+  .wpoints .pt i { width:7px; height:7px; border-radius:50%; background:var(--ink); }
+  .wpoints .pt:first-child i, .wpoints .pt:last-child i { width:9px; height:9px; }
+  .wpoints .pt em { font-style:normal; font-size:9.5px; color:var(--faint); font-variant-numeric:tabular-nums; }
+  .wpoints .pt b { font-size:10.5px; font-weight:600; font-variant-numeric:tabular-nums; color:var(--ink-2); }
+  .body-rows { font-size:12px; }
+  .body-rows .row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid var(--line); color:var(--ink-2); }
+  .body-rows .row:last-child { border-bottom:0; }
+  .body-rows b { font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink); }
+
+  /* ===== 运动 ===== */
+  .wk-bars { flex:1; display:flex; align-items:flex-end; gap:8px; }
+  .wk-bars .day { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:5px; height:100%; }
+  .wk-bars .day .bar { flex:1; width:100%; max-width:30px; margin:0 auto; }
+  .wk-bars .day .bar i { display:block; width:100%; height:100%; border-radius:5px 5px 2px 2px; background:var(--line-2); }
+  .wk-bars .day.hot .bar i { background:var(--primary); }
+  .wk-bars .day em { font-style:normal; font-size:9.5px; color:var(--faint); }
+  .sport-row { display:grid; grid-template-columns:40px 1fr auto auto; gap:12px; align-items:center; padding:11px 2px; border-bottom:1px solid var(--line); font-size:13px; }
+  .sport-row:last-child { border-bottom:0; }
+  .sport-ic { width:36px; height:36px; border-radius:10px; background:var(--sunken); border:1px solid var(--line); display:grid; place-items:center; font-size:15px; }
+  .sport-row .name b { display:block; font-size:13px; }
+  .sport-row .name span { font-size:10.5px; color:var(--muted); }
+  .sport-row .num { font-variant-numeric:tabular-nums; font-weight:600; }
+  .sport-row .num small { font-weight:400; color:var(--muted); font-size:10.5px; }
+
+  /* ===== 食材库 ===== */
+  .lib-toolbar { display:flex; gap:10px; align-items:center; }
+  .search { flex:1; max-width:420px; height:34px; border:1px solid var(--line); border-radius:9px; background:var(--card); display:flex; align-items:center; gap:8px; padding:0 12px; color:var(--faint); font-size:12.5px; }
+  .filters { display:flex; gap:4px; border:1px solid var(--line); border-radius:9px; padding:3px; background:var(--card); }
+  .filters button { all:unset; padding:4px 12px; border-radius:6px; font-size:12px; color:var(--muted); cursor:pointer; }
+  .filters button.active { background:var(--sunken); color:var(--ink); font-weight:600; }
+  .lib-grid { flex:1; min-height:0; display:grid; grid-template-columns:repeat(3,1fr); gap:12px; align-content:start; overflow:hidden; }
+  .food-card { display:flex; flex-direction:column; gap:8px; padding:13px 15px; }
+  .food-card .top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .food-card .top b { font-size:13.5px; font-weight:600; }
+  .food-card .top span { display:block; font-size:10.5px; color:var(--faint); margin-top:1px; }
+  .star { all:unset; color:var(--faint); cursor:pointer; font-size:14px; line-height:1; }
+  .star.on { color:var(--warn); }
+  .food-card .nums { display:flex; gap:14px; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .food-card .nums b { color:var(--ink); font-weight:600; }
+  .food-card .ops { display:flex; gap:6px; margin-top:auto; }
+  .food-card .ops button { all:unset; font-size:11px; color:var(--muted); padding:3px 8px; border:1px solid var(--line); border-radius:6px; cursor:pointer; }
+  .food-card .ops button:hover { color:var(--ink); border-color:var(--line-2); }
 </style>
 </head>
 <body>
 <aside>
   <div class="brand"><div class="mark">衡</div><div><b>轻衡</b><span>Fitwise Local</span></div></div>
   <nav>
-    <button class="active"><i class="dot"></i>今日</button>
-    <button><i class="dot"></i>饮食</button>
-    <button><i class="dot"></i>身体</button>
-    <button><i class="dot"></i>运动</button>
+    <button class="active" data-page="today"><i class="dot"></i>今日</button>
+    <button data-page="food"><i class="dot"></i>饮食</button>
+    <button data-page="body"><i class="dot"></i>身体</button>
+    <button data-page="workout"><i class="dot"></i>运动</button>
+    <button data-page="library"><i class="glyph">▤</i>食材库</button>
     <div class="group">工具</div>
-    <button>食材库</button>
-    <button>设置</button>
+    <button><i class="glyph">⚙</i>设置</button>
   </nav>
   <div class="side-foot">
     <button class="theme-toggle" id="themeToggle" onclick="const r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';this.lastChild.textContent=r.dataset.theme==='dark'?' 切到浅色':' 切到深色'">◐<span> 切到深色</span></button>
@@ -142,109 +220,332 @@
 </aside>
 
 <main>
-  <header>
-    <div>
-      <div class="date">10月25日 · 周日</div>
-      <h1>今日</h1>
-    </div>
-    <div class="actions">
-      <button class="btn">✓ 确认该日完整</button>
-      <button class="btn primary">＋ 记一笔</button>
-    </div>
-  </header>
+  <!-- ==================== 今日 ==================== -->
+  <section class="page active" id="page-today">
+    <header>
+      <div><div class="date">10月25日 · 周日</div><h1>今日</h1></div>
+      <div class="actions">
+        <button class="btn">✓ 确认该日完整</button>
+        <button class="btn primary">＋ 记一笔</button>
+      </div>
+    </header>
 
-  <section class="kpi-row">
-    <div class="card kpi">
-      <div class="label"><span>还能吃</span><span class="badge flat">区间 1,700–1,900</span></div>
-      <div class="value">1,240<small>kcal</small></div>
-      <div class="sub">已摄入 660 · 覆盖率 100%</div>
-      <div class="microbar"><i style="width:35%;background:var(--ok)"></i></div>
-    </div>
-    <div class="card kpi">
-      <div class="label"><span>体重</span><span class="badge ok">7 日 −1.2</span></div>
-      <div class="value">83.0<small>kg · 距目标 4.1</small></div>
-      <div class="spark"><b style="height:40%"></b><b style="height:44%"></b><b style="height:38%"></b><b style="height:46%"></b><b style="height:42%"></b><b style="height:30%"></b><b class="hot" style="height:28%"></b></div>
-    </div>
-    <div class="card kpi">
-      <div class="label"><span>蛋白质</span><span class="badge flat">87 / 100 g</span></div>
-      <div class="value">87<small>%</small></div>
-      <div class="microbar"><i style="width:87%;background:var(--primary)"></i></div>
-    </div>
-    <div class="card kpi">
-      <div class="label"><span>连续记录</span></div>
-      <div class="value">6<small>天</small></div>
-      <div class="streak-dots"><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i></div>
-    </div>
+    <section class="kpi-row">
+      <div class="card kpi">
+        <div class="label"><span>还能吃</span><span class="badge flat">区间 1,700–1,900</span></div>
+        <div class="value">1,240<small>kcal</small></div>
+        <div class="sub">已摄入 660 · 覆盖率 100%</div>
+        <div class="microbar"><i style="width:35%;background:var(--ok)"></i></div>
+      </div>
+      <div class="card kpi">
+        <div class="label"><span>体重</span><span class="badge ok">7 日 −1.2</span></div>
+        <div class="value">83.0<small>kg · 距目标 4.1</small></div>
+        <div class="spark"><b style="height:40%"></b><b style="height:44%"></b><b style="height:38%"></b><b style="height:46%"></b><b style="height:42%"></b><b style="height:30%"></b><b class="hot" style="height:28%"></b></div>
+      </div>
+      <div class="card kpi">
+        <div class="label"><span>蛋白质</span><span class="badge flat">87 / 100 g</span></div>
+        <div class="value">87<small>%</small></div>
+        <div class="microbar"><i style="width:87%;background:var(--primary)"></i></div>
+      </div>
+      <div class="card kpi">
+        <div class="label"><span>连续记录</span></div>
+        <div class="value">6<small>天</small></div>
+        <div class="streak-dots"><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i></div>
+      </div>
+    </section>
+
+    <section class="mid">
+      <div class="card">
+        <div class="panel-head"><h2>今日热量</h2><span>环内为剩余 · 完整日口径</span></div>
+        <div class="body">
+          <div class="energy">
+            <div class="donut">
+              <svg width="168" height="168" viewBox="0 0 168 168">
+                <circle cx="84" cy="84" r="72" fill="none" stroke="var(--ring-track)" stroke-width="13"/>
+                <circle cx="84" cy="84" r="72" fill="none" stroke="var(--primary)" stroke-width="13" stroke-linecap="round" stroke-dasharray="158.3 452.4"/>
+              </svg>
+              <div class="center"><b>1,240</b><i>kcal 剩余</i></div>
+            </div>
+            <div class="macro">
+              <div class="macro-bar">
+                <i style="width:32%;background:var(--ink)"></i>
+                <i style="width:53%;background:var(--ink);opacity:.45"></i>
+                <i style="width:15%;background:var(--ink);opacity:.18"></i>
+              </div>
+              <div class="macro-legend">
+                <div class="row"><i class="sw" style="background:var(--ink)"></i>蛋白质<b>87 g</b><span>目标 100</span></div>
+                <div class="row"><i class="sw" style="background:var(--ink);opacity:.45"></i>碳水<b>145 g</b><span>估算</span></div>
+                <div class="row"><i class="sw" style="background:var(--ink);opacity:.18"></i>脂肪<b>38 g</b><span>估算</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="chart-foot">未知营养不计为 0；热量不全的日子不进完整日均值。</div>
+      </div>
+
+      <div class="card">
+        <div class="panel-head"><h2>14 天热量</h2><span class="badge flat">12 天完整 · 2 天不全未计入</span></div>
+        <div class="trend-wrap">
+          <div class="trend-bars">
+            <div class="target-band" style="bottom:50%"></div>
+            <div class="day"><div class="bar"><i style="height:52%"></i></div><em>12</em></div>
+            <div class="day"><div class="bar"><i style="height:48%"></i></div><em>13</em></div>
+            <div class="day"><div class="bar"><i style="height:55%"></i></div><em>14</em></div>
+            <div class="day"><div class="bar"><i style="height:0"></i></div><em>15</em></div>
+            <div class="day"><div class="bar"><i style="height:50%"></i></div><em>16</em></div>
+            <div class="day"><div class="bar"><i style="height:58%"></i></div><em>17</em></div>
+            <div class="day"><div class="bar"><i style="height:0"></i></div><em>18</em></div>
+            <div class="day"><div class="bar"><i style="height:47%"></i></div><em>19</em></div>
+            <div class="day"><div class="bar"><i style="height:53%"></i></div><em>20</em></div>
+            <div class="day"><div class="bar"><i style="height:56%"></i></div><em>21</em></div>
+            <div class="day"><div class="bar"><i style="height:49%"></i></div><em>22</em></div>
+            <div class="day"><div class="bar"><i style="height:54%"></i></div><em>23</em></div>
+            <div class="day"><div class="bar"><i style="height:51%"></i></div><em>24</em></div>
+            <div class="day hot"><div class="bar"><i style="height:35%"></i></div><em>今</em></div>
+          </div>
+          <div class="chart-foot">虚线为目标区间上限（1,900 kcal）。空白 = 无记录或热量不全，不画成 0。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="bottom">
+      <div class="card">
+        <div class="panel-head"><h2>餐次</h2><span>660 kcal · 3 笔</span></div>
+        <div class="meal"><span class="slot">早餐</span><span class="desc">测试燕麦片 · 100 g</span><b>380<small> kcal</small></b></div>
+        <div class="meal"><span class="slot">午餐</span><span class="desc">鸡胸沙拉 · 1 份</span><b>200<small> kcal</small></b></div>
+        <div class="meal"><span class="slot">晚餐</span><span class="desc"><span class="unknown">尚未记录</span></span><b style="color:var(--faint)">—</b></div>
+        <div class="meal"><span class="slot">加餐</span><span class="desc">苹果 · 1 个</span><b>80<small> kcal</small></b></div>
+      </div>
+      <div class="card">
+        <div class="panel-head"><h2>常吃</h2><span>单击按上次份量记</span></div>
+        <div class="chips">
+          <button class="chip"><b>燕麦片</b><span>380 / 100 g</span></button>
+          <button class="chip"><b>鸡胸</b><span>133 / 100 g</span></button>
+          <button class="chip"><b>苹果</b><span>52 / 个</span></button>
+          <button class="chip"><b>纯牛奶</b><span>135 / 250 ml</span></button>
+        </div>
+      </div>
+    </section>
   </section>
 
-  <section class="mid">
-    <div class="card">
-      <div class="panel-head"><h2>今日热量</h2><span>环内为剩余 · 完整日口径</span></div>
-      <div class="energy">
-        <div class="donut">
-          <svg width="168" height="168" viewBox="0 0 168 168">
-            <circle cx="84" cy="84" r="72" fill="none" stroke="var(--ring-track)" stroke-width="13"/>
-            <circle cx="84" cy="84" r="72" fill="none" stroke="var(--primary)" stroke-width="13" stroke-linecap="round" stroke-dasharray="158.3 452.4"/>
-          </svg>
-          <div class="center"><b>1,240</b><i>kcal 剩余</i></div>
-        </div>
-        <div class="macro">
-          <div class="macro-bar">
-            <i style="width:32%;background:var(--ink)"></i>
-            <i style="width:53%;background:var(--ink);opacity:.45"></i>
-            <i style="width:15%;background:var(--ink);opacity:.18"></i>
-          </div>
-          <div class="macro-legend">
-            <div class="row"><i class="sw" style="background:var(--ink)"></i>蛋白质<b>87 g</b><span>目标 100</span></div>
-            <div class="row"><i class="sw" style="background:var(--ink);opacity:.45"></i>碳水<b>145 g</b><span>估算</span></div>
-            <div class="row"><i class="sw" style="background:var(--ink);opacity:.18"></i>脂肪<b>38 g</b><span>估算</span></div>
-          </div>
-          <div class="chart-foot">未知营养不计为 0；热量不全的日子不进完整日均值。</div>
-        </div>
+  <!-- ==================== 饮食 ==================== -->
+  <section class="page" id="page-food">
+    <header>
+      <div class="datestrip">
+        <button class="nav-btn">‹</button><b>10月25日 · 周日</b><button class="nav-btn">›</button>
+        <span style="font-size:11px;color:var(--faint)">补录后该日回到「待核对」</span>
       </div>
-    </div>
+      <div class="actions">
+        <button class="btn">▤ 食材库</button>
+        <button class="btn primary">＋ 记一笔</button>
+      </div>
+    </header>
 
-    <div class="card">
-      <div class="panel-head"><h2>14 天热量</h2><span class="badge flat">12 天完整 · 2 天不全未计入</span></div>
-      <div class="trend-bars">
-        <div class="target-band" style="bottom:46%"></div>
-        <div class="day"><i style="height:52%"></i><em>12</em></div>
-        <div class="day"><i style="height:48%"></i><em>13</em></div>
-        <div class="day"><i style="height:55%"></i><em>14</em></div>
-        <div class="day"><i style="height:0"></i><em>15</em></div>
-        <div class="day"><i style="height:50%"></i><em>16</em></div>
-        <div class="day"><i style="height:58%"></i><em>17</em></div>
-        <div class="day"><i style="height:0"></i><em>18</em></div>
-        <div class="day"><i style="height:47%"></i><em>19</em></div>
-        <div class="day"><i style="height:53%"></i><em>20</em></div>
-        <div class="day"><i style="height:56%"></i><em>21</em></div>
-        <div class="day"><i style="height:49%"></i><em>22</em></div>
-        <div class="day"><i style="height:54%"></i><em>23</em></div>
-        <div class="day"><i style="height:51%"></i><em>24</em></div>
-        <div class="day hot"><i style="height:35%"></i><em>今</em></div>
+    <section class="daystats">
+      <div class="card"><div class="label">热量</div><div class="value">660<small>kcal / 1,700–1,900</small></div><div class="note">覆盖率 100%</div></div>
+      <div class="card"><div class="label">蛋白质</div><div class="value">87<small>g / 100</small></div><div class="note">达标</div></div>
+      <div class="card"><div class="label">碳水</div><div class="value">145<small>g</small></div><div class="note">估算值</div></div>
+      <div class="card"><div class="label">脂肪</div><div class="value">38<small>g</small></div><div class="note">估算值</div></div>
+    </section>
+
+    <section class="food-mid">
+      <div class="card" style="display:flex;flex-direction:column">
+        <div class="panel-head"><h2>按餐次记录</h2><span class="badge ok">已确认完整</span></div>
+        <div class="meal-row"><span class="slot">早餐</span><div class="items"><span>测试燕麦片 · 100 g <small>· 380 kcal</small></span></div><b>380<small> kcal</small></b></div>
+        <div class="meal-row"><span class="slot">午餐</span><div class="items"><span>鸡胸沙拉 · 1 份 <small>· 200 kcal · 蛋白 32 g</small></span></div><b>200<small> kcal</small></b></div>
+        <div class="meal-row"><span class="slot">晚餐</span><div class="items"><span style="color:var(--faint)">尚未记录</span></div><b style="color:var(--faint)">—</b></div>
+        <div class="meal-row"><span class="slot">加餐</span><div class="items"><span>苹果 · 1 个 <small>· 80 kcal</small></span></div><b>80<small> kcal</small></b></div>
       </div>
-      <div class="chart-foot">虚线为目标区间上限（1,900 kcal）。空白 = 无记录或热量不全，不画成 0。</div>
-    </div>
+      <div class="stack">
+        <div class="card">
+          <div class="panel-head"><h2>常吃</h2><span>30 天频次</span></div>
+          <div class="chips">
+            <button class="chip"><b>燕麦片</b><span>380 / 100 g</span></button>
+            <button class="chip"><b>鸡胸</b><span>133 / 100 g</span></button>
+            <button class="chip"><b>苹果</b><span>52 / 个</span></button>
+            <button class="chip"><b>纯牛奶</b><span>135 / 250 ml</span></button>
+            <button class="chip"><b>鸡蛋</b><span>72 / 个</span></button>
+          </div>
+        </div>
+        <div class="card" style="flex:1;display:flex;flex-direction:column">
+          <div class="panel-head"><h2>今日下厨</h2><span>标准菜谱 · 只作参考</span></div>
+          <div style="font-size:13px;font-weight:600">洋葱豆腐炖里脊 <span style="font-size:10.5px;color:var(--faint);font-weight:400">v1 · 30 分钟</span></div>
+          <div class="body-rows" style="margin-top:6px">
+            <div class="row"><span>每份热量（4 人份）</span><b>883 kcal</b></div>
+            <div class="row"><span>蛋白质</span><b>119.6 g</b></div>
+            <div class="row"><span>用料</span><b>北豆腐 300 g · 猪里脊 400 g · 洋葱 100 g · 食用油 10 g</b></div>
+          </div>
+          <div class="chart-foot">实际摄入按餐次在日记中记录；菜谱不自动扣库存。</div>
+        </div>
+      </div>
+    </section>
   </section>
 
-  <section class="bottom">
-    <div class="card">
-      <div class="panel-head"><h2>餐次</h2><span>660 kcal · 3 笔</span></div>
-      <div class="meal"><span class="slot">早餐</span><span class="desc">测试燕麦片 · 100 g</span><b>380<small> kcal</small></b></div>
-      <div class="meal"><span class="slot">午餐</span><span class="desc">鸡胸沙拉 · 1 份</span><b>200<small> kcal</small></b></div>
-      <div class="meal"><span class="slot">晚餐</span><span class="desc"><span class="unknown">尚未记录</span></span><b style="color:var(--faint)">—</b></div>
-      <div class="meal"><span class="slot">加餐</span><span class="desc">苹果 · 1 个</span><b>80<small> kcal</small></b></div>
-    </div>
-    <div class="card">
-      <div class="panel-head"><h2>常吃</h2><span>单击按上次份量记</span></div>
-      <div class="chips">
-        <button class="chip"><b>燕麦片</b><span>380 / 100 g</span></button>
-        <button class="chip"><b>鸡胸</b><span>133 / 100 g</span></button>
-        <button class="chip"><b>苹果</b><span>52 / 个</span></button>
-        <button class="chip"><b>纯牛奶</b><span>135 / 250 ml</span></button>
+  <!-- ==================== 身体 ==================== -->
+  <section class="page" id="page-body">
+    <header>
+      <div><div class="date">10月25日 · 周日</div><h1>身体</h1></div>
+      <div class="actions"><button class="btn primary">＋ 记一次称重</button></div>
+    </header>
+
+    <section class="card">
+      <div class="panel-head"><h2>记录一次称重</h2><span>两位小数 · 同一天可多次，趋势取当日最新</span></div>
+      <div class="entry-form">
+        <div class="field"><label>称重日期</label><div class="box">2026-10-25 · 晨起</div></div>
+        <div class="field"><label>体重 kg</label><div class="box">83.</div></div>
+        <div class="field"><label>腰围 cm</label><div class="box placeholder">可留空</div></div>
+        <div class="field"><label>体脂 %</label><div class="box placeholder">可留空</div></div>
+        <div class="field"><label>备注</label><div class="box placeholder">可留空</div></div>
+        <button class="btn primary" style="height:32px">记录</button>
       </div>
-    </div>
+    </section>
+
+    <section class="kpi-row">
+      <div class="card kpi"><div class="label"><span>最新体重</span></div><div class="value">83.0<small>kg</small></div><div class="sub">距目标 78.9 还差 4.1</div></div>
+      <div class="card kpi"><div class="label"><span>七日平均</span><span class="badge ok">−1.2</span></div><div class="value">83.15<small>kg</small></div><div class="sub">每天只算一个代表值</div></div>
+      <div class="card kpi"><div class="label"><span>最新腰围</span></div><div class="value">—</div><div class="sub">还没有记录</div></div>
+      <div class="card kpi"><div class="label"><span>最新体脂</span></div><div class="value">—</div><div class="sub">还没有记录</div></div>
+    </section>
+
+    <section class="mid">
+      <div class="card">
+        <div class="panel-head"><h2>体重趋势 · 14 天</h2><span>虚线为每次称重</span></div>
+        <div class="weight-chart">
+          <div class="wline" style="bottom:18%"></div>
+          <div class="wpoints">
+            <div class="pt"><b>84.2</b><i></i><em>10-18</em></div>
+            <div class="pt"><b></b><i style="opacity:.25"></i><em>19</em></div>
+            <div class="pt"><b></b><i style="opacity:.25"></i><em>20</em></div>
+            <div class="pt"><b></b><i style="opacity:.25"></i><em>21</em></div>
+            <div class="pt"><b></b><i style="opacity:.25"></i><em>22</em></div>
+            <div class="pt"><b></b><i style="opacity:.25"></i><em>23</em></div>
+            <div class="pt"><b></b><i style="opacity:.25"></i><em>24</em></div>
+            <div class="pt"><b>83.0</b><i></i><em>今</em></div>
+          </div>
+          <div class="chart-foot">目标 78.9 kg（底部虚线）。只有一次称重时也画点，不再等两点。</div>
+        </div>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column">
+        <div class="panel-head"><h2>阶段复盘 · 7 天</h2><span class="badge flat">0 天可判定</span></div>
+        <div class="body-rows">
+          <div class="row"><span>日均热量（完整日）</span><b style="color:var(--muted);font-weight:500">数据不足</b></div>
+          <div class="row"><span>蛋白达标</span><b>0 / 0 天</b></div>
+          <div class="row"><span>区间体重变化</span><b>−1.2 kg</b></div>
+          <div class="row"><span>区间运动</span><b>0 次 · 0 分钟</b></div>
+          <div class="row"><span>周降幅判定</span><b style="color:var(--muted);font-weight:500">待样本（各需 3 天）</b></div>
+        </div>
+        <div class="chart-foot">所有判断由本地规则算出，不接云端模型；未知不折算成 0。</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="panel-head"><h2>全部记录</h2><span>含已更正与已作废 · 可回查</span></div>
+      <div class="meal" style="grid-template-columns:90px 70px 90px 1fr 90px 1fr auto">
+        <span class="slot">10-25</span><span class="slot">11:21</span><b>83.00</b><span class="desc">当日代表 · 晨起</span><span class="slot">—</span><span class="slot">—</span>
+        <span style="display:flex;gap:6px"><button class="btn" style="height:24px;padding:0 9px;font-size:11px">编辑</button><button class="btn" style="height:24px;padding:0 9px;font-size:11px">作废</button></span>
+      </div>
+    </section>
+  </section>
+
+  <!-- ==================== 运动 ==================== -->
+  <section class="page" id="page-workout">
+    <header>
+      <div><div class="date">本周 · 10月19日–25日</div><h1>运动</h1></div>
+      <div class="actions"><button class="btn primary">＋ 记一次运动</button></div>
+    </header>
+
+    <section class="kpi-row">
+      <div class="card kpi"><div class="label"><span>本周次数</span></div><div class="value">3<small>次</small></div><div class="sub">力量 2 · 有氧 1</div></div>
+      <div class="card kpi"><div class="label"><span>本周时长</span></div><div class="value">142<small>分钟</small></div><div class="microbar"><i style="width:71%;background:var(--primary)"></i></div></div>
+      <div class="card kpi"><div class="label"><span>最常项目</span></div><div class="value" style="font-size:22px;padding-top:5px">杠铃深蹲</div><div class="sub">近 30 天 11 次</div></div>
+      <div class="card kpi"><div class="label"><span>连续运动周</span></div><div class="value">4<small>周</small></div><div class="streak-dots"><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i></div></div>
+    </section>
+
+    <section class="mid">
+      <div class="card" style="display:flex;flex-direction:column">
+        <div class="panel-head"><h2>本周记录</h2><span>3 条</span></div>
+        <div class="sport-row"><div class="sport-ic">🏋️</div><div class="name"><b>下肢力量 · 杠铃深蹲</b><span>10月24日 · 55 分钟 · 中高强度</span></div><span class="num">55<small> 分钟</small></span></div>
+        <div class="sport-row"><div class="sport-ic">🏃</div><div class="name"><b>慢跑 · 户外</b><span>10月22日 · 32 分钟 · 低强度</span></div><span class="num">32<small> 分钟</small></span></div>
+        <div class="sport-row"><div class="sport-ic">🏋️</div><div class="name"><b>上肢力量 · 卧推划船</b><span>10月20日 · 55 分钟 · 中高强度</span></div><span class="num">55<small> 分钟</small></span></div>
+        <div class="chart-foot">运动消耗不抵扣饮食额度；它影响体重构成与精力。</div>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column">
+        <div class="panel-head"><h2>周分布 · 近 8 周</h2><span class="badge flat">分钟</span></div>
+        <div class="wk-bars">
+          <div class="day"><div class="bar"><i style="height:38%"></i></div><em>W1</em></div>
+          <div class="day"><div class="bar"><i style="height:52%"></i></div><em>W2</em></div>
+          <div class="day"><div class="bar"><i style="height:44%"></i></div><em>W3</em></div>
+          <div class="day"><div class="bar"><i style="height:60%"></i></div><em>W4</em></div>
+          <div class="day"><div class="bar"><i style="height:48%"></i></div><em>W5</em></div>
+          <div class="day"><div class="bar"><i style="height:56%"></i></div><em>W6</em></div>
+          <div class="day"><div class="bar"><i style="height:40%"></i></div><em>W7</em></div>
+          <div class="day hot"><div class="bar"><i style="height:50%"></i></div><em>本周</em></div>
+        </div>
+        <div class="chart-foot">空白周 = 未记录，不画成 0。</div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ==================== 食材库 ==================== -->
+  <section class="page" id="page-library">
+    <header>
+      <div><div class="date">本地资产 · 一次建档长期复用</div><h1>食材库</h1></div>
+      <div class="actions"><button class="btn">↩ 返回记餐（篮子已保留）</button><button class="btn primary">＋ 新建食物</button></div>
+    </header>
+
+    <section class="lib-toolbar">
+      <div class="search">⌕ 搜索食物名称或品牌</div>
+      <div class="filters">
+        <button class="active">全部</button><button>最近使用</button><button>常用收藏</button><button>已归档</button>
+      </div>
+      <span style="font-size:11px;color:var(--faint);margin-left:auto">6 项 · 修订生成新版本，历史餐食保持快照</span>
+    </section>
+
+    <section class="lib-grid">
+      <div class="card food-card">
+        <div class="top"><div><b>测试燕麦片</b><span>无品牌 · 包装标示 · v1</span></div><button class="star on">★</button></div>
+        <div class="nums"><span>能量 <b>380</b> kcal/100g</span><span>蛋白 <b>13</b> g</span></div>
+        <div class="ops"><button>修订</button><button>归档</button></div>
+      </div>
+      <div class="card food-card">
+        <div class="top"><div><b>鸡胸肉</b><span>无品牌 · 生重 · v2</span></div><button class="star on">★</button></div>
+        <div class="nums"><span>能量 <b>133</b> kcal/100g</span><span>蛋白 <b>24</b> g</span></div>
+        <div class="ops"><button>修订</button><button>归档</button></div>
+      </div>
+      <div class="card food-card">
+        <div class="top"><div><b>苹果</b><span>无品牌 · 可食部分 · v1</span></div><button class="star">☆</button></div>
+        <div class="nums"><span>能量 <b>52</b> kcal/个</span><span>纤维 <b>2.4</b> g</span></div>
+        <div class="ops"><button>修订</button><button>归档</button></div>
+      </div>
+      <div class="card food-card">
+        <div class="top"><div><b>纯牛奶</b><span>某品牌 · 包装标示 · v1</span></div><button class="star on">★</button></div>
+        <div class="nums"><span>能量 <b>135</b> kcal/250ml</span><span>蛋白 <b>8</b> g</span></div>
+        <div class="ops"><button>修订</button><button>归档</button></div>
+      </div>
+      <div class="card food-card">
+        <div class="top"><div><b>鸡蛋</b><span>无品牌 · 可食部分 · v1</span></div><button class="star">☆</button></div>
+        <div class="nums"><span>能量 <b>72</b> kcal/个</span><span>蛋白 <b>6.3</b> g</span></div>
+        <div class="ops"><button>修订</button><button>归档</button></div>
+      </div>
+      <div class="card food-card">
+        <div class="top"><div><b>糙米饭</b><span>无品牌 · 熟重 · v1</span></div><button class="star">☆</button></div>
+        <div class="nums"><span>能量 <b>112</b> kcal/100g</span><span>碳水 <b>24</b> g</span></div>
+        <div class="ops"><button>修订</button><button>归档</button></div>
+      </div>
+    </section>
   </section>
 </main>
+
+<script>
+  // 侧栏切换页面：原型内五页全览，全部一屏、无滚动。
+  document.querySelectorAll("nav button[data-page]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("nav button").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
+      document.getElementById("page-" + btn.dataset.page).classList.add("active");
+    });
+  });
+</script>
 </body>
 </html>
