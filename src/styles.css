@@ -188,34 +188,34 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 /* 饮食明细：日汇总 → 餐次小计 → 单项，三层共用同一列模板，数字列对齐。 */
 .diary-card { padding: 24px; min-width: 0; }
 .diary-card-tools { display: flex; align-items: center; gap: 12px; }
-.diary-sodium-toggle { margin: 0 !important; color: var(--muted); font-size: 11px; }
-.diary-summary { display: grid; grid-template-columns: minmax(150px, 1.4fr) repeat(6, minmax(72px, 1fr)); gap: 12px; margin-top: 16px; padding: 14px 16px; border-radius: 14px; background: var(--green-pale); }
+.diary-sodium-toggle { margin: 0 !important; color: var(--ui-muted); font-size: 11px; }
+.diary-summary { display: grid; grid-template-columns: minmax(150px, 1.4fr) repeat(6, minmax(72px, 1fr)); gap: 12px; margin-top: 16px; padding: 14px 16px; border-radius: 14px; background: var(--ui-sunken); }
 .diary-summary.with-sodium { grid-template-columns: minmax(150px, 1.4fr) repeat(7, minmax(72px, 1fr)); }
 .diary-summary-lead { display: grid; align-content: start; gap: 3px; }
-.diary-summary-lead strong { font-size: 13px; }
-.diary-summary-lead > span { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.diary-summary-lead strong { font-size: 13px; color: var(--ui-ink); }
+.diary-summary-lead > span { color: var(--ui-muted); font-size: 11px; line-height: 1.5; }
 .diary-summary-lead .status-pill { justify-self: start; margin-top: 4px; }
 .diary-summary-cell { display: grid; align-content: start; gap: 2px; }
-.diary-summary-cell > span { color: var(--muted); font-size: 11px; }
-.diary-summary-cell b { font: 600 16px "Space Grotesk", sans-serif; font-variant-numeric: tabular-nums; }
-.diary-summary-cell small { color: var(--muted); font-size: 10px; }
+.diary-summary-cell > span { color: var(--ui-muted); font-size: 11px; }
+.diary-summary-cell b { font: 600 16px "Space Grotesk", sans-serif; font-variant-numeric: tabular-nums; color: var(--ui-ink); }
+.diary-summary-cell small { color: var(--ui-muted); font-size: 10px; }
 .diary-scroll { margin-top: 12px; overflow-x: auto; }
 .diary-table { --diary-cols: minmax(200px, 2.4fr) 82px 74px 74px 70px 66px 58px 88px; min-width: 820px; }
 .diary-table.with-sodium { --diary-cols: minmax(200px, 2.4fr) 82px 74px 74px 70px 66px 58px 76px 88px; min-width: 900px; }
-.diary-row { display: grid; grid-template-columns: var(--diary-cols); gap: 10px; align-items: center; padding: 9px 8px; border-bottom: 1px solid var(--line-soft); background: var(--surface); font-size: 11px; }
-.diary-head { min-height: 32px; color: var(--muted); border-bottom: 1px solid var(--line); font-size: 11px; font-weight: 600; }
+.diary-row { display: grid; grid-template-columns: var(--diary-cols); gap: 10px; align-items: center; padding: 9px 8px; border-bottom: 1px solid var(--ui-line); background: var(--ui-card); font-size: 11px; color: var(--ui-ink-2); }
+.diary-head { min-height: 32px; color: var(--ui-muted); border-bottom: 1px solid var(--ui-line); font-size: 11px; font-weight: 600; background: var(--ui-card); }
 .diary-meal:last-child .diary-item:last-child { border-bottom: 0; }
-.diary-meal-head { margin-top: 8px; padding: 11px 8px; border-radius: 11px; background: var(--surface-soft); }
+.diary-meal-head { margin-top: 8px; padding: 11px 8px; border-radius: 11px; background: var(--ui-sunken); color: var(--ui-ink); }
 .diary-cell-food { min-width: 0; }
 .diary-cell-food strong, .diary-cell-food > span, .diary-cell-food small { display: block; }
-.diary-cell-food strong { font-size: 12px; }
-.diary-cell-food > span { margin-top: 3px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.diary-cell-food strong { font-size: 12px; color: var(--ui-ink); }
+.diary-cell-food > span { margin-top: 3px; color: var(--ui-muted); font-size: 11px; line-height: 1.45; }
 .diary-item-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
 .diary-cell-num { text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; }
 .diary-meal-head .diary-cell-num { font-weight: 600; }
 .food-entry { border-radius: 10px; }
-.diary-unknown, .diary-none { color: var(--muted); }
-.diary-partial { color: var(--ink); text-decoration: underline dashed var(--amber); text-underline-offset: 3px; }
+.diary-unknown, .diary-none { color: var(--ui-muted); }
+.diary-partial { color: var(--ui-ink); text-decoration: underline dashed var(--ui-warn); text-underline-offset: 3px; }
 .diary-cell-actions { position: sticky; right: 0; display: flex; justify-content: flex-end; gap: 10px; background: inherit; }
 .diary-meal-head .diary-cell-actions { gap: 0; }
 .diary-cell-actions .text-button { display: inline-flex; align-items: center; gap: 3px; }
