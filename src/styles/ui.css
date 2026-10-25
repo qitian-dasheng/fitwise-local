@@ -120,3 +120,25 @@
   .ui-mid, .ui-bottom { grid-template-columns: 1fr; }
   .ui-entry-form { grid-template-columns: 1fr 1fr; }
 }
+
+/* ── 应用壳（0.9.3 D 化）：侧栏跟随主题，替换 theme.css 的固定深墨侧栏 ── */
+body { background: var(--ui-bg); }
+.app-shell .sidebar {
+  background: var(--ui-bg);
+  border-right: 1px solid var(--ui-line);
+  color: var(--ui-muted);
+}
+.app-shell .sidebar nav button { color: var(--ui-muted); }
+.app-shell .sidebar nav button:hover { color: var(--ui-ink); background: var(--ui-sunken); }
+.app-shell .sidebar nav button.active { color: var(--ui-ink); background: var(--ui-sunken); font-weight: 600; }
+.app-shell .sidebar .nav-tool-label { color: var(--ui-faint); }
+.app-shell .sidebar .brand strong { color: var(--ui-ink); }
+.app-shell .sidebar .brand span { color: var(--ui-faint); }
+.app-shell .sidebar .brand-mark { background: var(--ui-primary); color: var(--ui-primary-ink); border-radius: 9px; }
+.app-shell .sidebar .profile-mini > div { background: var(--ui-sunken); border: 1px solid var(--ui-line); color: var(--ui-muted); }
+.app-shell .sidebar .profile-mini strong { color: var(--ui-ink); }
+.app-shell .sidebar .profile-mini small { color: var(--ui-faint); }
+.app-shell .collapse-button { border-color: var(--ui-line); color: var(--ui-muted); background: var(--ui-card); }
+.ui-theme-toggle { all: unset; display: flex; align-items: center; justify-content: center; gap: 8px; height: 30px; margin: 0 10px 6px; border: 1px solid var(--ui-line); border-radius: 8px; font-size: 11.5px; color: var(--ui-muted); cursor: pointer; }
+.ui-theme-toggle:hover { color: var(--ui-ink); border-color: var(--ui-line-2); }
+/* 主内容滚动条区域的过渡态：遗留白卡浮在 --ui-bg 画布上属预期，深层组件逐步迁移 */
