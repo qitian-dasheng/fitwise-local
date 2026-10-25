@@ -6,6 +6,7 @@ import { createPersonalState, initialState } from "../domain/seed";
 import { buildResetState, type ResetSummary } from "../domain/resetState";
 import type {
   AppState,
+  FoodUnit,
   PantryItem,
   MealEntry,
   MealType,

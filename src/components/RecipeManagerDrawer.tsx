@@ -63,12 +63,14 @@ export function RecipeManagerDrawer({
     );
   }, [searched, mealFilter, sort]);
   // 分组下拉：早餐→午餐→晚餐→加餐→未分类；多标签菜谱进每个匹配组。
-  const grouped = useMemo(() => mealTypes
-    .filter((type) => visible.some((item) => item.mealTags?.includes(type)))
-    .map((type) => ({ type, label: mealLabels[type], items: visible.filter((item) => item.mealTags?.includes(type)) }))
-    .concat(visible.some((item) => !item.mealTags?.length)
-      ? [{ type: "unlabeled" as const, label: "未分类", items: visible.filter((item) => !item.mealTags?.length) }]
-      : []), [visible]);
+  const grouped = useMemo<{ type: MealType | "unlabeled"; label: string; items: RecipeVersion[] }[]>(() => {
+    const groups: { type: MealType | "unlabeled"; label: string; items: RecipeVersion[] }[] = mealTypes
+      .filter((type) => visible.some((item) => item.mealTags?.includes(type)))
+      .map((type) => ({ type, label: mealLabels[type], items: visible.filter((item) => item.mealTags?.includes(type)) }));
+    const unlabeled = visible.filter((item) => !item.mealTags?.length);
+    if (unlabeled.length) groups.push({ type: "unlabeled", label: "未分类", items: unlabeled });
+    return groups;
+  }, [visible]);
   function changeMealFilter(value: MealType | "unlabeled" | "all") {
     setMealFilter(value);
     // 与名称搜索同口径：当前选择被筛掉时跟到第一个匹配，避免摘要区与下拉脱节。
