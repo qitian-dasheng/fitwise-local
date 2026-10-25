@@ -461,6 +461,11 @@ button.calendar-cell:focus-visible { outline: 2px solid var(--ui-ink); outline-o
 .chart-note { margin: 10px 0 0; color: var(--ui-muted); font-size: 11px; }
 
 .review-notes { display: grid; gap: 16px; padding: 24px; }
+/* 0.9.4 复盘提示默认折叠（有警示 verdict 时自动展开）；summary 复用卡片标题排版。 */
+.review-notes > .review-notes-summary { cursor: pointer; list-style: none; }
+.review-notes > .review-notes-summary::-webkit-details-marker { display: none; }
+.review-notes > .review-notes-summary::after { content: "▸"; margin-left: auto; color: var(--ui-muted); font-size: 12px; }
+.review-notes[open] > .review-notes-summary::after { content: "▾"; }
 .notes-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .notes-list li { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: 13px; background: var(--ui-sunken); }
 .note-icon { display: grid; flex: 0 0 auto; width: 27px; height: 27px; place-items: center; border-radius: 9px; }

@@ -34,6 +34,8 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   const setWeightRepresentative = useAppStore((state) => state.setWeightRepresentative);
   const [correction, setCorrection] = useState<Correction>(null);
   const action = useConfirmedAction();
+  // 0.9.4 表单折叠化：默认收成一行入口（首次使用无任何记录时展开引导），提交成功自动收起。
+  const [entryOpen, setEntryOpen] = useState(measurements.length === 0);
 
   const now = shanghaiNowParts();
   const [form, setForm] = useState({
@@ -67,6 +69,7 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   const chartStart = shiftDiaryDate(date, -13);
   const chartPeriod = usePeriodSummary(chartStart, date);
   const representatives = dailyRepresentatives(measurements.filter((item) => item.date <= date));
+  const latestEntry = representatives.at(-1);
 
   const chartData = chartPeriod.data
     ? chartPeriod.data.measurements.map((item) => ({ date: item.date.slice(5), weight: item.weightKg, average: item.average }))
@@ -134,8 +137,18 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
       <section className="ui-card body-entry">
         <div className="ui-panel-head">
           <h2>记录一次称重</h2>
-          <span className="ui-badge flat">两位小数 · 两次称重之间不要更换衣着与时间</span>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {!entryOpen && latestEntry && (
+              <span className="ui-chart-foot" style={{ marginTop: 0, paddingTop: 0 }}>
+                最近 {formatWeight(latestEntry.weightKg)} kg · {latestEntry.date.slice(5)}
+              </span>
+            )}
+            <button type="button" className={entryOpen ? "ui-btn" : "ui-btn primary"} onClick={() => setEntryOpen((open) => !open)}>
+              {entryOpen ? "收起" : "记一次称重"}
+            </button>
+          </div>
         </div>
+        {entryOpen && (
         <form
           className="body-entry-form"
           onSubmit={async (event) => {
@@ -162,6 +175,7 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
                   ? `已记录 ${formatWeight(input.weightKg)} kg；与最近记录相差较大，已保留原始值，请复核称量。`
                   : `已记录 ${formatWeight(input.weightKg)} kg${extras.length ? `，${extras.join("、")}` : ""}。`,
               );
+              setEntryOpen(false);
             }
           }}
         >
@@ -250,8 +264,9 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
           </fieldset>
           {weightError && <p className="form-error" role="alert">{weightError}</p>}
           {girthError && <p className="form-error" role="alert">{girthError}</p>}
-          {action.message && <p className="form-success" role="status">{action.message}</p>}
         </form>
+        )}
+        {action.message && <p className="form-success" role="status">{action.message}</p>}
       </section>
 
       <div className="metric-row five">
@@ -346,7 +361,7 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
       {(waistSeries.length > 0 || fatSeries.length > 0) && (
         <div className="girth-grid">
           {waistSeries.length > 0 && (
-            <section className="card chart-card girth-card">
+            <section className="ui-card chart-card girth-card">
               <div className="card-heading compact">
                 <div>
                   <p className="eyebrow">按日最新一次</p>
@@ -368,7 +383,7 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
             </section>
           )}
           {fatSeries.length > 0 && (
-            <section className="card chart-card girth-card">
+            <section className="ui-card chart-card girth-card">
               <div className="card-heading compact">
                 <div>
                   <p className="eyebrow">按日最新一次</p>
