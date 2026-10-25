@@ -2,6 +2,21 @@
 
 本地优先的个人减脂管理桌面应用（Windows）。无账号、无云端、无遥测，数据全在本机 SQLite。
 
+## 下载与安装
+
+从 [Releases](https://github.com/qitian-dasheng/fitwise-local/releases) 下载最新安装包：
+
+- **0.9.3 起**：`FitwiseLocal_x.x.x_x64-setup.exe`（NSIS 安装程序，按用户安装，通常无需管理员权限；应用内置自动更新）
+- **0.9.2（当前 Release）**：`FitwiseLocal_0.9.2_x64_zh-CN.msi`（Windows Installer）
+- **0.9.2 → 0.9.3 升级**：请先在「设置 → 应用」中卸载 0.9.2（MSI），再安装 0.9.3 exe；卸载不会删除你的记录数据（数据存于独立目录，与安装无关）
+- 校验：每个 Release 附 SHA-256，安装包名均为 ASCII
+
+## 隐私声明
+
+- **完全离线**：当前版本不发起任何网络请求，无遥测、无统计、无崩溃上报
+- 数据仅存于本机（SQLite 单库），应用不内置任何导出/同步到第三方的通道；JSON 导出由你手动触发
+- 0.9.3 起唯一的网络行为将是**版本更新检查**（可在设置中关闭），详见该版发布说明
+
 - **接手开发**：先读 [START_HERE.md](./START_HERE.md)（唯一权威接手文档，含架构、纪律、问题台账）。
 - **日常使用**：见 [DAILY_USAGE.md](./DAILY_USAGE.md)。
 - **版本记录**：`docs/releases/`（每版一份）；历史阶段文档在 `docs/history/`。
