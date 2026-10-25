@@ -198,7 +198,6 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 .diary-meal-head .diary-cell-actions { gap: 0; }
 .diary-cell-actions .text-button { display: inline-flex; align-items: center; gap: 3px; }
 .diary-legend { margin: 12px 0 0; color: var(--ui-muted); font-size: 11px; line-height: 1.6; }
-.recipe-visual { display: grid; width: 58px; height: 58px; margin-bottom: 16px; place-items: center; color: var(--ui-ink-2); border-radius: 18px; background: var(--ui-sunken); }.recipe-macros { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin: 16px 0; }.recipe-macros span { display: grid; color: var(--ui-muted); font-size: 11px; }.recipe-macros b { color: var(--ui-ink); font: 600 16px "Space Grotesk"; }.ingredient-list { margin: 0 0 18px; padding: 0; list-style: none; }.ingredient-list li { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--ui-line); font-size: 11px; }.ingredient-list li span { color: var(--ui-muted); }
 .ratio-summary { display: flex; gap: 12px; padding: 15px; border-radius: 12px; background: var(--ui-sunken); }.ratio-summary svg { color: var(--ui-ink-2); }.ratio-summary strong, .ratio-summary span { display: block; }.ratio-summary span { margin-top: 3px; color: var(--ui-muted); font-size: 11px; }
 
 .workout-list { padding: 24px; }.workout-row { display: grid; grid-template-columns: 48px 1fr repeat(3, minmax(75px, .35fr)); gap: 18px; align-items: center; padding: 16px 4px; border-bottom: 1px solid var(--ui-line); }.workout-icon { display: grid; width: 44px; height: 44px; place-items: center; color: var(--ui-ink-2); border-radius: 13px; background: var(--ui-sunken); }.workout-row strong, .workout-row span, .workout-row b { display: block; }.workout-row span { color: var(--ui-muted); font-size: 11px; }.workout-row b { font: 600 16px "Space Grotesk"; }.large-empty { display: grid; min-height: 330px; place-content: center; justify-items: center; color: var(--ui-muted); text-align: center; }.large-empty > svg { width: 40px; height: 40px; margin-bottom: 14px; color: var(--ui-faint); }.large-empty p { max-width: 360px; font-size: 11px; line-height: 1.7; }
@@ -282,31 +281,17 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 .drawer-summary > span { color: var(--ui-muted); }
 .drawer-summary .eyebrow { margin-bottom: 0; }
 
-/* ===== 0.4.8 结构修整：饮食页工作台 ===== */
-.food-page { display: grid; gap: 22px; }
-.food-page > .page-header,
-.food-page > .diary-date-control,
-.food-page > .form-hint,
-.food-page > .meal-correction-history { margin: 0; }
-.food-page > .form-hint { font-size: 12px; }
-.food-page > .settings-notice { margin: 0; }
+.food-page { display: flex; flex-direction: column; }
+.food-page > .meal-correction-history, .food-page > .form-hint { margin: 0; }
 
-.kitchen-card { display: grid; gap: 18px; padding: 24px; min-width: 0; }
-.kitchen-body { display: grid; gap: 16px; }
-.kitchen-top { display: flex; align-items: flex-start; gap: 16px; }
-.kitchen-top .recipe-visual { flex: 0 0 auto; margin-bottom: 0; }
-.kitchen-meta { min-width: 0; }
-.kitchen-meta h3 { margin-bottom: 6px; font-size: 18px; }
-.kitchen-meta p:not(.eyebrow) { margin: 0; color: var(--ui-muted); font-size: 12.5px; line-height: 1.7; }
-.kitchen-body .recipe-macros { margin: 0; }
-.kitchen-body .ingredient-list { margin: 0; }
-.kitchen-body .ingredient-list li { font-size: 12.5px; }
-.kitchen-empty { display: grid; justify-items: start; gap: 10px; padding: 22px; border: 1.5px dashed var(--ui-line-2); border-radius: 16px; background: var(--ui-sunken); }
-.kitchen-empty > svg { color: var(--ui-ink-2); }
-.kitchen-empty strong { font-size: 15px; }
-.kitchen-empty p { margin: 0; color: var(--ui-muted); font-size: 12.5px; line-height: 1.7; }
-.kitchen-footnote { display: flex; align-items: flex-start; gap: 9px; margin: 0; padding-top: 14px; border-top: 1px solid var(--ui-line); color: var(--ui-muted); font-size: 11.5px; line-height: 1.65; }
-.kitchen-footnote > svg { flex: 0 0 auto; color: var(--ui-ink-2); }
+/* ===== 0.9.4 今日下厨：压成一行入口（完整菜谱详情在管理菜谱抽屉） ===== */
+.food-workbench { display: grid; }
+.kitchen-card { display: grid; padding: 11px 14px; min-width: 0; }
+.kitchen-row { display: flex; align-items: center; gap: 12px; min-width: 0; flex-wrap: wrap; }
+.recipe-visual-sm { display: grid; flex: 0 0 auto; width: 34px; height: 34px; place-items: center; color: var(--ui-ink-2); border-radius: 10px; background: var(--ui-sunken); }
+.kitchen-row-main { flex: 1 1 220px; min-width: 0; display: grid; gap: 2px; }
+.kitchen-row-main strong { font-size: 13.5px; color: var(--ui-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kitchen-row-meta { font-size: 11.5px; color: var(--ui-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 @media (max-width: 620px) { .drawer { width: 100%; } .drawer-header, .drawer-body { padding-left: 18px; padding-right: 18px; } }
 
@@ -321,7 +306,6 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 .status-pill { font-size: 11px; padding: 5px 10px; }
 .recipe-picker { font-size: 12.5px; }
 .recipe-picker select { font-size: 13px; }
-.recipe-macros span { font-size: 11px; }
 
 /* 饮食明细：正文 13px / 表头 11px，数字列加宽以容纳新字号。 */
 .diary-table { --diary-cols: minmax(190px, 1fr) 84px 78px 78px 74px 70px 64px 92px; min-width: 860px; }

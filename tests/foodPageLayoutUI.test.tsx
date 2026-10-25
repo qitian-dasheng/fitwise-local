@@ -25,7 +25,7 @@ afterEach(async () => {
 
 const button = (label: string) => [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === label)!;
 
-it("lays out the cooking card and its footnote without a separate hint card", async () => {
+it("renders the cooking card as a single compact row (0.9.4 压一行)", async () => {
   await act(async () => root.render(<FoodPage />));
 
   expect(host.querySelector(".food-page")).not.toBeNull();
@@ -34,13 +34,16 @@ it("lays out the cooking card and its footnote without a separate hint card", as
   expect(host.querySelector(".two-column")).toBeNull();
   expect(host.querySelector(".validation-card")).toBeNull();
 
+  // 一行入口：菜名 + 热量/蛋白/时长摘要 + 两个动作按钮；不再有大图标块、三格宏量与食材清单。
   const kitchen = workbench.querySelector(".kitchen-card")!;
-  expect(kitchen.textContent).toContain("今日下厨");
+  expect(kitchen.querySelector(".kitchen-row")).not.toBeNull();
   expect(kitchen.textContent).toContain(initialState.recipes[0].name);
-
-  // 说明文案降级为厨房卡脚注，不再单独占一张卡。
-  const footnote = kitchen.querySelector(".kitchen-footnote")!;
-  expect(footnote.textContent).toContain("营养值不会把空白当成零");
+  expect(kitchen.textContent).toContain("kcal");
+  expect(kitchen.querySelector(".recipe-macros")).toBeNull();
+  expect(kitchen.querySelector(".ingredient-list")).toBeNull();
+  expect(kitchen.querySelector(".kitchen-footnote")).toBeNull();
+  expect([...kitchen.querySelectorAll("button")].map((b) => b.textContent?.trim())).toContain("加入餐次");
+  expect([...kitchen.querySelectorAll("button")].map((b) => b.textContent?.trim())).toContain("管理菜谱");
 });
 
 it("keeps recipe management inside a drawer that closes on Escape", async () => {

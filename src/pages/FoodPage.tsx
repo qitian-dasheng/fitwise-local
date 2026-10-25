@@ -1,5 +1,5 @@
 import { diaryToday, shiftDiaryDate, type DiaryDateProps } from "../domain/diary";
-import { BookOpen, ChefHat, ChevronLeft, ChevronRight, Library, Plus, ShieldCheck, UtensilsCrossed } from "lucide-react";
+import { BookOpen, ChefHat, ChevronLeft, ChevronRight, Library, Plus, UtensilsCrossed } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { MealEntry, RecipeVersion, MealType } from "../domain/types";
 import { useAppStore } from "../store/appStore";
@@ -158,39 +158,32 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
       />
 
       <div className="food-workbench">
-        <section className="ui-card kitchen-card">
-          <div className="ui-panel-head">
-            <h2>今日下厨</h2>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="ui-btn" disabled={!recipe} onClick={() => setRecipeMealOpen(true)}><UtensilsCrossed size={15} /> 加入餐次</button>
+        {/* 0.9.4 压成一行入口：完整菜谱详情（食材清单/宏量）在「管理菜谱」里看。 */}
+        <section className="ui-card kitchen-card" aria-label="今日下厨">
+          {recipe ? (
+            <div className="kitchen-row">
+              <span className="recipe-visual-sm"><ChefHat size={19} /></span>
+              <div className="kitchen-row-main">
+                <strong>{recipe.name}</strong>
+                <span className="kitchen-row-meta">
+                  {nutrientText(recipe.nutrition, "calories", energyUnit)} {energyUnitLabels[energyUnit]} · 蛋白 {nutrientText(recipe.nutrition, "protein")} g · {recipe.totalMinutes} 分钟
+                  {!latest.some((r) => r.id === recipe.id) ? ` · 历史 v${recipe.version}` : ` · v${recipe.version}`}
+                </span>
+              </div>
+              <button className="ui-btn primary" onClick={() => setRecipeMealOpen(true)}><UtensilsCrossed size={15} /> 加入餐次</button>
               <button className="ui-btn" onClick={() => setRecipeDrawer(true)}><BookOpen size={15} /> 管理菜谱</button>
             </div>
-          </div>
-
-          {recipe ? (
-            <div className="kitchen-body">
-              <div className="kitchen-top">
-                <div className="recipe-visual"><ChefHat size={30} /></div>
-                <div className="kitchen-meta">
-                  <p className="ui-chart-foot" style={{ marginTop: 0, paddingTop: 0 }}>v{recipe.version} · {recipe.totalMinutes} 分钟</p>
-                  <h3>{recipe.name}</h3>
-                  <p>标准菜谱只作营养与分量参考；实际摄入请按餐次在日记中记录。</p>
-                </div>
-              </div>
-              {!latest.some(r=>r.id===recipe.id)&&<p className="library-notice">正在复用历史 v{recipe.version}：展示沿用原版本的原料和营养，不会替换为最新版。</p>}
-              <div className="recipe-macros"><span><b>{nutrientText(recipe.nutrition, "calories", energyUnit)}</b> {energyUnitLabels[energyUnit]}</span><span><b>{nutrientText(recipe.nutrition, "protein")}</b> g 蛋白质</span><span><b>{recipe.totalMinutes}</b> 分钟</span></div>
-              <ul className="ingredient-list">{recipe.ingredients.map((item) => <li key={item.foodId}><span>{item.name}</span><b>{item.nutritionQuantity ?? item.amount} {foodUnitLabels[item.nutritionUnit ?? item.unit] ?? item.unit}</b></li>)}</ul>
-            </div>
           ) : (
-            <div className="kitchen-empty">
-              <ChefHat size={26} />
-              <strong>暂无标准菜谱</strong>
-              <p>仍可通过食材库或仅记录本次入口记餐；固定搭配建议先建成菜谱，方便每次快速核对。</p>
-              <button className="ui-btn" onClick={() => openRecipeEditor("new", false)}>新建第一个菜谱</button>
+            <div className="kitchen-row">
+              <span className="recipe-visual-sm"><ChefHat size={19} /></span>
+              <div className="kitchen-row-main">
+                <strong>还没有菜谱</strong>
+                <span className="kitchen-row-meta">固定搭配建成菜谱后，可一键按份量记入餐次</span>
+              </div>
+              <button className="ui-btn" onClick={() => openRecipeEditor("new", false)}><Plus size={15} /> 新建菜谱</button>
+              <button className="ui-btn" onClick={() => setRecipeDrawer(true)}><BookOpen size={15} /> 管理菜谱</button>
             </div>
           )}
-
-          <p className="kitchen-footnote"><ShieldCheck size={15} /><span>营养值不会把空白当成零：首次商品会校验千焦／千卡、每份／每百克和净含量。</span></p>
         </section>
       </div>
 
