@@ -1,6 +1,5 @@
 // AI 采集通道测试：mock 客户端注入，绝不真实联网。
 
-use super::*;
 use serde_json::json;
 
 struct MockClient {

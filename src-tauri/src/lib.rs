@@ -1,18 +1,18 @@
+mod ai_collect;
 mod body_commands;
 mod data_diagnostics;
 mod domain_commands;
 mod domain_queries;
 mod domain_store;
-mod ai_collect;
-mod update_proxy;
-mod food_catalog;
 mod domain_upgrade;
+mod food_catalog;
 mod food_library;
 mod meal_corrections;
 mod pantry_commands;
 mod recipe_meal_commands;
 mod recipes;
 mod record_commands;
+mod update_proxy;
 mod workout_commands;
 
 #[cfg(test)]

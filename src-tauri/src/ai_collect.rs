@@ -40,7 +40,9 @@ impl OllamaClient for HttpOllamaClient {
         if !response.status().is_success() {
             return Err(format!("Ollama 返回错误状态 {}", response.status()));
         }
-        let body: Value = response.json().map_err(|error| format!("Ollama 响应不是 JSON：{error}"))?;
+        let body: Value = response
+            .json()
+            .map_err(|error| format!("Ollama 响应不是 JSON：{error}"))?;
         body["message"]["content"]
             .as_str()
             .map(str::to_owned)
@@ -68,7 +70,9 @@ pub(crate) fn list_ollama_models(base: &str) -> Result<Vec<String>, String> {
     if !response.status().is_success() {
         return Err(format!("Ollama 返回错误状态 {}", response.status()));
     }
-    let body: Value = response.json().map_err(|error| format!("Ollama 响应不是 JSON：{error}"))?;
+    let body: Value = response
+        .json()
+        .map_err(|error| format!("Ollama 响应不是 JSON：{error}"))?;
     Ok(body["models"]
         .as_array()
         .map(|items| {
@@ -82,22 +86,28 @@ pub(crate) fn list_ollama_models(base: &str) -> Result<Vec<String>, String> {
 
 /// 草稿条目校验：name 缺失/空白 → None（跳过该条）；营养值未知/非法一律置 unknown（ai_estimate + low）。
 fn sanitize_draft(raw: &Value) -> Option<Value> {
-    let name = raw["name"].as_str().map(str::trim).filter(|value| !value.is_empty())?;
+    let name = raw["name"]
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
     if name.chars().count() > 120 {
         return None;
     }
     if name.chars().count() > 120 {
-        return Err("食物名不能超过 120 字。".into());
+        return None; // 超长名跳过（AI 噪声，非用户输入）。
     }
-    let nutrient = |key: &str, unit: &str| {
-        match raw["nutrition"][key].as_f64() {
-            Some(number) if number.is_finite() && number >= 0.0 => {
-                json!({"state": "known", "value": number, "unit": unit, "source": "ai_estimate", "confidence": "low"})
-            }
-            _ => json!({"state": "unknown", "unit": unit, "source": "ai_estimate", "confidence": "low"}),
+    let nutrient = |key: &str, unit: &str| match raw["nutrition"][key].as_f64() {
+        Some(number) if number.is_finite() && number >= 0.0 => {
+            json!({"state": "known", "value": number, "unit": unit, "source": "ai_estimate", "confidence": "low"})
+        }
+        _ => {
+            json!({"state": "unknown", "unit": unit, "source": "ai_estimate", "confidence": "low"})
         }
     };
-    let amount_label = raw["amountLabel"].as_str().map(str::trim).filter(|value| !value.is_empty());
+    let amount_label = raw["amountLabel"]
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
     Some(json!({
         "name": name,
         "amountLabel": amount_label.unwrap_or("AI 估计"),
@@ -154,11 +164,7 @@ pub(crate) fn generate_draft_with(
     Ok(json!({"model": model, "items": items}))
 }
 
-pub(crate) fn generate_draft(
-    base: &str,
-    model: &str,
-    description: &str,
-) -> Result<Value, String> {
+pub(crate) fn generate_draft(base: &str, model: &str, description: &str) -> Result<Value, String> {
     generate_draft_with(&HttpOllamaClient, base, model, description)
 }
 

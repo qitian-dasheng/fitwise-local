@@ -1,6 +1,5 @@
 // 内置食材目录合并测试（0.11.0）：只使用内存库与临时数据，绝不触碰用户真实数据库。
 
-use super::*;
 use crate::domain_store::{ensure_repository_schema, STORAGE_NAME};
 use rusqlite::Connection;
 use serde_json::json;

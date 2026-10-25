@@ -46,10 +46,15 @@ pub fn get_system_proxy() -> Option<SystemProxy> {
     {
         use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
         let settings = winreg::RegKey::predef(HKEY_CURRENT_USER)
-            .open_subkey_with_flags(r"Software\Microsoft\Windows\CurrentVersion\Internet Settings", KEY_READ)
+            .open_subkey_with_flags(
+                r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+                KEY_READ,
+            )
             .ok()?;
         let enabled = settings.get_value::<u32, _>("ProxyEnable").unwrap_or(0) != 0;
-        let server = settings.get_value::<String, _>("ProxyServer").unwrap_or_default();
+        let server = settings
+            .get_value::<String, _>("ProxyServer")
+            .unwrap_or_default();
         parse_proxy_server(&server, enabled).map(|url| SystemProxy { url: Some(url) })
     }
     #[cfg(not(target_os = "windows"))]
