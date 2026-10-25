@@ -9,6 +9,7 @@ import { nutrientKeys, type FoodMealInput, type MealEntry, type MealType } from 
 import { mealLabels } from "../domain/meals";
 import { diaryToday } from "../domain/diary";
 import { useConfirmedAction } from "./useConfirmedAction";
+import { MiniSelect } from "./MiniSelect";
 
 /**
  * 0.9.4 第六轮分离式重设计：核对与确认从记餐弹窗迁到饮食页本条。
@@ -104,7 +105,8 @@ export function BasketBar({ onRecorded }: { onRecorded?: (date: string) => void 
           ))}
           <div className="form-grid">
             <label><span>日期</span><input type="date" required max={diaryToday()} value={date} onChange={(event) => setDate(event.target.value)}/></label>
-            <label><span>餐次</span><select value={type} onChange={(event) => setType(event.target.value as MealType)}>{Object.entries(mealLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+            <label><span>餐次</span><MiniSelect ariaLabel="餐次" value={type} onChange={(value) => setType(value as MealType)}
+              options={Object.entries(mealLabels).map(([value, label]) => ({ value, label }))} /></label>
           </div>
           <p className="form-hint">保存失败会保留待确认内容，可直接重试；万一重复用日报条目「作废」移除。</p>
         </div>
