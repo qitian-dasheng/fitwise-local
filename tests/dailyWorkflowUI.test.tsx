@@ -53,17 +53,19 @@ it("can render an empty recipe store and does not offer an empty day as complete
   await act(async () => root.render(<FoodPage/>));
   expect(container.textContent).toContain("暂无标准菜谱");
   await act(async () => root.render(<TodayPage goTo={() => undefined}/>));
-  expect(button("确认该日饮食完整").disabled).toBe(true);
+  expect(button("确认该日完整").disabled).toBe(true);
 });
 
-it("keeps the quick-action card free of duplicate copy and moves the completion hint into the header", async () => {
+it("keeps the cockpit header free of duplicate copy and keeps the completion discipline visible", async () => {
   await act(async () => root.render(<TodayPage goTo={() => undefined}/>));
   expect(container.textContent).not.toContain("三件事都在这里");
   expect(container.textContent).not.toContain("点了直接开表单");
-  expect(container.querySelector(".quick-actions h2")?.textContent).toBe("补记一笔");
-  expect(container.querySelector(".quick-actions .eyebrow")).toBeNull();
-  expect(container.querySelector(".complete-day .form-hint")?.textContent).toContain("确认前请核对所有餐次");
-  expect(container.querySelector(".page > .form-hint")).toBeNull();
+  // 方向 D：快捷入口是页头三个按钮，主操作只有一个 primary（记一笔）。
+  const headerButtons = [...container.querySelectorAll<HTMLButtonElement>(".ui-page-head button")];
+  expect(headerButtons.some((item) => item.textContent?.includes("记一笔"))).toBe(true);
+  expect(container.querySelectorAll(".ui-page-head .ui-btn.primary").length).toBe(1);
+  // 完成确认的纪律文案仍在（不可凭空确认，未知热量日不进均值）。
+  expect(container.textContent).toContain("确认前请核对所有餐次");
 });
 
 it("reopens only the supplemented diary date and leaves other completed dates alone", async () => {
