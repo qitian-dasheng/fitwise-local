@@ -354,6 +354,91 @@ pub(crate) fn apply(
                 payload.clone(),
             )?;
         }
+        // 目标是「当前有效配置」，不是历史事实：直接更新 profile 单例，
+        // 旧值完整进审计事件；趋势与达标判定始终用当前目标计算，不做回溯重算。
+        "set_target_profile" => {
+            let daily = payload
+                .get("dailyCalories")
+                .and_then(Value::as_object)
+                .ok_or("命令缺少 dailyCalories。")?;
+            let min = daily
+                .get("min")
+                .and_then(Value::as_f64)
+                .ok_or("热量区间缺少 min。")?;
+            let target = daily
+                .get("target")
+                .and_then(Value::as_f64)
+                .ok_or("热量区间缺少 target。")?;
+            let max = daily
+                .get("max")
+                .and_then(Value::as_f64)
+                .ok_or("热量区间缺少 max。")?;
+            for (label, value) in [("热量下限", min), ("热量目标", target), ("热量上限", max)]
+            {
+                if !value.is_finite() || !(500.0..=8000.0).contains(&value) {
+                    return Err(format!("{label}需在 500–8000 kcal 之间。"));
+                }
+            }
+            if !(min <= target && target <= max) {
+                return Err("热量区间需满足：下限 ≤ 目标 ≤ 上限。".into());
+            }
+            let protein = payload_number(payload, "proteinTargetG")?;
+            if !(1.0..=500.0).contains(&protein) {
+                return Err("蛋白质目标需在 1–500 g 之间。".into());
+            }
+            let fiber = payload_number(payload, "fiberTargetG")?;
+            if !(0.0..=200.0).contains(&fiber) {
+                return Err("纤维目标需在 0–200 g 之间。".into());
+            }
+            let weight = payload_number(payload, "targetWeightKg")?;
+            if !(20.0..=400.0).contains(&weight) {
+                return Err("目标体重需在 20–400 kg 之间。".into());
+            }
+            if (weight * 100.0 - (weight * 100.0).round()).abs() > 1e-6 {
+                return Err("目标体重最多保留两位小数。".into());
+            }
+            let before = {
+                let profile = state
+                    .get("profile")
+                    .and_then(Value::as_object)
+                    .ok_or("领域状态缺少 profile 单例。")?;
+                json!({
+                    "dailyCalories": profile.get("dailyCalories"),
+                    "proteinTargetG": profile.get("proteinTargetG"),
+                    "fiberTargetG": profile.get("fiberTargetG"),
+                    "targetWeightKg": profile.get("targetWeightKg"),
+                })
+            };
+            {
+                let profile = state
+                    .get_mut("profile")
+                    .and_then(Value::as_object_mut)
+                    .ok_or("领域状态缺少 profile 单例。")?;
+                profile.insert(
+                    "dailyCalories".into(),
+                    json!({"min": min, "target": target, "max": max}),
+                );
+                profile.insert("proteinTargetG".into(), json!(protein));
+                profile.insert("fiberTargetG".into(), json!(fiber));
+                profile.insert("targetWeightKg".into(), json!(weight));
+            }
+            let after = json!({
+                "dailyCalories": {"min": min, "target": target, "max": max},
+                "proteinTargetG": protein, "fiberTargetG": fiber, "targetWeightKg": weight,
+            });
+            audit(
+                state,
+                command_id,
+                "target_profile_updated",
+                "profile",
+                "profile",
+                json!({"before": before, "after": after}),
+            )?;
+            return Ok(CommandMutation {
+                applied: true,
+                result: json!({"profile": state["profile"].clone()}),
+            });
+        }
         _ => return Err("未知的领域命令。".into()),
     }
     Ok(CommandMutation {

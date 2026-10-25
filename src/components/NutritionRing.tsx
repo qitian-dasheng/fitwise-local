@@ -1,4 +1,4 @@
-export function NutritionRing({ value, max, label, color = "var(--green)" }: { value: number; max: number; label: string; color?: string }) {
+export function NutritionRing({ value, max, label, color = "var(--green)", rangeLabel }: { value: number; max: number; label: string; color?: string; rangeLabel?: string }) {
   const ratio = Math.min(1, Math.max(0, value / max));
   return (
     <div className="nutrition-ring-wrap">
@@ -10,7 +10,7 @@ export function NutritionRing({ value, max, label, color = "var(--green)" }: { v
       >
         <div className="nutrition-ring-inner">
           <strong>{Math.round(value)}</strong>
-          <span>/ {max}</span>
+          <span>/ {rangeLabel ?? max}</span>
         </div>
       </div>
       <span className="ring-label">{label}</span>

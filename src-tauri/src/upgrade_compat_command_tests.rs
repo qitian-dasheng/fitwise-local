@@ -98,7 +98,7 @@ fn legacy_database() -> (Connection, std::path::PathBuf) {
 
 #[test]
 fn legacy_database_opens_under_0_9_1_without_any_migration_or_data_change() {
-    let (mut connection, path) = legacy_database();
+    let (connection, path) = legacy_database();
     let envelope_before = load_envelope(&connection).unwrap().unwrap();
 
     // 0.9.1 代码首次打开：schema 无操作，信封一字节不变。

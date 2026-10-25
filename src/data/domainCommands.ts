@@ -26,7 +26,8 @@ export type DomainCommandKind =
   | "undo_workout_correction"
   | "restore_voided_workout"
   | "set_checkin"
-  | "set_day_complete";
+  | "set_day_complete"
+  | "set_target_profile";
 
 export interface DomainCommandResponse<TResult = Record<string, never>> {
   applied: boolean;

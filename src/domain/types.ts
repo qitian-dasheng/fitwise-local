@@ -103,6 +103,14 @@ export interface UserProfile {
   equipment: string[];
 }
 
+/** set_target_profile 的载荷：只允许改目标类字段，身份字段（姓名/身高等）不在其中。 */
+export interface TargetProfileInput {
+  dailyCalories: { min: number; target: number; max: number };
+  proteinTargetG: number;
+  fiberTargetG: number;
+  targetWeightKg: number;
+}
+
 export interface MealEntry {
   id: string;
   status?: "active" | "superseded" | "void";

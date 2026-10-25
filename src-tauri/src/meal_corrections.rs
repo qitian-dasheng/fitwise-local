@@ -76,7 +76,9 @@ pub(crate) fn apply(
             let unit_label = serde_json::from_value::<crate::food_library::FoodUnit>(json!(unit))
                 .map(|unit| unit.label())
                 .unwrap_or(unit);
-            next["amountLabel"] = json!(format!("{quantity} {unit_label} · 已纠错（沿用原营养版本）"));
+            next["amountLabel"] = json!(format!(
+                "{quantity} {unit_label} · 已纠错（沿用原营养版本）"
+            ));
         } else {
             let name = payload_str(payload, "name")?.trim();
             let amount = payload_str(payload, "amountLabel")?.trim();

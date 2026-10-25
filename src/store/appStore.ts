@@ -14,7 +14,9 @@ import type {
   FoodMeasurementBasis,
   RecipeMealInput,
   MealCorrectionInput, RecipeInput, MeasurementCondition, BodyMeasurement,
+  TargetProfileInput,
 } from "../domain/types";
+import { targetFieldsOf, validateTargetProfileInput } from "../domain/targets";
 import { enqueueDomainCommand, executeDomainCommand, type DomainCommandKind } from "../data/domainCommands";
 import { appStorage, flushAppStorageWrites, isTauriRuntime, reportStorageFailure, suppressNextAppStorageWrite } from "../data/storage";
 import { foodMealEntries, saveFoodInState } from "../domain/foodLibrary";
@@ -168,6 +170,7 @@ interface AppActions {
   undoWorkoutCorrection: (input: { workoutId: string; reason?: string }, commandId?: string) => Promise<ActionResult>;
   restoreVoidedWorkout: (input: { workoutId: string; reason: string }, commandId?: string) => Promise<ActionResult>;
   setCheckIn: (input: { hunger?: number; energy?: number; date?: string }, commandId?: string) => Promise<ActionResult>;
+  setTargetProfile: (input: TargetProfileInput, commandId?: string) => Promise<ActionResult>;
   setDayComplete: (date: string, complete: boolean, commandId?: string) => Promise<ActionResult>;
   toggleDayComplete: (commandId?: string) => Promise<ActionResult>;
   resetDemo: () => Promise<ResetSummary>;
@@ -662,6 +665,21 @@ export const useAppStore = create<AppStore>()(
           checkIns: state.checkIns.some((item) => item.date === date)
             ? state.checkIns.map((item) => (item.date === date ? { ...item, ...input } : item))
             : [...state.checkIns, { date, complete: false, ...input }],
+        }));
+        return {};
+      },
+      async setTargetProfile(input, commandId = uid()) {
+        if (isTauriRuntime()) return submit("set_target_profile", { ...input }, commandId);
+        // 浏览器镜像：同一套守卫校验；旧目标进审计事件，与 Rust 同口径。
+        const checked = validateTargetProfileInput(input);
+        if (checked.error || !checked.payload) return { error: checked.error };
+        const before = targetFieldsOf(get().profile);
+        set((state) => ({
+          profile: { ...state.profile, ...checked.payload },
+          auditEvents: [...state.auditEvents, {
+            id: `${commandId}:audit`, eventType: "target_profile_updated", entityType: "profile", entityId: "profile",
+            payload: { commandId, details: { before, after: checked.payload } }, createdAt: new Date().toISOString(),
+          }],
         }));
         return {};
       },

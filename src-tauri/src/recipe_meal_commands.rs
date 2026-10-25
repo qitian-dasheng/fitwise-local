@@ -25,10 +25,9 @@ pub(crate) fn apply(
         return Err("餐次无效。".into());
     }
     let recipe_version_id = payload_str(payload, "recipeVersionId")?;
-    let entries: Vec<PortionRequest> = serde_json::from_value(
-        payload.get("entries").cloned().ok_or("没有待记餐食物。")?,
-    )
-    .map_err(|error| format!("记餐份量无效：{error}"))?;
+    let entries: Vec<PortionRequest> =
+        serde_json::from_value(payload.get("entries").cloned().ok_or("没有待记餐食物。")?)
+            .map_err(|error| format!("记餐份量无效：{error}"))?;
     if entries.is_empty() || entries.len() > 50 {
         return Err("一次可确认 1–50 项食物。".into());
     }

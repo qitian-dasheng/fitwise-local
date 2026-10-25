@@ -101,7 +101,7 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickActi
             <span className="status-pill neutral">目标 {Math.round(toDisplayEnergy(profile.dailyCalories.min, energyUnit))}–{Math.round(toDisplayEnergy(profile.dailyCalories.max, energyUnit))}</span>
           </div>
           <div className="rings-row">
-            <NutritionRing value={toDisplayEnergy(summary.totals.calories, energyUnit)} max={toDisplayEnergy(profile.dailyCalories.target, energyUnit)} label={`热量 · ${energyUnitLabels[energyUnit]}`} />
+            <NutritionRing value={toDisplayEnergy(summary.totals.calories, energyUnit)} max={toDisplayEnergy(profile.dailyCalories.target, energyUnit)} label={`热量 · ${energyUnitLabels[energyUnit]}`} rangeLabel={`${Math.round(toDisplayEnergy(profile.dailyCalories.min, energyUnit))}–${Math.round(toDisplayEnergy(profile.dailyCalories.max, energyUnit))}`} />
             <NutritionRing value={summary.totals.protein} max={profile.proteinTargetG} label="蛋白质 · g" color="var(--blue)" />
             <NutritionRing value={summary.totals.fiber} max={profile.fiberTargetG} label="纤维 · g" color="var(--amber)" />
           </div>
