@@ -1,12 +1,10 @@
-import { diaryToday, type DiaryDateProps } from "../domain/diary";
-import { DiaryDateControl } from "../components/DiaryDateControl";
-import { BookOpen, ChefHat, Library, Plus, ShieldCheck, UtensilsCrossed } from "lucide-react";
+import { diaryToday, shiftDiaryDate, type DiaryDateProps } from "../domain/diary";
+import { BookOpen, ChefHat, ChevronLeft, ChevronRight, Library, Plus, ShieldCheck, UtensilsCrossed } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { MealEntry, RecipeVersion, MealType } from "../domain/types";
 import { useAppStore } from "../store/appStore";
 import { useFoodPicker } from "../store/foodPicker";
 import { Modal } from "../components/Modal";
-import { PageHeader } from "../components/PageHeader";
 import { useConfirmedAction } from "../components/useConfirmedAction";
 import type { ActionResult } from "../store/appStore";
 import { FoodLibraryModal } from "../components/FoodLibraryModal";
@@ -109,29 +107,43 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
   }
 
   return (
-    <div className="page food-page">
-      <PageHeader eyebrow="实际摄入" title="饮食日记" description="新食物确认一次规格，以后选择食物、填写吃了多少，自动计算营养。" action={<div className="card-heading-actions"><button className="button primary" onClick={() => openMeal()}><Plus size={17} /> 添加食物</button><button className="button secondary" onClick={() => (goTo ? goTo("library") : setLibraryOpen(true))}><Library size={17} /> 食材库</button></div>} />
-      <DiaryDateControl date={date} onChange={onDateChange}/>
-      <p className="form-hint">补录或新增餐食会把该日重新标为待核对，请在日报再次确认完成。</p>
+    <div className="page food-page" style={{ display: "flex", flexDirection: "column", gap: 13, flex: 1, minHeight: 0 }}>
+      <header className="ui-page-head">
+        <div>
+          <div className="date">{today === diaryToday() ? "实际摄入 · 今天" : `实际摄入 · ${today}`}</div>
+          <h1>饮食日记</h1>
+        </div>
+        <div className="actions" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div className="ui-datestrip">
+            <button className="ui-navbtn" aria-label="前一天" onClick={() => onDateChange?.(shiftDiaryDate(date, -1))}><ChevronLeft size={15} /></button>
+            <input type="date" aria-label="查看日期" value={date} onChange={(event) => event.target.value && onDateChange?.(event.target.value)} style={{ all: "unset", cursor: "pointer", font: "inherit", color: "var(--ui-ink-2)" }} />
+            <button className="ui-navbtn" aria-label="后一天" disabled={date >= diaryToday()} onClick={() => onDateChange?.(shiftDiaryDate(date, 1))}><ChevronRight size={15} /></button>
+          </div>
+          <button className="ui-btn" onClick={() => (goTo ? goTo("library") : setLibraryOpen(true))}><Library size={15} /> 食材库</button>
+          <button className="ui-btn primary" onClick={() => openMeal()}><Plus size={15} /> 添加食物</button>
+        </div>
+      </header>
+
       {frequent.length > 0 && (
-        <div className="frequent-bar card" aria-label="常吃食物">
-          <span className="frequent-title">常吃</span>
-          <div className="frequent-chips">
+        <section className="ui-card" aria-label="常吃食物" style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 14 }}>
+          <div className="ui-panel-head" style={{ marginBottom: 0 }}><h2 style={{ fontSize: 12 }}>常吃</h2></div>
+          <div className="ui-chips">
             {frequent.map((food) => (
               <button
                 key={food.definition.id}
                 type="button"
-                className="frequent-chip"
+                className="ui-chip"
                 title={food.lastPortion ? `按上次 ${food.lastPortion.quantity} ${foodUnitLabels[food.lastPortion.unit]} 加入篮子` : "打开选择器选择份量"}
                 onClick={() => quickAddFrequent(food)}
               >
-                {food.definition.name}
-                {food.lastPortion && <small>{food.lastPortion.quantity}{foodUnitLabels[food.lastPortion.unit]}</small>}
+                <b>{food.definition.name}</b>
+                {food.lastPortion && <span>上次 {food.lastPortion.quantity}{foodUnitLabels[food.lastPortion.unit]}</span>}
               </button>
             ))}
           </div>
-        </div>
+        </section>
       )}
+      <p className="ui-chart-foot" style={{ marginTop: 0, paddingTop: 0 }}>补录或新增餐食会把该日重新标为待核对，请在日报再次确认完成。</p>
       <MealDiaryTable
         date={today}
         entries={meals}
@@ -146,15 +158,12 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
       />
 
       <div className="food-workbench">
-        <section className="card kitchen-card">
-          <div className="card-heading compact">
-            <div>
-              <p className="eyebrow">标准菜谱</p>
-              <h2>今日下厨</h2>
-            </div>
-            <div className="card-heading-actions">
-              <button className="button primary small" disabled={!recipe} onClick={() => setRecipeMealOpen(true)}><UtensilsCrossed size={15} /> 加入餐次</button>
-              <button className="button secondary small" onClick={() => setRecipeDrawer(true)}><BookOpen size={15} /> 管理菜谱</button>
+        <section className="ui-card kitchen-card">
+          <div className="ui-panel-head">
+            <h2>今日下厨</h2>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="ui-btn" disabled={!recipe} onClick={() => setRecipeMealOpen(true)}><UtensilsCrossed size={15} /> 加入餐次</button>
+              <button className="ui-btn" onClick={() => setRecipeDrawer(true)}><BookOpen size={15} /> 管理菜谱</button>
             </div>
           </div>
 
@@ -163,7 +172,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
               <div className="kitchen-top">
                 <div className="recipe-visual"><ChefHat size={30} /></div>
                 <div className="kitchen-meta">
-                  <p className="eyebrow">v{recipe.version} · {recipe.totalMinutes} 分钟</p>
+                  <p className="ui-chart-foot" style={{ marginTop: 0, paddingTop: 0 }}>v{recipe.version} · {recipe.totalMinutes} 分钟</p>
                   <h3>{recipe.name}</h3>
                   <p>标准菜谱只作营养与分量参考；实际摄入请按餐次在日记中记录。</p>
                 </div>
@@ -177,7 +186,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
               <ChefHat size={26} />
               <strong>暂无标准菜谱</strong>
               <p>仍可通过食材库或仅记录本次入口记餐；固定搭配建议先建成菜谱，方便每次快速核对。</p>
-              <button className="button secondary small" onClick={() => openRecipeEditor("new", false)}>新建第一个菜谱</button>
+              <button className="ui-btn" onClick={() => openRecipeEditor("new", false)}>新建第一个菜谱</button>
             </div>
           )}
 
