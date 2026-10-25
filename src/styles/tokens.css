@@ -2,51 +2,18 @@
  * 轻衡设计令牌 · 唯一真源
  *
  * 规则（写进设计守卫，改前先读）：
- * 1. 除了本文件，src/styles 下任何文件不得出现 #RRGGBB / rgb() / hsl() 字面量。
+ * 1. 颜色只存在于本文件的 --ui-* 双主题层（:root + [data-theme="dark"]）；
+ *    其余样式文件（styles.css / ui.css / base.css）不得出现任何 hex / rgb / rgba。
  * 2. 字号不得低于 11px。需要更小时，改用更浅的墨色或更少的字，不要缩字。
- * 3. 禁止 box-shadow。层级用 0.5px 描边 + 底色差表达，不用投影。
- * 4. 强调色 --accent 只作填充，配 --accent-ink 使用；它不能当文字色（白底对比度不足）。
+ * 3. 层级用 0.5px 描边 + 底色差表达，不用投影（--ui-shadow 是例外：近不可见的 1px 立体感）。
+ * 4. 语义色（ok/warn/danger）只进数据层，不染 chrome。
  * 5. 数值改动只改这里；design/DESIGN_SYSTEM.md 只写规则与用法，不复制数值。
+ *
+ * 0.9.4（M2.5 收尾）：旧版恒浅色令牌（--ink-* / --surface* / --accent* / 旧语义色 /
+ * --chart-*）已全部退役——它们没有深色覆盖，是 0.9.3 实机深色残留白卡的根因。
  */
 
 :root {
-  /* ── 墨色：5 档承担全部信息层级 ─────────────────────────── */
-  --ink-900: #111413; /* 标题、关键数值。白底对比 16:1 */
-  --ink-700: #333834; /* 正文。对比 10:1 */
-  --ink-600: #4a514c; /* 次要正文。对比 7.5:1 */
-  --ink-500: #5f665f; /* 辅助说明。对比 6:1 */
-  --ink-400: #6f776f; /* 正文下限，对比 5:1。再浅就只能做装饰 */
-  --ink-300: #9aa19b; /* 仅装饰：分隔、图标描边、禁用。不可承载信息 */
-  --line: #e4e7e2; /* 卡片与表格描边（0.5px） */
-  --line-soft: #eff1ed; /* 行分隔、极弱边界 */
-  --surface: #ffffff; /* 卡片 */
-  --surface-sunken: #f7f8f5; /* 页面底、表头、输入框底 */
-  --surface-raise: #fbfcf9; /* 悬浮层、弹窗内区块 */
-
-  /* ── 强调：全站唯一彩色 ─────────────────────────────────── */
-  --accent: #d6ff4b; /* 只作填充：当前选中、主按钮、图表高亮柱 */
-  --accent-ink: #16190f; /* 强调底色上的文字 */
-  --accent-soft: #f2ffc2; /* 强调的浅底：选中行背景 */
-  --focus-ring: #111413; /* 焦点环用墨色，不用强调色（避免与选中混淆） */
-
-  /* ── 语义：4 个，低饱和，只用于状态 ─────────────────────── */
-  --ok: #1f7a4d;
-  --ok-soft: #e6f4eb;
-  --warn: #8a6100;
-  --warn-soft: #fcf1d6;
-  --danger: #a33a2b;
-  --danger-soft: #fbe9e5;
-  --info: #2c5a7c;
-  --info-soft: #e7f0f7;
-
-  /* ── 图表：单色相阶梯（不靠色相区分系列） ───────────────── */
-  --chart-1: #111413;
-  --chart-2: #3e4a44;
-  --chart-3: #6b7a72;
-  --chart-4: #9aaaa2;
-  --chart-5: #cbd3cd;
-  --chart-grid: #eceeeb;
-
   /* ── 字体 ───────────────────────────────────────────────── */
   --font-sans: "Noto Sans SC", "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
@@ -98,11 +65,9 @@
 }
 
 /* ══════════════════════════════════════════════════════════════
- * 方向 D 令牌层（0.9.3 迁移基准，DESIGN_SYSTEM.md §2）
+ * 方向 D 颜色层（0.9.3 起，0.9.4 起唯一颜色来源）
  *
- * 命名空间 --ui-*：与上方旧令牌零冲突。迁移期间旧页面继续用旧令牌（恒浅色），
- * 迁移完成的组件一律用 --ui-* 并自动获得深色主题（[data-theme="dark"]）。
- * 全部页面迁完后旧层退役。语义色（ok/warn/danger）只进数据层，不染 chrome。
+ * 命名空间 --ui-*，浅/深成对（tokenPairs 守卫照看）。语义色只进数据层。
  * ══════════════════════════════════════════════════════════════ */
 :root {
   --ui-bg: #fafafa;          /* 页面底 */
@@ -121,6 +86,7 @@
   --ui-warn: #b45309; --ui-warn-soft: #fffbeb;
   --ui-danger: #dc2626;
   --ui-ring-track: #e4e4e7;  /* 环与条的底轨 */
+  --ui-overlay: rgba(24, 24, 27, .5); /* 弹窗/抽屉遮罩 */
   --ui-shadow: 0 1px 2px rgba(24, 24, 27, .04);
 }
 
@@ -131,7 +97,7 @@
   --ui-ink: #fafafa;
   --ui-ink-2: #d4d4d8;
   --ui-muted: #a1a1aa;
-  --ui-faint: #71717a;
+  --ui-faint: #8b8b94; /* 0.9.4：#71717a 在深卡上仅 3.7:1，提亮到 ≥5:1 允许承载小字 */
   --ui-line: #27272a;
   --ui-line-2: #3f3f46;
   --ui-primary: #fafafa;
@@ -141,5 +107,6 @@
   --ui-warn: #fbbf24; --ui-warn-soft: #451a03;
   --ui-danger: #f87171;
   --ui-ring-track: #27272a;
+  --ui-overlay: rgba(0, 0, 0, .65);
   --ui-shadow: 0 1px 2px rgba(0, 0, 0, .4);
 }

@@ -2,11 +2,10 @@
  * 基础层：reset、字体、焦点环、滚动条。
  *
  * 迁移期规则：本文件只放「全局一悦」的东西；页面与组件样式留在旧 styles.css，逐页搬过来。
- * 依赖 tokens.css（在前加载）。
+ * 依赖 tokens.css（在前加载）；颜色一律 --ui-*（跟随主题）。
  */
 
-/* 全局字体切到 Noto Sans SC（tokens 的 --font-sans 已含回落链）。
-   迁移完成后，旧 styles.css :root 里的 font-family 行删除，这里就是唯一出处。 */
+/* 全局字体切到 Noto Sans SC（tokens 的 --font-sans 已含回落链）。 */
 :root {
   font-family: var(--font-sans);
 }
@@ -17,14 +16,14 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 焦点环统一：键盘可达的硬线，迁移中逐页检查。 */
+/* 焦点环统一：键盘可达的硬线，颜色随主题（近黑/近白）。 */
 :focus-visible {
-  outline: 2px solid var(--focus-ring, #111413);
+  outline: 2px solid var(--ui-ink);
   outline-offset: 2px;
 }
 
 /* 滚动条收窄，配色跟线条走。 */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--line, #e4e7e2) transparent;
+  scrollbar-color: var(--ui-line-2) transparent;
 }
