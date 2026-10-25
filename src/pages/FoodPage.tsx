@@ -13,6 +13,7 @@ import { RecipeEditor } from "../components/RecipeEditor";
 import { RecipeManagerDrawer } from "../components/RecipeManagerDrawer";
 import { RecipeMealDraftModal } from "../components/RecipeMealDraftModal";
 import { latestRecipes } from "../domain/recipes";
+import { recipeShortage } from "../domain/pantry";
 import { MealDiaryTable } from "../components/MealDiaryTable";
 import { CopyMealModal } from "../components/CopyMealModal";
 import { mealCopySource, mealLabels, mealTypes, frequentFoods, type FrequentFood, type MealCopySource } from "../domain/meals";
@@ -96,6 +97,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
       >,
     [meals, today],
   );
+  const pantryItems = useAppStore((state) => state.pantryItems);
   const latest=latestRecipes(recipes);
   const recipeOptions=showHistory?recipes:latest;
   const recipe = recipeOptions.find(r=>r.id===selectedRecipeId)??recipeOptions[0];
@@ -170,6 +172,13 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
                   {!latest.some((r) => r.id === recipe.id) ? ` · 历史 v${recipe.version}` : ` · v${recipe.version}`}
                 </span>
               </div>
+              {pantryItems.length > 0 && (() => {
+                // 缺货只读提示：仅同单位可比，不猜换算、不自动扣减（0.9.4 食物柜联动）。
+                const shortage = recipeShortage(recipe, pantryItems);
+                if (shortage.missingCount === 0) return null;
+                const detail = `缺：${shortage.missingNames.join("、")}${shortage.incomparableCount > 0 ? `；另有 ${shortage.incomparableCount} 样与柜内单位不同，未比较` : ""}`;
+                return <span className="ui-badge warn" title={detail}>缺 {shortage.missingCount} 样</span>;
+              })()}
               <button className="ui-btn primary" onClick={() => setRecipeMealOpen(true)}><UtensilsCrossed size={15} /> 加入餐次</button>
               <button className="ui-btn" onClick={() => setRecipeDrawer(true)}><BookOpen size={15} /> 管理菜谱</button>
             </div>

@@ -163,6 +163,9 @@ fn execute_with_connection(
             | "set_checkin"
             | "set_day_complete"
             | "set_target_profile"
+            | "pantry_adjust"
+            | "pantry_update_item"
+            | "pantry_delete_item"
     ) {
         return Err("未知的领域命令。".into());
     }
@@ -238,6 +241,15 @@ fn execute_with_connection(
         )?,
         "add_weight" | "revise_weight" | "void_weight" | "set_weight_representative" => {
             crate::body_commands::apply(
+                &mut state,
+                &request.kind,
+                &request.payload,
+                &request.command_id,
+            )?
+        }
+        // 食物柜（0.9.4）：库存轻量版，简单命令信封，不做跨集合事务。
+        "pantry_adjust" | "pantry_update_item" | "pantry_delete_item" => {
+            crate::pantry_commands::apply(
                 &mut state,
                 &request.kind,
                 &request.payload,
@@ -348,6 +360,7 @@ mod tests {
     include!("meal_copy_tests.rs");
     include!("workout_command_tests.rs");
     include!("recipe_meal_command_tests.rs");
+    include!("pantry_command_tests.rs");
     include!("food_management_command_tests.rs");
     include!("upgrade_compat_command_tests.rs");
     include!("target_profile_tests.rs");

@@ -8,7 +8,7 @@ use tauri::{AppHandle, Manager};
 
 pub(crate) const STORAGE_NAME: &str = "fitwise-app-state-v1";
 const SINGLETONS: [&str; 1] = ["profile"];
-const COLLECTIONS: [&str; 8] = [
+const COLLECTIONS: [&str; 9] = [
     "foodDefinitions",
     "foodDefinitionVersions",
     "meals",
@@ -17,6 +17,8 @@ const COLLECTIONS: [&str; 8] = [
     "workouts",
     "recipes",
     "auditEvents",
+    // 0.9.4 食物柜（库存轻量版）：只回答「家里还有什么、快没了没」，与饮食记录解耦。
+    "pantryItems",
 ];
 
 #[derive(Serialize)]
@@ -139,8 +141,16 @@ pub(crate) fn persist_envelope(
     if name != STORAGE_NAME {
         return Err("未知的领域存储名称。".into());
     }
-    let envelope: Value =
+    let mut envelope: Value =
         serde_json::from_str(raw).map_err(|error| format!("状态 JSON 无效：{error}"))?;
+    // 0.9.4 兼容：旧启动状态/旧快照缺 pantryItems 时补空数组——新集合不能卡死旧状态的写入路径。
+    if let Some(state) = envelope.get_mut("state").and_then(Value::as_object_mut) {
+        for collection in COLLECTIONS {
+            state
+                .entry((*collection).to_owned())
+                .or_insert_with(|| Value::Array(Vec::new()));
+        }
+    }
     let persist_version = envelope
         .get("version")
         .and_then(Value::as_i64)
@@ -160,7 +170,8 @@ pub(crate) fn persist_envelope(
         }
     }
 
-    let hash = format!("{:x}", Sha256::digest(raw.as_bytes()));
+    let normalized = serde_json::to_string(&envelope).map_err(|error| error.to_string())?;
+    let hash = format!("{:x}", Sha256::digest(normalized.as_bytes()));
     let now = Utc::now().to_rfc3339();
     let transaction = connection
         .transaction()
@@ -178,6 +189,13 @@ pub(crate) fn write_transaction(
     hash: &str,
     now: &str,
 ) -> Result<(), String> {
+    // 0.9.4：新集合对旧状态（重置/导入）的兼容——缺失补空，写库侧不因新增集合拒绝旧状态。
+    let mut state = state.clone();
+    for collection in COLLECTIONS {
+        state
+            .entry((*collection).to_owned())
+            .or_insert_with(|| Value::Array(Vec::new()));
+    }
     transaction
         .execute("DELETE FROM domain_singletons", [])
         .map_err(|error| error.to_string())?;
@@ -308,8 +326,14 @@ pub(crate) fn import_legacy_state(
 pub(crate) fn normalize_legacy_envelope(raw: &str) -> Result<String, String> {
     let mut envelope: Value = serde_json::from_str(raw).map_err(|error| error.to_string())?;
     let version = envelope["version"].as_i64().ok_or("状态缺少版本。")?;
+    // 0.9.4 新集合：旧库/旧启动状态没有 pantryItems，装载前补空数组（幂等）。
+    if let Some(state) = envelope.get_mut("state").and_then(Value::as_object_mut) {
+        state
+            .entry("pantryItems")
+            .or_insert_with(|| serde_json::json!([]));
+    }
     if version == 4 {
-        return Ok(raw.to_owned());
+        return serde_json::to_string(&envelope).map_err(|error| error.to_string());
     }
     if version != 2 && version != 3 {
         return Err("此持久化版本暂不受支持，请保留原数据库并检查升级路径。".into());
@@ -395,6 +419,7 @@ pub fn domain_storage_remove(app: AppHandle, name: String) -> Result<(), String>
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResetSummary {
+    pub kept_pantry_items: i64,
     pub kept_food_definitions: i64,
     pub kept_food_definition_versions: i64,
     pub kept_recipes: i64,
@@ -487,6 +512,10 @@ fn build_reset_state(
     state: &Map<String, Value>,
 ) -> Result<(Map<String, Value>, ResetSummary), String> {
     let mut next = state.clone();
+    // 食物柜是「家里有什么」的库存资产，与食材库同侧保留，不随记录清除（0.9.4）。
+    let kept_pantry_items = collection_len(&next, "pantryItems");
+    next.entry("pantryItems".to_owned())
+        .or_insert_with(|| Value::Array(Vec::new()));
     let cleared_meals = collection_len(&next, "meals");
     let cleared_check_ins = collection_len(&next, "checkIns");
     let cleared_measurements = collection_len(&next, "measurements");
@@ -575,6 +604,7 @@ fn build_reset_state(
     next.insert("recipes".into(), Value::Array(recipes));
 
     let summary = ResetSummary {
+        kept_pantry_items,
         kept_food_definitions: collection_len(&next, "foodDefinitions"),
         kept_food_definition_versions: collection_len(&next, "foodDefinitionVersions"),
         kept_recipes: collection_len(&next, "recipes"),

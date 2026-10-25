@@ -7,6 +7,7 @@ import { useAppStore } from "../store/appStore";
 import { useFoodPicker } from "../store/foodPicker";
 import { useConfirmedAction } from "../components/useConfirmedAction";
 import { FoodEditor, FoodIdentityEditor } from "../components/FoodEditor";
+import { PantryPanel } from "../components/PantryPanel";
 import { useEnergyUnit } from "../hooks/useEnergyUnit";
 import { energyUnitLabels } from "../domain/energyDisplay";
 
@@ -16,7 +17,7 @@ import { energyUnitLabels } from "../domain/energyDisplay";
  */
 export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}) {
   const [query, setQuery] = useState("");
-  const [mode, setMode] = useState<"all" | "recent" | "favorites" | "archived">("all");
+  const [mode, setMode] = useState<"all" | "recent" | "favorites" | "archived" | "pantry">("all");
   const [editing, setEditing] = useState<FoodLibraryItem | "new" | null>(null);
   const [identity, setIdentity] = useState<FoodLibraryItem | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -123,14 +124,17 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
         </div>
       </header>
       {notice && <p className="library-notice" role="status">{notice}</p>}
-      <div className="library-toolbar">
-        <label className="library-search"><Search size={17}/><input aria-label="搜索食物或品牌" placeholder="搜索食物名称或品牌" value={query} onChange={(event) => setQuery(event.target.value)}/></label>
-      </div>
+      {mode !== "pantry" && (
+        <div className="library-toolbar">
+          <label className="library-search"><Search size={17}/><input aria-label="搜索食物或品牌" placeholder="搜索食物名称或品牌" value={query} onChange={(event) => setQuery(event.target.value)}/></label>
+        </div>
+      )}
       <div className="library-tabs" role="group" aria-label="食材筛选">
-        {([["all", "全部"], ["recent", "最近使用"], ["favorites", "常用收藏"], ["archived", "已归档"]] as const).map(([value, label]) => (
+        {([["all", "全部"], ["recent", "最近使用"], ["favorites", "常用收藏"], ["archived", "已归档"], ["pantry", "食物柜"]] as const).map(([value, label]) => (
           <button key={value} className={mode === value ? "active" : ""} onClick={() => { setMode(value); setPendingDelete(null); }}>{label}</button>
         ))}
       </div>
+      {mode === "pantry" ? <PantryPanel/> : (<>
       {search.error && <p className="form-error" role="alert">{search.error}</p>}
       <div className="library-body library-page-body">
         <div className="library-results">
@@ -171,6 +175,7 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
         </div>
       </div>
       <p className="form-hint">这里只管理营养资料，不写入饮食；记餐请到「饮食」页。</p>
+      </>)}
     </div>
   );
 }

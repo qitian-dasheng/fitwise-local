@@ -2,6 +2,7 @@ import type { AppState } from "./types";
 
 /** 与 Rust `reset_domain_records`（src-tauri/src/domain_store.rs）保持同一套保留口径。 */
 export interface ResetSummary {
+  keptPantryItems: number;
   keptFoodDefinitions: number;
   keptFoodDefinitionVersions: number;
   keptRecipes: number;
@@ -47,6 +48,7 @@ export function buildResetState(state: AppState): { state: AppState; summary: Re
       auditEvents: [],
     },
     summary: {
+      keptPantryItems: state.pantryItems.length,
       keptFoodDefinitions: state.foodDefinitions.length,
       keptFoodDefinitionVersions: versions.length,
       keptRecipes: recipes.length,
