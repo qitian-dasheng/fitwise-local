@@ -1,0 +1,122 @@
+/**
+ * 方向 D 组件层（0.9.3 迁移基准，DESIGN_SYSTEM §5）
+ *
+ * 纪律：本文件类名一律 ui- 前缀、颜色一律 var(--ui-*)——与旧 styles.css 的类和旧令牌
+ * 零冲突，迁移中的页面可以新旧混排；全站迁完后旧层退役。
+ * 柱状图必须底对齐（flex-column + justify-content:flex-end）：2026-10 方向 D 评审的教训，
+ * tokenPairs/stylesGuard 同族守卫照看，这里先用结构保证。
+ */
+
+/* ── 基础件 ─────────────────────────────────────────────── */
+.ui-card { background: var(--ui-card); border: 1px solid var(--ui-line); border-radius: 12px; padding: 14px 16px; box-shadow: var(--ui-shadow); }
+.ui-panel-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.ui-panel-head h2 { font-size: 13px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
+.ui-panel-head span { font-size: 10.5px; color: var(--ui-faint); }
+
+.ui-badge { display: inline-flex; align-items: center; gap: 3px; height: 19px; padding: 0 6px; border-radius: 5px; font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ui-badge.ok { color: var(--ui-ok); background: var(--ui-ok-soft); }
+.ui-badge.warn { color: var(--ui-warn); background: var(--ui-warn-soft); }
+.ui-badge.flat { color: var(--ui-muted); background: var(--ui-sunken); }
+
+.ui-btn { all: unset; display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 13px; border-radius: 8px; font-size: 12.5px; cursor: pointer; border: 1px solid var(--ui-line); color: var(--ui-ink-2); background: var(--ui-card); box-sizing: border-box; }
+.ui-btn:hover { border-color: var(--ui-line-2); color: var(--ui-ink); }
+.ui-btn.primary { background: var(--ui-primary); color: var(--ui-primary-ink); border-color: var(--ui-primary); font-weight: 600; }
+.ui-btn.primary:hover { background: var(--ui-primary-hover); }
+
+.ui-chart-foot { font-size: 10.5px; color: var(--ui-faint); margin-top: auto; padding-top: 10px; line-height: 1.5; }
+
+/* ── 指标卡行 ───────────────────────────────────────────── */
+.ui-kpi-row { display: grid; grid-template-columns: 1.35fr 1fr 1fr .8fr; gap: 12px; }
+.ui-kpi .label { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--ui-muted); }
+.ui-kpi .value { font-size: 30px; font-weight: 650; letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1.25; margin-top: 3px; color: var(--ui-ink); }
+.ui-kpi .value small { font-size: 12.5px; font-weight: 500; color: var(--ui-muted); letter-spacing: 0; margin-left: 2px; }
+.ui-kpi .sub { font-size: 11px; color: var(--ui-muted); margin-top: 2px; }
+.ui-microbar { height: 4px; border-radius: 3px; background: var(--ui-ring-track); margin-top: 9px; overflow: hidden; }
+.ui-microbar i { display: block; height: 100%; border-radius: 3px; }
+.ui-spark { display: flex; align-items: flex-end; gap: 2.5px; height: 26px; margin-top: 8px; }
+.ui-spark b { flex: 1; border-radius: 2px 2px 0 0; background: var(--ui-line-2); min-height: 2px; }
+.ui-spark b.hot { background: var(--ui-ink); }
+.ui-streak { display: flex; gap: 4px; margin-top: 9px; }
+.ui-streak i { width: 8px; height: 8px; border-radius: 50%; background: var(--ui-ok); }
+.ui-streak i.off { background: var(--ui-ring-track); }
+
+/* ── 热量环 + 宏量条 ────────────────────────────────────── */
+.ui-mid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 12px; flex: 1; min-height: 0; }
+.ui-mid .ui-card { display: flex; flex-direction: column; min-height: 0; }
+.ui-energy { display: flex; gap: 22px; align-items: center; flex: 1; min-width: 0; }
+.ui-donut { position: relative; width: 168px; height: 168px; flex: none; }
+.ui-donut svg { transform: rotate(-90deg); display: block; }
+.ui-donut .center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.ui-donut .center b { font-size: 27px; font-weight: 650; letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: var(--ui-ink); }
+.ui-donut .center i { font-style: normal; font-size: 10.5px; color: var(--ui-muted); }
+.ui-macro { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+.ui-macro-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--ui-ring-track); }
+.ui-macro-bar i { height: 100%; background: var(--ui-ink); }
+.ui-macro-legend { display: flex; flex-direction: column; gap: 7px; }
+.ui-macro-legend .row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ui-ink-2); }
+.ui-macro-legend .sw { width: 9px; height: 9px; border-radius: 3px; flex: none; background: var(--ui-ink); }
+.ui-macro-legend b { font-variant-numeric: tabular-nums; margin-left: auto; font-weight: 600; color: var(--ui-ink); }
+.ui-macro-legend span { color: var(--ui-muted); font-size: 10.5px; }
+
+/* ── 柱状趋势（底对齐硬规则） ───────────────────────────── */
+.ui-trend { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ui-trend-bars { flex: 1; min-height: 80px; display: flex; align-items: stretch; gap: 5px; position: relative; padding-top: 4px; }
+.ui-target-band { position: absolute; left: 0; right: 0; border-top: 1.5px dashed var(--ui-faint); opacity: .55; }
+.ui-trend-bars .day { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 5px; min-width: 0; }
+.ui-trend-bars .day .bar { flex: 1; width: 100%; max-width: 22px; margin: 0 auto; display: flex; flex-direction: column; justify-content: flex-end; }
+.ui-trend-bars .day .bar i { display: block; width: 100%; height: 100%; border-radius: 4px 4px 2px 2px; background: var(--ui-line-2); }
+.ui-trend-bars .day.hot .bar i { background: var(--ui-primary); }
+.ui-trend-bars .day em { font-style: normal; font-size: 9.5px; color: var(--ui-faint); font-variant-numeric: tabular-nums; flex: none; }
+
+/* ── 明细行 / chips ─────────────────────────────────────── */
+.ui-bottom { display: grid; grid-template-columns: 1.5fr 1fr; gap: 12px; }
+.ui-meal { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--ui-line); font-size: 12.5px; }
+.ui-meal:last-child { border-bottom: 0; }
+.ui-meal .slot { color: var(--ui-muted); font-size: 11.5px; }
+.ui-meal .desc { color: var(--ui-ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-meal .desc .unknown { color: var(--ui-faint); }
+.ui-meal b { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ui-ink); }
+.ui-meal b small { font-weight: 400; color: var(--ui-muted); font-size: 10.5px; }
+.ui-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.ui-chip { all: unset; display: inline-flex; flex-direction: column; padding: 7px 11px; border: 1px solid var(--ui-line); border-radius: 9px; cursor: pointer; min-width: 74px; box-sizing: border-box; }
+.ui-chip:hover { border-color: var(--ui-line-2); background: var(--ui-sunken); }
+.ui-chip b { font-size: 12.5px; font-weight: 600; color: var(--ui-ink); }
+.ui-chip span { font-size: 10px; color: var(--ui-muted); font-variant-numeric: tabular-nums; margin-top: 1px; }
+
+/* ── 页头与日期条 ───────────────────────────────────────── */
+.ui-page-head { display: flex; align-items: flex-end; justify-content: space-between; }
+.ui-page-head .date { font-size: 11.5px; color: var(--ui-muted); letter-spacing: .02em; }
+.ui-page-head h1 { font-size: 17px; font-weight: 600; letter-spacing: -.01em; margin: 2px 0 0; color: var(--ui-ink); }
+.ui-page-head .actions { display: flex; gap: 8px; }
+.ui-datestrip { display: flex; align-items: center; gap: 10px; }
+.ui-datestrip b { font-size: 13.5px; font-weight: 600; }
+.ui-navbtn { all: unset; width: 28px; height: 28px; border: 1px solid var(--ui-line); border-radius: 7px; display: grid; place-items: center; color: var(--ui-muted); cursor: pointer; }
+.ui-navbtn:hover { color: var(--ui-ink); border-color: var(--ui-line-2); }
+
+/* ── 汇总小指标（饮食页） ───────────────────────────────── */
+.ui-daystats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.ui-daystats .ui-card { padding: 11px 15px; }
+.ui-daystats .label { font-size: 10.5px; color: var(--ui-muted); }
+.ui-daystats .value { font-size: 21px; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin-top: 1px; color: var(--ui-ink); }
+.ui-daystats .value small { font-size: 10.5px; font-weight: 500; color: var(--ui-muted); margin-left: 2px; }
+.ui-daystats .note { font-size: 10px; color: var(--ui-faint); margin-top: 1px; }
+
+/* ── 表单字段（身体页速录） ─────────────────────────────── */
+.ui-entry-form { display: grid; grid-template-columns: 1.2fr .9fr .9fr .9fr .9fr auto; gap: 10px; align-items: end; }
+.ui-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ui-field label { font-size: 10.5px; color: var(--ui-muted); }
+.ui-field .box { height: 32px; border: 1px solid var(--ui-line); border-radius: 8px; background: var(--ui-card); display: flex; align-items: center; padding: 0 10px; font-size: 12.5px; color: var(--ui-ink-2); font-variant-numeric: tabular-nums; }
+.ui-field .box.placeholder { color: var(--ui-faint); }
+
+/* ── 键值行（复盘/详情） ────────────────────────────────── */
+.ui-rows { font-size: 12px; }
+.ui-rows .row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--ui-line); color: var(--ui-ink-2); }
+.ui-rows .row:last-child { border-bottom: 0; }
+.ui-rows b { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ui-ink); }
+
+/* ── 窄屏 ───────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .ui-kpi-row { grid-template-columns: 1fr 1fr; }
+  .ui-mid, .ui-bottom { grid-template-columns: 1fr; }
+  .ui-entry-form { grid-template-columns: 1fr 1fr; }
+}
