@@ -2,7 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FoodLibraryPage } from "../src/pages/FoodLibraryPage";
-import { initialState } from "../src/domain/seed";
+import { initialState, seedRecipe } from "../src/domain/seed";
 import { buildResetState } from "../src/domain/resetState";
 import { recipeShortage, isLowStock, pantryStepForUnit, daysUntilExpiry } from "../src/domain/pantry";
 import { useAppStore } from "../src/store/appStore";
@@ -98,7 +98,7 @@ describe("食物柜域函数", () => {
         { foodId: "food-egg", name: "鸡蛋", amount: 3, unit: "piece" },
         { foodId: "food-oil", name: "食用油", amount: 10, unit: "g" },
       ],
-      nutrition: initialState.recipes[0].nutrition,
+      nutrition: seedRecipe.nutrition,
       totalMinutes: 10, equipment: [], createdAt: "t", version: 1,
     } as unknown as RecipeVersion;
     const pantry: PantryItem[] = [
@@ -156,7 +156,8 @@ describe("食材库页食物柜分组", () => {
     seedFoods();
     await act(async () => { root.render(<FoodLibraryPage />); });
     const tabs = [...host.querySelectorAll(".library-tabs button")] as HTMLButtonElement[];
-    expect(tabs.map((tab) => tab.textContent)).toEqual(["全部", "最近使用", "常用收藏", "已归档", "食物柜"]);
+    // 第五轮：已归档分组在无归档食材时隐藏。
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["全部", "最近使用", "常用收藏", "食物柜"]);
 
     const pantryTab = tabs.find((tab) => tab.textContent === "食物柜")!;
     await act(async () => pantryTab.click());

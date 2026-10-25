@@ -7,7 +7,7 @@ import { FoodPage } from "../src/pages/FoodPage";
 import { activeMeals, completedDayCalorieAverage, nutrition, summarizeMeals } from "../src/domain/calculations";
 import { latestRecipes, previewRecipe } from "../src/domain/recipes";
 import { diaryToday } from "../src/domain/diary";
-import { initialState } from "../src/domain/seed";
+import { initialState, seedRecipe } from "../src/domain/seed";
 import { useAppStore } from "../src/store/appStore";
 import type { MealEntry } from "../src/domain/types";
 let host:HTMLDivElement;let root:Root;
@@ -60,7 +60,7 @@ it("ignores superseded and void meals in summaries but exposes their original ev
 });
 
 it("deduplicates recipe identities to the latest version without changing prepared snapshots",()=>{
-  const old=structuredClone(initialState.recipes[0]);const newer={...old,id:"new-v2",version:2,name:"新版"};expect(latestRecipes([old,newer])).toEqual([newer]);expect(old.version).toBe(1);
+  const old=structuredClone(seedRecipe);const newer={...old,id:"new-v2",version:2,name:"新版"};expect(latestRecipes([old,newer])).toEqual([newer]);expect(old.version).toBe(1);
 });
 it("visits catalog-only food management without losing unfinished recipe fields or recording a meal",async()=>{
   await act(async()=>root.render(<RecipeEditor onClose={close} onSaved={saved}/>));await fill(input("菜谱名称"),"写到一半的菜谱");
@@ -74,7 +74,7 @@ it("does not fabricate successful desktop-only writes in browser previews",async
   expect(()=>previewRecipe({foodDefinitionVersions:[]},{name:"空",totalMinutes:1,equipment:[],ingredients:[]})).toThrow("至少一种原料");
 });
 it("historical recipe picker keeps the selected version and only permits copy or original-version cooking", async () => {
-  const old=structuredClone(initialState.recipes[0]),newer={...old,id:"recipe-v2",name:"新版配方",version:2};
+  const old=structuredClone(seedRecipe),newer={...old,id:"recipe-v2",name:"新版配方",version:2};
   useAppStore.setState({recipes:[old,newer]});await act(async()=>root.render(<FoodPage/>));
   // 菜谱管理控件已收进抽屉：主页不再出现下拉与管理按钮组。
   expect(host.querySelector('select[aria-label="选择标准菜谱"]')).toBeNull();
@@ -98,7 +98,7 @@ it("historical recipe picker keeps the selected version and only permits copy or
 });
 it("save-as creates independent recipe identity while pinning historical food versions and source", async () => {
   const food=await makeFood(),save=vi.fn().mockResolvedValue({recipeVersionId:"copy-v1"});useAppStore.setState({saveRecipe:save});
-  const recipe={...structuredClone(initialState.recipes[0]),ingredients:[{foodId:food.foodId!,name:"原味燕麦",amount:50,unit:"g" as const,measurementBasis:"package" as const,foodVersionId:food.foodVersionId,nutritionQuantity:50,nutritionUnit:"g" as const}]};
+  const recipe={...structuredClone(seedRecipe),ingredients:[{foodId:food.foodId!,name:"原味燕麦",amount:50,unit:"g" as const,measurementBasis:"package" as const,foodVersionId:food.foodVersionId,nutritionQuantity:50,nutritionUnit:"g" as const}]};
   await act(async()=>root.render(<RecipeEditor recipe={recipe} copyMode onClose={close} onSaved={saved}/>));
   await submit();
   expect(save).toHaveBeenCalledOnce();const payload=save.mock.calls[0][0];expect(payload.recipeId).toBeUndefined();expect(payload.expectedVersionId).toBeUndefined();expect(payload.copiedFromVersionId).toBe(recipe.id);expect(payload.ingredients[0].foodVersionId).toBe(food.foodVersionId);expect(payload.ingredients[0].quantity).toBe(50);

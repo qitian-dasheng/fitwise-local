@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { nutrition } from "./calculations";
-import type { AppState } from "./types";
+import type { RecipeVersion, AppState } from "./types";
 
 const now = new Date();
 const today = format(now, "yyyy-MM-dd");
@@ -32,8 +32,24 @@ export const initialState: AppState = {
     },
   ],
   workouts: [],
-  recipes: [
-    {
+  recipes: [],
+  auditEvents: [],
+  pantryItems: [],
+};
+
+/** Desktop onboarding starts without fictional health records. */
+export function createPersonalState(): AppState {
+  const state = structuredClone(initialState);
+  state.measurements = [];
+  state.checkIns = [];
+  return state;
+}
+
+/**
+ * 演示菜谱夹具：0.9.4 起不再随 initialState 下发（桌面首启与浏览器预览都从零开始，
+ * 详见第五轮反馈「删除默认菜谱」）；仅作为测试夹具保留。
+ */
+export const seedRecipe: RecipeVersion = {
       id: "recipe-pork-tofu-v1",
       recipeId: "recipe-pork-tofu",
       name: "洋葱豆腐炖里脊",
@@ -50,18 +66,7 @@ export const initialState: AppState = {
       ),
       totalMinutes: 30,
       equipment: ["电磁炉", "基础锅具"],
-      source: "fatsecret",
-      createdAt: now.toISOString(),
-    },
-  ],
-  auditEvents: [],
-  pantryItems: [],
+  source: "fatsecret",
+  createdAt: now.toISOString(),
 };
 
-/** Desktop onboarding starts without fictional health records. */
-export function createPersonalState(): AppState {
-  const state = structuredClone(initialState);
-  state.measurements = [];
-  state.checkIns = [];
-  return state;
-}

@@ -139,7 +139,8 @@ export function TrendsPage({
   const emptyDays = days.filter((day) => day.mealCount === 0).length;
 
   return (
-    <div className="page trends-page">
+    // 嵌入身体页标签时不再套 .page（BodyPage 已有页面内边距，嵌套会双重缩进导致 UI 无法对齐）。
+    <div className={embedded ? "trends-page" : "page trends-page"}>
       {!embedded && (
         <PageHeader
           eyebrow="只看确认过的事实"
@@ -150,7 +151,8 @@ export function TrendsPage({
       )}
 
       <div className="review-controls">
-        <DiaryDateControl date={date} onChange={onDateChange} />
+        {/* 嵌入身体页时不渲染日期控件：页头日期条就在上方，重复控件只会挤占版面。 */}
+        {!embedded && <DiaryDateControl date={date} onChange={onDateChange} />}
         <div className="range-tabs" role="group" aria-label="统计区间">
           {RANGE_PRESETS.map((preset) => (
             <button

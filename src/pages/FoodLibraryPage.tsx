@@ -26,6 +26,7 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
   const search = useFoodLibrarySearch(query, mode);
   const action = useConfirmedAction();
   const state = useAppStore();
+  const hasArchived = state.foodDefinitions.some((item) => item.archived === true);
   const returnTicket = useFoodPicker((picker) => picker.returnTicket);
   const [displayUnit] = useEnergyUnit();
 
@@ -128,7 +129,8 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
         <label className="library-search"><Search size={17}/><input aria-label="搜索食物或品牌" placeholder={mode === "pantry" ? "搜索柜内食材名称或品牌" : "搜索食物名称或品牌"} value={query} onChange={(event) => setQuery(event.target.value)}/></label>
       </div>
       <div className="library-tabs" role="group" aria-label="食材筛选">
-        {([["all", "全部"], ["recent", "最近使用"], ["favorites", "常用收藏"], ["archived", "已归档"], ["pantry", "食物柜"]] as const).map(([value, label]) => (
+        {/* 已归档分组只在确有归档食材时出现（归档是「被引用食材的软删除」，无归档时隐藏减少占位）。 */}
+        {([["all", "全部"], ["recent", "最近使用"], ["favorites", "常用收藏"], ...((hasArchived || mode === "archived") ? [["archived", "已归档"]] as const : []), ["pantry", "食物柜"]] as const).map(([value, label]) => (
           <button key={value} className={mode === value ? "active" : ""} onClick={() => { setMode(value); setPendingDelete(null); }}>{label}</button>
         ))}
       </div>

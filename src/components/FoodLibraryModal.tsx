@@ -93,7 +93,6 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
       setBasket((items) => items.filter((entry) => !oldVersionIds.has(entry.foodVersionId)));
       setNotice(catalogOnly ? "食物资料已保存。关闭本窗口返回菜谱，无须记餐。" : "食物资料已保存。填写吃了多少并确认后，才会记入饮食。");
     }} /> : identity ? <FoodIdentityEditor item={identity} action={action} onCancel={() => { action.setMessage(""); setIdentity(null); }} onSaved={() => { setIdentity(null); setNotice("名称/品牌已纠错。营养规格与历史记录未改动。"); }} /> : <fieldset className="library-fields" disabled={action.busy}>
-      <p className="form-hint">首次确认规格，以后只填吃了多少。这里使用营养资料，记餐不会重复扣减制作批次的库存。</p>
       {notice && <p className="library-notice" role="status">{notice}</p>}
       <div className="library-toolbar"><label className="library-search"><Search size={17}/><input aria-label="搜索食物或品牌" placeholder="搜索食物名称或品牌" value={query} onChange={(event) => setQuery(event.target.value)}/></label><button className="button primary small" onClick={() => (onOpenEditor ? onOpenEditor("new") : setEditing("new"))}><Plus size={15}/> 新建食物</button></div>
       <div className="library-tabs" role="group" aria-label="食材筛选">{([["all", "全部"], ["recent", "最近使用"], ["favorites", "常用收藏"]] as const).map(([value, label]) => <button key={value} className={mode === value ? "active" : ""} onClick={() => setMode(value)}>{label}</button>)}{catalogOnly&&<button className={mode === "archived" ? "active" : ""} onClick={() => { setMode("archived"); setPendingDelete(null); }}>已归档</button>}</div>
@@ -120,7 +119,6 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
         </div>) : <div className="library-empty"><strong>{mode === "recent" ? "尚无食材库记餐记录" : mode === "favorites" ? "还没有收藏食物" : mode === "archived" ? "没有已归档的食材" : "没有找到食物"}</strong><p>新食物先保存一次规格，之后就可以直接选择。</p><button className="button secondary small" onClick={() => (onOpenEditor ? onOpenEditor("new") : setEditing("new"))}>新建食物</button></div>}
       </div><div className="library-side"><div className="library-portion">{selected ? <>
         <div className="card-heading compact"><div><h3>{selected.definition.name}</h3><p className="form-hint">{selected.definition.brand} · {foodBasisLabels[selected.definition.measurementBasis]} · v{selected.version.version}</p></div><button className="text-button" onClick={() => (onOpenEditor ? onOpenEditor(selected) : setEditing(selected))}>修订规格</button></div>
-        <p className="form-hint">参考：每 {selected.version.basis.quantity}{foodUnitLabels[selected.version.basis.unit]}；原始能量 {selected.version.labelNutrients.calories ?? "未知"} {selected.version.energyUnit}</p>
         {selected.version.origin?.method === "manual_label" && <p className="form-hint">来源：离线标签人工核对；原始规格和来源记录保存在收件箱“已建档”草稿中。</p>}
         {selected.per100g && <p className="form-hint">每 100 克：{nutrientLabel(selected.per100g, "calories", 1, displayUnit)} {energyUnitLabels[displayUnit]}，蛋白质 {nutrientLabel(selected.per100g, "protein")} g</p>}
         {selected.per100ml && <p className="form-hint">每 100 毫升：{nutrientLabel(selected.per100ml, "calories", 1, displayUnit)} {energyUnitLabels[displayUnit]}，蛋白质 {nutrientLabel(selected.per100ml, "protein")} g</p>}
@@ -128,7 +126,6 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
         {lastHint && <p className="form-hint">{lastHint}，改过就按你填的为准。</p>}
         {preview.loading && <p className="form-hint">正在换算…</p>}{preview.error && <p className="form-error" role="alert">{preview.error}</p>}
         {preview.data && <><NutritionPreview facts={preview.data.nutrition} energyUnit={displayUnit}/>{!catalogOnly&&<button className="button secondary wide" disabled={action.busy || basket.length >= 50} onClick={() => { if (!request || !preview.data) return; const facts = preview.data.nutrition; setBasket((items) => [...items, { ...request, name: selected.definition.name, facts }]); setNotice(`已把 ${selected.definition.name} 加入待确认餐食，可继续选择其他食物。`); }}><Plus size={15}/> 加入本餐</button>}</>}
-        <p className="form-hint">缺少“个／份／包装”换算时，先修订规格；生重、熟重及可食部分分别建档。</p>
       </> : <div className="portion-empty"><Utensils size={22} /><strong>选择一个食物</strong><span>左侧挑选后，这里显示营养与摄入量换算。</span></div>}</div>
       {!catalogOnly&&<div className="library-basket"><h3>本次待确认 · {basket.length} 项</h3>
         {basket.length > 0 && <div className="basket-summary" aria-label="本批营养合计">
@@ -151,7 +148,7 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
         <div className="form-grid"><label><span>日期</span><input type="date" required max={diaryToday()} value={date} onChange={(event) => setDate(event.target.value)}/></label><label><span>餐次</span><select value={type} onChange={(event) => setType(event.target.value as FoodMealInput["type"])}>{Object.entries(mealLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
         {action.message && <p className="form-error" role="alert">{action.message}</p>}
         <button className="button primary wide" disabled={action.busy || !basket.length || !date || date > diaryToday()} onClick={async () => { const input: FoodMealInput = { date, type, entries: basket.map(({ foodVersionId, quantity, unit }) => ({ foodVersionId, quantity, unit })) }; const result = await action.run(JSON.stringify(input), (id) => state.recordFoodMeal(input, id)); if (!result.error) { useFoodPicker.getState().clearBasket(); onRecorded?.(date); onClose(); } }}>{action.busy ? "正在保存…" : `确认写入 ${basket.length} 项食物`}</button>
-        <p className="form-hint">保存失败会保留本次待确认内容，可直接重试。若应用异常终止，重开后请先核对目标餐次再决定是否重记；万一重复，用条目「作废」移除并留痕。</p>
+        <p className="form-hint">保存失败会保留待确认内容，可直接重试；万一重复用条目「作废」移除。</p>
         <button className="text-button" onClick={onManual}>找不到想吃的？仅记录本次（不建档直接记）</button>
       </div>}</div></div>
       {catalogOnly&&<p className="library-notice">这里只保存营养资料，不写入饮食；完成后关闭此窗口返回菜谱，原输入会保留。</p>}
