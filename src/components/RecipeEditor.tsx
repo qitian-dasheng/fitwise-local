@@ -5,8 +5,9 @@ import { FoodLibraryModal } from "./FoodLibraryModal";
 import { useConfirmedAction } from "./useConfirmedAction";
 import { useAppStore } from "../store/appStore";
 import { foodBasisLabels, foodUnitLabels, nutrientLabel } from "../domain/foodLibrary";
+import { mealLabels } from "../domain/meals";
 import { previewRecipe } from "../domain/recipes";
-import type { FoodUnit, RecipeInput, RecipeVersion } from "../domain/types";
+import type { FoodUnit, MealType, RecipeInput, RecipeVersion } from "../domain/types";
 import { useEnergyUnit } from "../hooks/useEnergyUnit";
 import { energyUnitLabels } from "../domain/energyDisplay";
 
@@ -35,6 +36,8 @@ export function RecipeEditor({ recipe, copyMode = false, onClose, onSaved }: {
   const [name, setName] = useState(copyMode && recipe ? `${recipe.name}（副本）` : recipe?.name ?? "");
   const [minutes, setMinutes] = useState(String(recipe?.totalMinutes ?? 30));
   const [equipment, setEquipment] = useState(recipe?.equipment ?? state.profile.equipment.slice(0, 1));
+  // OBS-010（0.9.4）：适用餐次多选，缺失 = 未分类；不选也能保存。
+  const [mealTags, setMealTags] = useState<MealType[]>(recipe?.mealTags ?? []);
   const [rows, setRows] = useState<Row[]>(() => recipe ? recipe.ingredients.map(i => ({
     key: crypto.randomUUID(), foodVersionId: i.foodVersionId ?? "",
     quantity: String(i.nutritionQuantity ?? i.amount), unit: i.nutritionUnit ?? i.unit,
@@ -45,6 +48,7 @@ export function RecipeEditor({ recipe, copyMode = false, onClose, onSaved }: {
   const input: RecipeInput = {
     ...(copyMode && recipe ? { copiedFromVersionId: recipe.id } : {}),
     name, totalMinutes: Number(minutes), equipment,
+    ...(mealTags.length ? { mealTags } : {}),
     ingredients: rows.map(({ foodVersionId, quantity, unit }) => ({
       foodVersionId, quantity: Number(quantity), unit,
     })),
@@ -119,6 +123,18 @@ export function RecipeEditor({ recipe, copyMode = false, onClose, onSaved }: {
               </section>;
             })}
             <button type="button" className="button secondary" disabled={rows.length >= 50} onClick={() => setRows(r => [...r, emptyRow()])}><Plus size={16} /> 添加一种原料</button>
+            <div className="recipe-equipment" style={{ marginTop: 4 }}>
+              <span>适用餐次</span>
+              <span className="reason-chips">
+                {(Object.entries(mealLabels) as [MealType, string][]).map(([value, label]) => (
+                  <button type="button" key={value} className={mealTags.includes(value) ? "active" : ""}
+                    aria-pressed={mealTags.includes(value)}
+                    onClick={() => setMealTags(tags => tags.includes(value) ? tags.filter(tag => tag !== value) : [...tags, value])}>
+                    {label}
+                  </button>
+                ))}
+              </span>
+            </div>
             <details className="recipe-rules">
               <summary>厨具与保存规则 · {equipment.length ? equipment.join("、") : "尚未选择厨具"}</summary>
               <div className="recipe-equipment"><span>实际厨具</span>{state.profile.equipment.map(eq => <label className="checkbox-label" key={eq}><input type="checkbox" checked={equipment.includes(eq)} onChange={e => setEquipment(items => e.target.checked ? [...items, eq] : items.filter(v => v !== eq))} /><span>{eq}</span></label>)}</div>

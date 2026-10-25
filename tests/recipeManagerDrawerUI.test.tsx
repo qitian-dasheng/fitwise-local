@@ -9,7 +9,7 @@ let container: HTMLDivElement;
 let root: Root;
 const onSelect = vi.fn();
 
-const recipe = (id: string, name: string, createdAt: string): RecipeVersion => ({
+const recipe = (id: string, name: string, createdAt: string, mealTags?: RecipeVersion["mealTags"]): RecipeVersion => ({
   id,
   recipeId: `r-${id}`,
   name,
@@ -18,6 +18,7 @@ const recipe = (id: string, name: string, createdAt: string): RecipeVersion => (
   nutrition: nutrition({ calories: 100, protein: 5 }),
   totalMinutes: 10,
   equipment: [],
+  ...(mealTags ? { mealTags } : {}),
   source: "personal",
   createdAt,
 });
@@ -106,4 +107,48 @@ it("sorts by creation time newest first", async () => {
     sort.dispatchEvent(new Event("change", { bubbles: true }));
   });
   expect(optionValues()).toEqual(["rv3", "rv2", "rv1"]);
+});
+
+// ── OBS-010（0.9.4）：按适用餐次筛选 + 分组下拉 ──────────────────
+
+const groupLabels = () => [...container.querySelectorAll<HTMLOptGroupElement>('select[aria-label="选择标准菜谱"] optgroup')].map((group) => group.label);
+const filterSelect = () => container.querySelector<HTMLSelectElement>('[aria-label="按餐次筛选"]')!;
+const setSelect = (select: HTMLSelectElement, value: string) => act(async () => {
+  Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set?.call(select, value);
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+});
+
+it("groups the dropdown by meal tags with an unlabeled fallback", async () => {
+  const tagged = [
+    recipe("rv1", "白菜豆腐锅", "2026-10-20T00:00:00Z", ["lunch", "dinner"]),
+    recipe("rv2", "燕麦粥", "2026-10-22T00:00:00Z", ["breakfast"]),
+    recipe("rv3", "随便炖", "2026-10-21T00:00:00Z"),
+  ];
+  await render({ recipes: tagged, latest: tagged, options: tagged, recipe: tagged[1] });
+  // 分组顺序按餐次固定；多标签菜谱（白菜豆腐锅）出现在午餐与晚餐两组。
+  expect(groupLabels()).toEqual(["早餐", "午餐", "晚餐", "未分类"]);
+  const lunchOptions = [...container.querySelectorAll<HTMLOptGroupElement>('select[aria-label="选择标准菜谱"] optgroup')[1].querySelectorAll("option")].map((item) => item.value);
+  expect(lunchOptions).toEqual(["rv1"]);
+  expect(container.textContent).toContain("适用 早餐。");
+});
+
+it("filters by meal and falls back to the first match when the selection is filtered out", async () => {
+  const tagged = [
+    recipe("rv1", "白菜豆腐锅", "2026-10-20T00:00:00Z", ["lunch"]),
+    recipe("rv2", "燕麦粥", "2026-10-22T00:00:00Z", ["breakfast"]),
+  ];
+  await render({ recipes: tagged, latest: tagged, options: tagged, recipe: tagged[1] });
+  await setSelect(filterSelect(), "lunch");
+  expect(optionValues()).toEqual(["rv1"]);
+  // 当前选择（早餐的燕麦粥）被筛掉 → 跟到第一个匹配（午餐的白菜豆腐锅）。
+  expect(onSelect).toHaveBeenCalledWith("rv1");
+
+  await setSelect(filterSelect(), "unlabeled");
+  expect(container.querySelector('select[aria-label="选择标准菜谱"]')).toBeNull();
+  expect(container.textContent).toContain("没有匹配的菜谱");
+
+  await setSelect(filterSelect(), "all");
+  // 「全部」仍按分组展示：早餐组（燕麦粥）在前、午餐组（白菜豆腐锅）在后。
+  expect(groupLabels()).toEqual(["早餐", "午餐"]);
+  expect(optionValues()).toEqual(["rv2", "rv1"]);
 });

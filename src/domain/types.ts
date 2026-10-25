@@ -232,6 +232,8 @@ export interface RecipeVersion {
   nutrition: NutritionFacts;
   totalMinutes: number;
   equipment: string[];
+  /** 适用餐次（OBS-010，0.9.4）：多选标签；缺失 = 未分类。 */
+  mealTags?: MealType[];
   source: DataSource;
   confirmedBy?: string;
   confirmedAt?: string;
@@ -305,6 +307,7 @@ export interface RecipeInput {
   name: string;
   totalMinutes: number;
   equipment: string[];
+  mealTags?: MealType[];
   ingredients: { foodVersionId: string; quantity: number; unit: FoodUnit }[];
   recipeId?: string;
   expectedVersionId?: string;

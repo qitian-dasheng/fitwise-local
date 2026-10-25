@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Copy, PencilLine, Plus, Search, UtensilsCrossed } from "lucide-react";
-import type { RecipeVersion } from "../domain/types";
+import type { MealType, RecipeVersion } from "../domain/types";
+import { mealLabels, mealTypes } from "../domain/meals";
 import { Drawer } from "./Drawer";
 import { useEnergyUnit } from "../hooks/useEnergyUnit";
 import { energyUnitLabels } from "../domain/energyDisplay";
@@ -44,14 +45,41 @@ export function RecipeManagerDrawer({
   const [energyUnit] = useEnergyUnit();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"name" | "recent">("name");
+  // OBS-010（0.9.4）：按适用餐次筛选，多标签菜谱在任一匹配分组出现；未分类兜底。
+  const [mealFilter, setMealFilter] = useState<MealType | "unlabeled" | "all">("all");
   // R4-A：名称搜索 + 轻量排序，只做查找面，不动菜谱数据模型。
-  const visible = useMemo(() => {
+  const searched = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const filtered = options.filter((item) => !needle || item.name.toLowerCase().includes(needle));
+    return options.filter((item) => !needle || item.name.toLowerCase().includes(needle));
+  }, [options, query]);
+  const visible = useMemo(() => {
+    const filtered = mealFilter === "all"
+      ? searched
+      : searched.filter((item) => mealFilter === "unlabeled"
+          ? !item.mealTags?.length
+          : item.mealTags?.includes(mealFilter));
     return [...filtered].sort((left, right) =>
       sort === "name" ? left.name.localeCompare(right.name, "zh-Hans-CN") : right.createdAt.localeCompare(left.createdAt),
     );
-  }, [options, query, sort]);
+  }, [searched, mealFilter, sort]);
+  // 分组下拉：早餐→午餐→晚餐→加餐→未分类；多标签菜谱进每个匹配组。
+  const grouped = useMemo(() => mealTypes
+    .filter((type) => visible.some((item) => item.mealTags?.includes(type)))
+    .map((type) => ({ type, label: mealLabels[type], items: visible.filter((item) => item.mealTags?.includes(type)) }))
+    .concat(visible.some((item) => !item.mealTags?.length)
+      ? [{ type: "unlabeled" as const, label: "未分类", items: visible.filter((item) => !item.mealTags?.length) }]
+      : []), [visible]);
+  function changeMealFilter(value: MealType | "unlabeled" | "all") {
+    setMealFilter(value);
+    // 与名称搜索同口径：当前选择被筛掉时跟到第一个匹配，避免摘要区与下拉脱节。
+    if (recipe && value !== "all") {
+      const matches = (item: RecipeVersion) => value === "unlabeled" ? !item.mealTags?.length : item.mealTags?.includes(value);
+      if (!matches(recipe)) {
+        const first = searched.find(matches);
+        onSelect(first?.id ?? "");
+      }
+    }
+  }
   function changeQuery(value: string) {
     setQuery(value);
     // 当前选择被搜掉时跟到第一个匹配，避免摘要区与下拉脱节。
@@ -94,6 +122,12 @@ export function RecipeManagerDrawer({
           <input aria-label="搜索菜谱名称" placeholder="搜索菜谱名称" value={query} onChange={(event) => changeQuery(event.target.value)} />
         </label>
         <div className="recipe-picker-sort">
+          <span>餐次</span>
+          <select aria-label="按餐次筛选" value={mealFilter} onChange={(event) => changeMealFilter(event.target.value as MealType | "unlabeled" | "all")}>
+            <option value="all">全部</option>
+            {mealTypes.map((type) => <option key={type} value={type}>{mealLabels[type]}</option>)}
+            <option value="unlabeled">未分类</option>
+          </select>
           <span>排序</span>
           <select aria-label="菜谱排序" value={sort} onChange={(event) => setSort(event.target.value as "name" | "recent")}>
             <option value="name">按名称</option>
@@ -105,11 +139,15 @@ export function RecipeManagerDrawer({
           <label className="recipe-picker">
             <span>选择标准菜谱（{showHistory ? "含历史版本" : "每道菜的最新版本"}）</span>
             <select aria-label="选择标准菜谱" value={recipe && visible.some((item) => item.id === recipe.id) ? recipe.id : ""} onChange={(event) => onSelect(event.target.value)}>
-              {visible.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name} · v{item.version}
-                  {latest.some((entry) => entry.id === item.id) ? "（最新）" : "（历史）"}
-                </option>
+              {grouped.map((group) => (
+                <optgroup key={group.type} label={group.label}>
+                  {group.items.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} · v{item.version}
+                      {latest.some((entry) => entry.id === item.id) ? "（最新）" : "（历史）"}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </label>
@@ -127,7 +165,10 @@ export function RecipeManagerDrawer({
             {nutrientText(recipe.nutrition, "calories", energyUnit)} {energyUnitLabels[energyUnit]} · {nutrientText(recipe.nutrition, "protein")} g 蛋白质 ·{" "}
             {recipe.ingredients.length} 种原料 · {recipe.totalMinutes} 分钟
           </span>
-          <span>共 {recipes.length} 个版本，其中最新版本 {latest.length} 个。</span>
+          <span>
+            共 {recipes.length} 个版本，其中最新版本 {latest.length} 个。
+            {recipe.mealTags?.length ? ` 适用 ${recipe.mealTags.map((tag) => mealLabels[tag]).join("、")}。` : " 未设置适用餐次。"}
+          </span>
         </div>
       ) : (
         <div className="drawer-summary">

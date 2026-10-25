@@ -16,9 +16,31 @@ struct RecipeInput {
     total_minutes: f64,
     equipment: Vec<String>,
     ingredients: Vec<Ingredient>,
+    /// 适用餐次（OBS-010，0.9.4）：breakfast/lunch/dinner/snack 的子集，可空 = 未分类。
+    meal_tags: Option<Vec<String>>,
     recipe_id: Option<String>,
     copied_from_version_id: Option<String>,
     expected_version_id: Option<String>,
+}
+
+/// 餐次标签清洗：只认四个合法值，按固定顺序去重排序。
+fn clean_meal_tags(raw: Option<Vec<String>>) -> Result<Vec<String>, String> {
+    let Some(raw) = raw else {
+        return Ok(Vec::new());
+    };
+    if raw.len() > 4 {
+        return Err("适用餐次最多四项。".into());
+    }
+    let mut cleaned: Vec<String> = Vec::new();
+    for tag in ["breakfast", "lunch", "dinner", "snack"] {
+        if raw.iter().any(|item| item == tag) {
+            cleaned.push(tag.to_owned());
+        }
+    }
+    if cleaned.len() != raw.len() {
+        return Err("适用餐次只能是早餐/午餐/晚餐/加餐。".into());
+    }
+    Ok(cleaned)
 }
 
 pub(crate) fn apply(
@@ -43,6 +65,7 @@ pub(crate) fn apply(
     if input.equipment.is_empty() || input.equipment.len() > 10 {
         return Err("请选择实际使用的厨具。".into());
     }
+    let meal_tags = clean_meal_tags(input.meal_tags.clone())?;
     let allowed = state["profile"]["equipment"]
         .as_array()
         .cloned()
@@ -155,6 +178,9 @@ pub(crate) fn apply(
     let (now, _) = now_and_date();
     let id = format!("recipe-version-{command_id}");
     let mut recipe = json!({"id":id,"recipeId":recipe_id,"name":input.name.trim(),"version":number,"ingredients":ingredients,"nutrition":nutrition,"totalMinutes":input.total_minutes,"equipment":input.equipment,"source":"personal","confirmedBy":state["profile"]["name"],"confirmedAt":now,"createdAt":now});
+    if !meal_tags.is_empty() {
+        recipe["mealTags"] = json!(meal_tags);
+    }
     if let Some(source) = input.copied_from_version_id {
         recipe["copiedFromVersionId"] = json!(source);
     }
