@@ -1,10 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
-import { Activity, ChevronRight, Database, HardDrive, RotateCcw, ShieldCheck } from "lucide-react";
+import { Activity, Bot, ChevronRight, Database, HardDrive, RotateCcw, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAppStore } from "../store/appStore";
 import { Modal } from "../components/Modal";
 import { TargetGoalModal } from "../components/TargetGoalModal";
+import { AiSettingsModal } from "../components/AiSettingsModal";
 import { DataExportPanel } from "../components/DataExportPanel";
 import { RuntimeDiagnostics } from "../components/RuntimeDiagnostics";
 import { UpdatePanel } from "../components/UpdatePanel";
@@ -20,6 +21,8 @@ interface DomainStorageStatus {
 }
 
 const isTauri = isTauriRuntime;
+
+type SettingsRowKey = "target" | "data" | "update" | "diagnostics" | "reset" | "ai";
 
 /** 0.9.4 设置行：图标 + 标题 + 当前值摘要，点击弹窗承载原卡片全部内容。 */
 function SettingsRow({
@@ -48,7 +51,8 @@ export function SettingsPage() {
   const [storageStatus, setStorageStatus] = useState<DomainStorageStatus | null>(null);
   const [upgradeReport, setUpgradeReport] = useState<{ reconciled: boolean; backupPath?: string | null } | null>(null);
   const [version, setVersion] = useState("");
-  const [openRow, setOpenRow] = useState<null | "target" | "data" | "update" | "diagnostics" | "reset">(null);
+  const [openRow, setOpenRow] = useState<null | SettingsRowKey>(null);
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -92,6 +96,12 @@ export function SettingsPage() {
           onClick={() => setOpenRow("target")}
         />
         <SettingsRow
+          icon={<Bot size={17} />}
+          title="AI 采集"
+          summary="用 Ollama 从自然语言生成饮食草稿（默认关闭，仅本机）"
+          onClick={() => setAiSettingsOpen(true)}
+        />
+        <SettingsRow
           icon={<HardDrive size={17} />}
           title="数据与导出"
           summary={storageStatus?.initialized ? `领域仓库修订 ${storageStatus.revision} · 实体 ${storageStatus.entityCount} · 审计 ${auditEventCount} 条` : "等待首次写入 · 可导出 JSON 备份"}
@@ -120,6 +130,7 @@ export function SettingsPage() {
 
       {openRow === "target" && <TargetGoalModal profile={profile} onClose={() => setOpenRow(null)} />}
 
+      {aiSettingsOpen && <AiSettingsModal onClose={() => setAiSettingsOpen(false)} />}
       {openRow === "data" && (
         <Modal title="数据与导出" onClose={() => setOpenRow(null)}>
           <p className="form-hint">本地 SQLite 记录可导出为未加密 JSON；导出不会修改记录。</p>
