@@ -29,7 +29,8 @@ it("renders the cooking card as a single compact row (0.9.4 压一行)", async (
   await act(async () => root.render(<FoodPage />));
 
   expect(host.querySelector(".food-page")).not.toBeNull();
-  const workbench = host.querySelector(".food-workbench")!;
+  // 0.9.4 第二轮：菜谱行上移为页头正下方细条。
+  const workbench = host.querySelector(".kitchen-strip")!;
   expect(workbench).not.toBeNull();
   expect(host.querySelector(".two-column")).toBeNull();
   expect(host.querySelector(".validation-card")).toBeNull();

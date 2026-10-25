@@ -53,7 +53,7 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
           </div>
         </header>
         {fromPicker && <p className="library-notice">从记餐转来：保存后可一键返回饮食页，待确认篮子仍在。</p>}
-        <section className="card">
+        <section className="card editor-card">
           <FoodEditor
             key={editing === "new" ? "new" : editing.version.id}
             item={editing === "new" ? undefined : editing}
@@ -98,7 +98,7 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
             <button className="ui-btn" onClick={() => { action.setMessage(""); setIdentity(null); }}><ArrowLeft size={15}/> 返回食材库</button>
           </div>
         </header>
-        <section className="card">
+        <section className="card editor-card">
           <FoodIdentityEditor
             item={identity}
             action={action}

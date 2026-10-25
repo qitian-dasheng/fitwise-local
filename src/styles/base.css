@@ -8,6 +8,12 @@
 /* 全局字体切到 Noto Sans SC（tokens 的 --font-sans 已含回落链）。 */
 :root {
   font-family: var(--font-sans);
+  color-scheme: light;
+}
+
+/* 深色主题下原生控件（日期/时间选择器、复选框、滚动条）跟随主题，否则弹白底。 */
+[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 /* 数字与单位统一等宽：表格、指标卡、图表轴都受益。 */

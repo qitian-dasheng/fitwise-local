@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FoodPage } from "../src/pages/FoodPage";
 import { nutrition } from "../src/domain/calculations";
-import { diaryToday } from "../src/domain/diary";
+import { diaryToday, shiftDiaryDate } from "../src/domain/diary";
 import { initialState } from "../src/domain/seed";
 import { DIARY_SODIUM_KEY } from "../src/domain/preferences";
 import { useAppStore } from "../src/store/appStore";
@@ -56,37 +56,48 @@ async function renderPage(meals: MealEntry[]) {
   });
 }
 
+// 0.9.4 第二轮：卡片化结构。日合计独立卡 + 四餐卡；data-meal-type / data-nutrient / .food-entry 锚点保留。
 const group = (type: MealType) => host.querySelector(`[data-meal-type="${type}"]`) as HTMLElement;
-const mealHead = (type: MealType) => group(type).querySelector(".diary-meal-head") as HTMLElement;
+const mealSubtotal = (type: MealType, key: NutrientKey) =>
+  group(type).querySelector(`.meal-card-sub [data-nutrient="${key}"]`) as HTMLElement;
+const itemNutrient = (key: NutrientKey) =>
+  host.querySelector(`.food-entry [data-nutrient="${key}"]`) as HTMLElement;
 const summaryCell = (key: NutrientKey) => host.querySelector(`.diary-summary-cell[data-nutrient="${key}"]`) as HTMLElement;
-const headCell = (key: NutrientKey) => mealHead("lunch").querySelector(`[data-nutrient="${key}"]`) as HTMLElement;
+const mealActions = (type: MealType) => [...group(type).querySelectorAll(".meal-card-actions button")];
 const button = (label: string) => [...host.querySelectorAll("button")].find((item) => item.textContent?.includes(label))!;
 
-it("renders the three layers: daily summary, four meal subtotals and item rows", async () => {
+it("renders the card layers: daily total card plus four meal cards", async () => {
   await renderPage([entry({ id: "燕麦", nutrition: full(300) })]);
 
-  const headers = [...host.querySelectorAll(".diary-head > span")].map((cell) => cell.textContent?.trim());
-  expect(headers).toEqual(["食物 / 份量", "热量 kcal", "蛋白质 g", "碳水 g", "脂肪 g", "纤维 g", "糖 g", "操作"]);
-
-  expect(host.querySelectorAll(".diary-meal")).toHaveLength(4);
-  expect(host.querySelectorAll(".diary-meal-head")).toHaveLength(4);
-  expect(host.querySelectorAll(".food-entry")).toHaveLength(1);
+  // 日合计独立卡：标题 + 汇总格 + 图例。
+  expect(host.querySelector(".diary-total-card")).not.toBeNull();
+  expect(host.querySelector(".diary-total-card h2")?.textContent).toBe("日合计");
   expect(host.querySelector(".diary-summary")).not.toBeNull();
+  expect(host.querySelector(".diary-legend")).not.toBeNull();
 
-  // 空餐次只给一条跨列提示，不再铺一排「—」
+  // 四餐卡：早餐/午餐/晚餐/加餐各一张。
+  const cards = [...host.querySelectorAll(".meal-card")];
+  expect(cards).toHaveLength(4);
+  expect(cards.map((card) => card.getAttribute("data-meal-type"))).toEqual(["breakfast", "lunch", "dinner", "snack"]);
+
+  // 空餐次卡：没有数字，只有「还没有记录」与添加入口。
   expect(group("breakfast").textContent).toContain("还没有记录");
-  expect(mealHead("breakfast").querySelector('[data-nutrient="calories"]')).toBeNull();
-  expect(mealHead("breakfast").querySelectorAll(".diary-cell-num")).toHaveLength(0);
-  expect(group("breakfast").querySelector(".diary-empty-hint")!.textContent).toContain("添加早餐");
+  expect(group("breakfast").querySelector("[data-nutrient]")).toBeNull();
   expect(group("breakfast").textContent).not.toContain("—");
   expect(group("breakfast").textContent).not.toContain("0 kcal");
+  expect(mealActions("breakfast").map((item) => item.textContent?.trim())).toContain("添加早餐");
+
+  // 有记录的餐：卡头小计（热量+蛋白），卡体一条 item。
+  expect(group("lunch").querySelectorAll(".food-entry")).toHaveLength(1);
+  expect(mealSubtotal("lunch", "calories").textContent).toBe("300");
+  expect(mealSubtotal("lunch", "protein").textContent).toBe("20");
 });
 
 it("shows unknown instead of zero and flags the day as incomplete", async () => {
   await renderPage([entry({ id: "外食", nutrition: nutrition({ calories: 300, protein: 20 }) })]);
 
-  expect(headCell("fat").textContent).toBe("未知");
-  expect(headCell("carbohydrates").textContent).toBe("未知");
+  expect(itemNutrient("fat").textContent).toContain("未知");
+  expect(itemNutrient("carbohydrates").textContent).toContain("未知");
   expect(summaryCell("fat").textContent).toContain("未知");
   expect(summaryCell("calories").textContent).toContain("300");
 
@@ -101,9 +112,12 @@ it("marks partially known totals with a lower bound", async () => {
     entry({ id: "缺项餐", nutrition: nutrition({ calories: 100, protein: 10 }) }),
   ]);
 
-  expect(mealHead("lunch").querySelector('[data-nutrient="fat"]')!.textContent).toBe("≥10");
-  expect(mealHead("lunch").querySelector('[data-nutrient="protein"]')!.textContent).toBe("30");
+  // 卡头小计与日合计都保留「≥」语义。
+  expect(mealSubtotal("lunch", "protein").textContent).toBe("30");
   expect(summaryCell("fat").textContent).toContain("≥10");
+  // 条目级的缺项仍是「未知」。
+  const missingRow = [...host.querySelectorAll(".food-entry")].find((row) => row.textContent?.includes("缺项餐"))!;
+  expect(missingRow.querySelector('[data-nutrient="fat"]')?.textContent).toContain("未知");
 });
 
 it("keeps each meal subtotal limited to its own rows", async () => {
@@ -113,8 +127,8 @@ it("keeps each meal subtotal limited to its own rows", async () => {
     entry({ id: "晚餐", type: "dinner", nutrition: full(500) }),
   ]);
 
-  expect(mealHead("lunch").querySelector('[data-nutrient="calories"]')!.textContent).toBe("400");
-  expect(mealHead("dinner").querySelector('[data-nutrient="calories"]')!.textContent).toBe("500");
+  expect(mealSubtotal("lunch", "calories").textContent).toBe("400");
+  expect(mealSubtotal("dinner", "calories").textContent).toBe("500");
   expect(summaryCell("calories").textContent).toContain("900");
 });
 
@@ -122,38 +136,40 @@ it("scales shared-batch rows by the consumed ratio everywhere", async () => {
   await renderPage([entry({ id: "整锅一半", nutrition: full(300), consumedRatio: 0.5 })]);
 
   const row = host.querySelector(".food-entry") as HTMLElement;
-  expect(row.querySelector('[data-nutrient="calories"]')!.textContent).toBe("150");
-  expect(mealHead("lunch").querySelector('[data-nutrient="calories"]')!.textContent).toBe("150");
+  // 条目热量内联单位（150 kcal）；小计与日合计不含单位文本差异按包含断言。
+  expect(row.querySelector('[data-nutrient="calories"]')!.textContent).toContain("150");
+  expect(mealSubtotal("lunch", "calories").textContent).toBe("150");
   expect(summaryCell("calories").textContent).toContain("150");
   expect(row.textContent).toContain("按 50% 计入");
 });
 
-it("toggles the sodium column and remembers the choice", async () => {
+it("toggles the sodium nutrient and remembers the choice", async () => {
   await renderPage([entry({ id: "燕麦", nutrition: full(300) })]);
 
-  expect(host.textContent).not.toContain("钠 mg");
+  expect(host.querySelector('[data-nutrient="sodium"]')).toBeNull();
   const toggle = host.querySelector<HTMLInputElement>(".diary-sodium-toggle input")!;
   await act(async () => {
     toggle.click();
   });
 
-  expect(host.textContent).toContain("钠 mg");
   expect(host.querySelector('.diary-summary-cell[data-nutrient="sodium"]')!.textContent).toContain("200");
   expect(window.localStorage.getItem(DIARY_SODIUM_KEY)).toBe("1");
-  expect(host.querySelector(".diary-table")!.className).toContain("with-sodium");
+  // 条目级营养行出现钠（mg 单位）。
+  expect(itemNutrient("sodium").textContent).toContain("200");
+  expect(itemNutrient("sodium").textContent).toContain("mg");
 
   await act(async () => {
     host.querySelector<HTMLInputElement>(".diary-sodium-toggle input")!.click();
   });
-  expect(host.textContent).not.toContain("钠 mg");
+  expect(host.querySelector('[data-nutrient="sodium"]')).toBeNull();
   expect(window.localStorage.getItem(DIARY_SODIUM_KEY)).toBe("0");
 });
 
-it("keeps an add entry in every meal even when the meal already has food", async () => {
+it("keeps an add entry in every meal card even when the meal already has food", async () => {
   await renderPage([entry({ id: "午餐项", nutrition: full(300) })]);
 
-  const addButtons = [...host.querySelectorAll(".diary-meal-head button")].map((item) => item.textContent?.trim());
-  expect(addButtons).toEqual(["添加早餐", "添加午餐", "添加晚餐", "添加加餐"]);
+  const addButtons = host.querySelectorAll(".meal-card .meal-card-actions button");
+  expect([...addButtons].map((item) => item.textContent?.trim())).toEqual(["添加早餐", "添加午餐", "添加晚餐", "添加加餐"]);
   // 页头全局入口仍是唯一的「添加食物」
   expect([...host.querySelectorAll("button")].filter((item) => item.textContent?.trim() === "添加食物")).toHaveLength(1);
 });
@@ -194,7 +210,6 @@ it("renders the brand once when the amount label already carries it", async () =
 });
 
 // ===== 0.4.13 照搬上次这一餐 =====
-import { shiftDiaryDate } from "../src/domain/diary";
 
 const yesterday = shiftDiaryDate(day, -1);
 
@@ -204,7 +219,7 @@ it("offers to copy the latest same-meal day and lists what comes over", async ()
     entry({ id: "酸奶", date: yesterday, type: "breakfast", name: "酸奶", amountLabel: "150 g", nutrition: nutrition({ calories: 93, protein: 4 }) }),
   ]);
 
-  const copy = [...mealHead("breakfast").querySelectorAll("button")].find((item) => item.textContent?.includes("照搬"))!;
+  const copy = mealActions("breakfast").find((item) => item.textContent?.includes("照搬"))! as HTMLButtonElement;
   expect(copy).toBeTruthy();
   expect(copy.textContent).toContain(yesterday.slice(5));
   expect(copy.textContent).toContain("2 项");
@@ -221,9 +236,7 @@ it("copies the items into the empty meal and keeps the trace back", async () => 
     entry({ id: "燕麦", date: yesterday, type: "breakfast", name: "燕麦", amountLabel: "50 g", nutrition: nutrition({ calories: 200, protein: 8 }) }),
   ]);
   await act(async () => {
-    [...mealHead("breakfast").querySelectorAll("button")]
-      .find((item) => item.textContent?.includes("照搬"))!
-      .click();
+    (mealActions("breakfast").find((item) => item.textContent?.includes("照搬"))! as HTMLButtonElement).click();
   });
   const dialog = document.querySelector(".modal") as HTMLElement;
   await act(async () => {
@@ -236,7 +249,7 @@ it("copies the items into the empty meal and keeps the trace back", async () => 
   expect(created[0].copiedFromId).toBe("燕麦");
   // 来源那天的记录原样保留。
   expect(useAppStore.getState().meals.filter((item) => item.date === yesterday)).toHaveLength(1);
-  // 条目名在明细行里，不在餐次小计行。
+  // 条目名在餐卡的明细行里。
   expect(group("breakfast").textContent).toContain("燕麦");
 });
 
@@ -247,9 +260,9 @@ it("hides the copy entry when the meal already has records or has no source", as
   ]);
 
   // 早餐已经有记录：不给照搬，避免重复计热量。
-  expect([...mealHead("breakfast").querySelectorAll("button")].some((item) => item.textContent?.includes("照搬"))).toBe(false);
+  expect(mealActions("breakfast").some((item) => item.textContent?.includes("照搬"))).toBe(false);
   // 午餐有来源：给。
-  expect([...mealHead("lunch").querySelectorAll("button")].some((item) => item.textContent?.includes("照搬"))).toBe(true);
+  expect(mealActions("lunch").some((item) => item.textContent?.includes("照搬"))).toBe(true);
   // 加餐从来没记过：没有入口。
-  expect([...mealHead("snack").querySelectorAll("button")].some((item) => item.textContent?.includes("照搬"))).toBe(false);
+  expect(mealActions("snack").some((item) => item.textContent?.includes("照搬"))).toBe(false);
 });

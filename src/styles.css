@@ -164,7 +164,6 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 .metric-card > span, .metric-card small { color: var(--ui-muted); font-size: 11.5px; }.metric-card > strong, .icon-metric strong { font: 600 22px "Space Grotesk", sans-serif; color: var(--ui-ink); }.metric-card small { align-self: end; }
 .metric-card.icon-metric { grid-template-columns: 42px 1fr; align-items: center; min-height: 100px; }.icon-metric > div { display: grid; gap: 6px; }.icon-metric div > span { color: var(--ui-muted); font-size: 11px; }.metric-icon { display: grid; width: 40px; height: 40px; place-items: center; color: var(--ui-ink); border-radius: 12px; background: var(--ui-sunken); }.metric-icon svg { width: 19px; }.warn-card .metric-icon { color: var(--ui-warn); background: var(--ui-warn-soft); }
 /* 饮食明细：日汇总 → 餐次小计 → 单项，三层共用同一列模板，数字列对齐。 */
-.diary-card { padding: 24px; min-width: 0; }
 .diary-card-tools { display: flex; align-items: center; gap: 12px; }
 .diary-sodium-toggle { margin: 0 !important; color: var(--ui-muted); font-size: 12px; }
 .diary-summary { display: grid; grid-template-columns: minmax(150px, 1.4fr) repeat(6, minmax(72px, 1fr)); gap: 12px; margin-top: 16px; padding: 14px 16px; border-radius: 14px; background: var(--ui-sunken); }
@@ -177,26 +176,9 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 .diary-summary-cell > span { color: var(--ui-muted); font-size: 11px; }
 .diary-summary-cell b { font: 600 16px "Space Grotesk", sans-serif; font-variant-numeric: tabular-nums; color: var(--ui-ink); }
 .diary-summary-cell small { color: var(--ui-muted); font-size: 11px; }
-.diary-scroll { margin-top: 12px; overflow-x: auto; }
-.diary-table { --diary-cols: minmax(200px, 2.4fr) 82px 74px 74px 70px 66px 58px 88px; min-width: 820px; }
-.diary-table.with-sodium { --diary-cols: minmax(200px, 2.4fr) 82px 74px 74px 70px 66px 58px 76px 88px; min-width: 900px; }
-.diary-row { display: grid; grid-template-columns: var(--diary-cols); gap: 10px; align-items: center; padding: 9px 8px; border-bottom: 1px solid var(--ui-line); background: var(--ui-card); font-size: 11px; color: var(--ui-ink-2); }
-.diary-head { min-height: 32px; color: var(--ui-muted); border-bottom: 1px solid var(--ui-line); font-size: 11px; font-weight: 600; background: var(--ui-card); }
-.diary-meal:last-child .diary-item:last-child { border-bottom: 0; }
-.diary-meal-head { margin-top: 8px; padding: 11px 8px; border-radius: 11px; background: var(--ui-sunken); color: var(--ui-ink); }
-.diary-cell-food { min-width: 0; }
-.diary-cell-food strong, .diary-cell-food > span, .diary-cell-food small { display: block; }
-.diary-cell-food strong { font-size: 13px; color: var(--ui-ink); }
-.diary-cell-food > span { margin-top: 3px; color: var(--ui-muted); font-size: 11px; line-height: 1.45; }
-.diary-item-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
-.diary-cell-num { text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; }
-.diary-meal-head .diary-cell-num { font-weight: 600; }
-.food-entry { border-radius: 10px; }
+.diary-cell-num { font-variant-numeric: tabular-nums; }
 .diary-unknown, .diary-none { color: var(--ui-muted); }
 .diary-partial { color: var(--ui-ink); text-decoration: underline dashed var(--ui-warn); text-underline-offset: 3px; }
-.diary-cell-actions { position: sticky; right: 0; display: flex; justify-content: flex-end; gap: 10px; background: inherit; }
-.diary-meal-head .diary-cell-actions { gap: 0; }
-.diary-cell-actions .text-button { display: inline-flex; align-items: center; gap: 3px; }
 .diary-legend { margin: 12px 0 0; color: var(--ui-muted); font-size: 11px; line-height: 1.6; }
 .ratio-summary { display: flex; gap: 12px; padding: 15px; border-radius: 12px; background: var(--ui-sunken); }.ratio-summary svg { color: var(--ui-ink-2); }.ratio-summary strong, .ratio-summary span { display: block; }.ratio-summary span { margin-top: 3px; color: var(--ui-muted); font-size: 11px; }
 
@@ -261,16 +243,6 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 .recipe-rules summary { cursor: pointer; color: var(--ui-ink-2); font-weight: 600; overflow-wrap: anywhere; }
 .recipe-rules .recipe-equipment { margin-top: 14px; }
 .recipe-rules ul { margin-bottom: 0; padding-left: 20px; }
-@media (max-width: 640px) {
-  .diary-card { padding: 16px; }
-  .diary-card-tools { flex-wrap: wrap; gap: 8px; }
-  .diary-table, .diary-table.with-sodium { --diary-cols: minmax(120px, 1fr) 70px 84px; min-width: 0; }
-  .diary-cell-num + .diary-cell-num { display: none; }
-  .diary-cell-actions { position: static; gap: 6px; }
-  .diary-meal-head .diary-cell-actions .text-button { font-size: 11px; }
-  .diary-head { font-size: 10px; }
-}
-
 @media (max-width: 620px) { .recipe-editor .form-grid { grid-template-columns: 1fr; } }
 
 /* ===== 0.4.8 结构修整：右侧抽屉 ===== */
@@ -295,20 +267,47 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 .food-page { display: flex; flex-direction: column; }
 .food-page > .meal-correction-history, .food-page > .form-hint { margin: 0; }
 
-/* ===== 0.9.4 今日下厨：压成一行入口（完整菜谱详情在管理菜谱抽屉） ===== */
-.food-workbench { display: grid; }
-.kitchen-card { display: grid; padding: 11px 14px; min-width: 0; }
-.kitchen-row { display: flex; align-items: center; gap: 12px; min-width: 0; flex-wrap: wrap; }
+/* ===== 0.9.4 第二轮：饮食页卡片化——日合计独立卡 + 四餐卡横排（卡内面板内滚） ===== */
+.diary-board { display: grid; gap: 12px; }
+.diary-total-card { display: grid; gap: 12px; padding: 16px 18px; }
+.meal-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; }
+@media (max-width: 1280px) { .meal-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .meal-cards { grid-template-columns: 1fr; } }
+.meal-card { display: grid; gap: 8px; padding: 13px 14px; min-width: 0; }
+.meal-card.empty { border-style: dashed; }
+.meal-card-head { display: grid; gap: 4px; }
+.meal-card-title h3 { margin: 0; font-size: 13.5px; color: var(--ui-ink); }
+.meal-card-sub { font-size: 11px; color: var(--ui-muted); }
+.meal-card-sub b { color: var(--ui-ink); font-variant-numeric: tabular-nums; font-weight: 600; }
+.meal-card-actions { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.meal-card-items { display: grid; gap: 8px; max-height: 300px; overflow-y: auto; padding-right: 2px; }
+.meal-card-item { display: grid; gap: 5px; padding: 9px 11px; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--ui-sunken); }
+.meal-card-item-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.meal-card-item-head strong { font-size: 12.5px; color: var(--ui-ink); overflow-wrap: anywhere; }
+.meal-card-item-head b { font-size: 14px; color: var(--ui-ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.meal-card-item-head b small { font-weight: 400; font-size: 10px; color: var(--ui-muted); }
+.meal-card-item-tags { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 11px; color: var(--ui-muted); align-items: center; }
+.meal-card-item-foot { display: flex; justify-content: space-between; gap: 6px 8px; align-items: center; flex-wrap: wrap; }
+.meal-card-item-nutrients { display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 10.5px; color: var(--ui-muted); min-width: 0; }
+.meal-card-item-nutrients em { font-style: normal; font-variant-numeric: tabular-nums; }
+.meal-card-item-nutrients em small { color: var(--ui-faint); font-size: 10px; }
+.meal-card-item-actions { display: flex; gap: 10px; flex: 0 0 auto; }
+
+/* 菜谱细条：页头正下方右对齐（完整菜谱详情在管理菜谱抽屉） */
+.kitchen-strip { display: flex; justify-content: flex-end; }
+.kitchen-strip .kitchen-card { width: min(880px, 100%); padding: 9px 12px; }
+.kitchen-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .recipe-visual-sm { display: grid; flex: 0 0 auto; width: 34px; height: 34px; place-items: center; color: var(--ui-ink-2); border-radius: 10px; background: var(--ui-sunken); }
-.kitchen-row-main { flex: 1 1 220px; min-width: 0; display: grid; gap: 2px; }
+.kitchen-row-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
 .kitchen-row-main strong { font-size: 13.5px; color: var(--ui-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kitchen-row-meta { font-size: 11.5px; color: var(--ui-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.food-workbench { display: grid; }
+
 
 @media (max-width: 620px) { .drawer { width: 100%; } .drawer-header, .drawer-body { padding-left: 18px; padding-right: 18px; } }
 
-/* ===== 0.4.8 空餐次：一条跨列提示，不铺破折号 ===== */
-.diary-meal-head-empty { background: transparent; border-bottom: 1px dashed var(--ui-line); }
-.diary-empty-hint { grid-column: 2 / -1; align-self: center; justify-self: start; color: var(--ui-muted); font-size: 12px; }
+/* 0.4.8 照搬按钮（卡片化后仍沿用此配色锚点） */
+.diary-empty-hint { color: var(--ui-muted); }
 .diary-empty-hint:hover { color: var(--ui-ink); }
 
 /* ===== 0.4.8 字号与密度：小字整体上调一档，对齐库存页 ===== */
@@ -319,12 +318,6 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 .recipe-picker select { font-size: 13px; }
 
 /* 饮食明细：正文 13px / 表头 11px，数字列加宽以容纳新字号。 */
-.diary-table { --diary-cols: minmax(190px, 1fr) 84px 78px 78px 74px 70px 64px 92px; min-width: 860px; }
-.diary-table.with-sodium { --diary-cols: minmax(190px, 1fr) 84px 78px 78px 74px 70px 64px 78px 92px; min-width: 940px; }
-.diary-row { padding: 11px 8px; font-size: 13px; }
-.diary-head { min-height: 36px; font-size: 11px; }
-.diary-meal-head { padding: 12px 8px; }
-.diary-cell-num { font-size: 13px; }
 .drawer .checkbox-label { font-size: 12.5px; line-height: 1.65; }
 
 /* ===== 0.4.8 身体页：体重录入、指标、历史表 ===== */
@@ -374,17 +367,18 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 
 /* 右栏没有卡片外壳，标题需要下移一个卡片内边距，才能和左卡标题同高。 */
 .body-page .chart-large:has(.empty-chart) { height: 210px; }
+/* 0.9.4 第二轮一屏化：概览标签趋势 240 / 围度 130；历史表与复盘日历面板内滚。 */
+.body-page .chart-large { height: 240px; }
+.body-page .girth-chart { height: 130px; }
+.body-tabs { align-self: flex-start; }
+.body-table-scroll { max-height: calc(100vh - 300px); min-height: 200px; overflow-y: auto; }
+.review-calendar .calendar-grid { max-height: 336px; overflow-y: auto; }
 
 /* 抽屉里的三个菜谱动作等宽排一行，避免折成两行。 */
 .drawer-body > .button-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .drawer-body > .button-row > .button { padding: 0 10px; font-size: 12.5px; }
 
 /* 以库存页实测基准收口：表头 12px / 正文 12px / 主文 13px / 次要 11px。 */
-.diary-row { font-size: 12px; }
-.diary-head { font-size: 12px; }
-.diary-cell-num { font-size: 12px; }
-.diary-cell-food strong { font-size: 13px; }
-.diary-cell-food > span { font-size: 11px; }
 .body-row { font-size: 12px; }
 .body-head { font-size: 12px; }
 .body-cell-num { font-size: 12px; }
@@ -491,8 +485,6 @@ button.calendar-cell:focus-visible { outline: 2px solid var(--ui-ink); outline-o
 .reason-chips button.active { color: var(--ui-ink); border-color: var(--ui-ink); background: var(--ui-sunken); font-weight: 600; }
 
 /* ===== 0.4.13 照搬上次：空餐次两个入口并排 ===== */
-.diary-empty-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; grid-column: 2 / -1; }
-.diary-empty-actions .diary-empty-hint { grid-column: auto; }
 .copy-meal-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .copy-meal-list li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 9px 12px; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--ui-sunken); font-size: 12.5px; }
 .copy-meal-list li strong { font-weight: 600; }
@@ -503,9 +495,12 @@ button.calendar-cell:focus-visible { outline: 2px solid var(--ui-ink); outline-o
 .page-stack { display: grid; }
 .page-stack > .page { padding-bottom: 28px; }
 
-/* ── 0.9.2 食材库独立页与全页建档表单 ─────────────────────────── */
+/* ── 0.9.4 食材库独立页与全页建档表单 ─────────────────────────── */
+/* .card 基类不带内边距（惯例），编辑器整页卡在此补齐——0.9.4 实机"文字贴卡边"修复。 */
+.editor-card { padding: 24px; }
+
 .food-library-page .library-page-body { display: block; }
-.food-library-page .library-results { max-height: none; overflow: visible; }
+.food-library-page .library-results { max-height: calc(100vh - 330px); min-height: 220px; overflow-y: auto; padding-right: 4px; }
 .food-library-page .library-item .library-select { flex: 1; min-width: 0; text-align: left; background: none; border: none; padding: 0; cursor: default; }
 /* 独立页搜索框：补齐弹窗内输入框的可见外观（.food-library 作用域覆盖不到本页，0.9.4 实机"图标错位/框不可见"的修复）。 */
 .food-library-page .library-search input { height: 40px; padding: 0 12px 0 38px; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--ui-card); color: var(--ui-ink); }

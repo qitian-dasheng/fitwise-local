@@ -119,10 +119,11 @@ export default function App() {
       </div>
     ),
     body: (
-      <div className="page-stack">
-        <BodyPage date={date} onDateChange={setDate} />
-        <TrendsPage date={date} onDateChange={setDate} goTo={setPage} embedded />
-      </div>
+      <BodyPage
+        date={date}
+        onDateChange={setDate}
+        reviewSlot={<TrendsPage date={date} onDateChange={setDate} goTo={setPage} embedded />}
+      />
     ),
     workout: (
       <WorkoutPage

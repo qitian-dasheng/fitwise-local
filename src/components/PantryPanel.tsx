@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Minus, PencilLine, Plus, Trash2 } from "lucide-react";
 import { useAppStore } from "../store/appStore";
 import { useConfirmedAction } from "./useConfirmedAction";
@@ -109,11 +109,20 @@ export function PantryPanel() {
 }
 
 function PantryEntryModal({ onClose, action, onSaved }: { onClose: () => void; action: ReturnType<typeof useConfirmedAction>; onSaved: (name: string) => void }) {
-  const definitions = useAppStore((state) => state.foodDefinitions).filter((item) => item.archived !== true);
-  const [form, setForm] = useState({ foodDefinitionId: definitions[0]?.id ?? "", quantity: "", unit: "g" as FoodUnit, expiresAt: "", lowStockThreshold: "", note: "" });
-  const existing = useAppStore((state) => state.pantryItems.map((item) => item.foodDefinitionId));
-  const candidates = definitions.filter((item) => !existing.includes(item.id));
+  // 选择器只取稳定引用，派生一律在组件体内用 useMemo——
+  // 在选择器里 map/filter 会每次返回新数组，useSyncExternalStore 判定快照变化，无限重渲染（React #185）。
+  const definitions = useAppStore((state) => state.foodDefinitions);
+  const pantryItems = useAppStore((state) => state.pantryItems);
+  const [form, setForm] = useState({ foodDefinitionId: "", quantity: "", unit: "g" as FoodUnit, expiresAt: "", lowStockThreshold: "", note: "" });
+  const candidates = useMemo(
+    () => definitions.filter((item) => item.archived !== true && !pantryItems.some((entry) => entry.foodDefinitionId === item.id)),
+    [definitions, pantryItems],
+  );
   const target = candidates.find((item) => item.id === form.foodDefinitionId) ?? candidates[0];
+  // 候选集异步就绪后把默认选中补上（初值留空避免渲染期写 store）。
+  useEffect(() => {
+    if (!form.foodDefinitionId && target) setForm((current) => ({ ...current, foodDefinitionId: target.id }));
+  }, [target, form.foodDefinitionId]);
 
   return (
     <Modal title="入库" onClose={() => { if (!action.busy) onClose(); }}>

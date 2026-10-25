@@ -52,9 +52,10 @@ it("遗留的 kJ 偏好被忽略：饮食页各处始终以 kcal 显示", async 
   window.localStorage.setItem(ENERGY_UNIT_KEY, "kJ");
   await render(<FoodPage date={diaryToday()} />);
 
-  const headers = [...host.querySelectorAll(".diary-head > span")].map((cell) => cell.textContent?.trim());
-  expect(headers).toContain("热量 kcal");
-  expect(headers).not.toContain("热量 kJ");
+  // 0.9.4 卡片化后表头取消；单位口径看日合计格的 label+单位。
+  const calorieCell = host.querySelector('.diary-summary-cell[data-nutrient="calories"]');
+  expect(calorieCell?.textContent).toContain("kcal");
+  expect(calorieCell?.textContent).not.toContain("kJ");
 
   await act(async () => {
     useAppStore.setState({ meals: [entry({ id: "燕麦", nutrition: full(300) })] });

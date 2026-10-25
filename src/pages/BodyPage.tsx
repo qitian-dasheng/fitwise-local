@@ -27,7 +27,15 @@ import { useAppStore } from "../store/appStore";
 
 type Correction = { measurement: BodyMeasurement; mode: "edit" | "void" } | null;
 
-export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps = {}) {
+type BodyTab = "overview" | "review" | "history";
+
+const BODY_TABS: { value: BodyTab; label: string }[] = [
+  { value: "overview", label: "概览" },
+  { value: "review", label: "区间与复盘" },
+  { value: "history", label: "全部记录" },
+];
+
+export function BodyPage({ date = diaryToday(), onDateChange, reviewSlot }: DiaryDateProps & { /** 区间与复盘标签的内容（App 传入嵌入的 TrendsPage） */ reviewSlot?: React.ReactNode } = {}) {
   const measurements = useAppStore((state) => state.measurements);
   const profile = useAppStore((state) => state.profile);
   const recordWeight = useAppStore((state) => state.recordWeight);
@@ -36,6 +44,8 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   const action = useConfirmedAction();
   // 0.9.4 表单折叠化：默认收成一行入口（首次使用无任何记录时展开引导），提交成功自动收起。
   const [entryOpen, setEntryOpen] = useState(measurements.length === 0);
+  // 0.9.4 第二轮：页内三标签（概览/区间与复盘/全部记录）——原「身体页+嵌入复盘」上下堆叠过长。
+  const [tab, setTab] = useState<BodyTab>("overview");
 
   const now = shanghaiNowParts();
   const [form, setForm] = useState({
@@ -134,6 +144,15 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
       </header>
       <p className="ui-chart-foot" style={{ marginTop: 0, paddingTop: 0 }}>统计区间 {start} 至 {date}。旧记录没有保存称重时刻时显示「未标注」，不会拿入库时间顶替。</p>
 
+      <div className="range-tabs body-tabs" role="tablist" aria-label="身体页分区">
+        {BODY_TABS.map((item) => (
+          <button key={item.value} type="button" role="tab" aria-selected={tab === item.value} className={tab === item.value ? "active" : ""} onClick={() => setTab(item.value)}>
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "overview" && (<>
       <section className="ui-card body-entry">
         <div className="ui-panel-head">
           <h2>记录一次称重</h2>
@@ -406,15 +425,20 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
           )}
         </div>
       )}
+      </>)}
 
-      <WeightHistoryTable
-        measurements={measurements}
-        onEdit={(measurement) => setCorrection({ measurement, mode: "edit" })}
-        onVoid={(measurement) => setCorrection({ measurement, mode: "void" })}
-        onSetRepresentative={(measurement) => {
-          void setWeightRepresentative(measurement.id);
-        }}
-      />
+      {tab === "review" && reviewSlot}
+
+      {tab === "history" && (
+        <WeightHistoryTable
+          measurements={measurements}
+          onEdit={(measurement) => setCorrection({ measurement, mode: "edit" })}
+          onVoid={(measurement) => setCorrection({ measurement, mode: "void" })}
+          onSetRepresentative={(measurement) => {
+            void setWeightRepresentative(measurement.id);
+          }}
+        />
+      )}
 
       {correction && (
         <WeightCorrectionModal

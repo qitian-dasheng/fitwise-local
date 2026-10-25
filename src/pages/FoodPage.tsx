@@ -126,6 +126,36 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
         </div>
       </header>
 
+      {/* 0.9.4 第二轮：菜谱行上移到页头正下方（右对齐细条），页面底部不再有厨房卡。 */}
+      <div className="kitchen-strip">
+        <section className="ui-card kitchen-card" aria-label="今日下厨">
+          {recipe ? (
+            <div className="kitchen-row">
+              <span className="recipe-visual-sm"><ChefHat size={19} /></span>
+              <div className="kitchen-row-main">
+                <strong>{recipe.name}</strong>
+                <span className="kitchen-row-meta">
+                  {nutrientText(recipe.nutrition, "calories", energyUnit)} {energyUnitLabels[energyUnit]} · 蛋白 {nutrientText(recipe.nutrition, "protein")} g · {recipe.totalMinutes} 分钟
+                  {!latest.some((r) => r.id === recipe.id) ? ` · 历史 v${recipe.version}` : ` · v${recipe.version}`}
+                </span>
+              </div>
+              <button className="ui-btn primary" onClick={() => setRecipeMealOpen(true)}><UtensilsCrossed size={15} /> 加入餐次</button>
+              <button className="ui-btn" onClick={() => setRecipeDrawer(true)}><BookOpen size={15} /> 管理菜谱</button>
+            </div>
+          ) : (
+            <div className="kitchen-row">
+              <span className="recipe-visual-sm"><ChefHat size={19} /></span>
+              <div className="kitchen-row-main">
+                <strong>还没有菜谱</strong>
+                <span className="kitchen-row-meta">固定搭配建成菜谱后，可一键按份量记入餐次</span>
+              </div>
+              <button className="ui-btn" onClick={() => openRecipeEditor("new", false)}><Plus size={15} /> 新建菜谱</button>
+              <button className="ui-btn" onClick={() => setRecipeDrawer(true)}><BookOpen size={15} /> 管理菜谱</button>
+            </div>
+          )}
+        </section>
+      </div>
+
       {frequent.length > 0 && (
         <section className="ui-card" aria-label="常吃食物" style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 14 }}>
           <div className="ui-panel-head" style={{ marginBottom: 0 }}><h2 style={{ fontSize: 12 }}>常吃</h2></div>
@@ -159,42 +189,6 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
         onVoid={(meal) => setCorrection({ meal, mode: "void" })}
       />
 
-      <div className="food-workbench">
-        {/* 0.9.4 压成一行入口：完整菜谱详情（食材清单/宏量）在「管理菜谱」里看。 */}
-        <section className="ui-card kitchen-card" aria-label="今日下厨">
-          {recipe ? (
-            <div className="kitchen-row">
-              <span className="recipe-visual-sm"><ChefHat size={19} /></span>
-              <div className="kitchen-row-main">
-                <strong>{recipe.name}</strong>
-                <span className="kitchen-row-meta">
-                  {nutrientText(recipe.nutrition, "calories", energyUnit)} {energyUnitLabels[energyUnit]} · 蛋白 {nutrientText(recipe.nutrition, "protein")} g · {recipe.totalMinutes} 分钟
-                  {!latest.some((r) => r.id === recipe.id) ? ` · 历史 v${recipe.version}` : ` · v${recipe.version}`}
-                </span>
-              </div>
-              {pantryItems.length > 0 && (() => {
-                // 缺货只读提示：仅同单位可比，不猜换算、不自动扣减（0.9.4 食物柜联动）。
-                const shortage = recipeShortage(recipe, pantryItems);
-                if (shortage.missingCount === 0) return null;
-                const detail = `缺：${shortage.missingNames.join("、")}${shortage.incomparableCount > 0 ? `；另有 ${shortage.incomparableCount} 样与柜内单位不同，未比较` : ""}`;
-                return <span className="ui-badge warn" title={detail}>缺 {shortage.missingCount} 样</span>;
-              })()}
-              <button className="ui-btn primary" onClick={() => setRecipeMealOpen(true)}><UtensilsCrossed size={15} /> 加入餐次</button>
-              <button className="ui-btn" onClick={() => setRecipeDrawer(true)}><BookOpen size={15} /> 管理菜谱</button>
-            </div>
-          ) : (
-            <div className="kitchen-row">
-              <span className="recipe-visual-sm"><ChefHat size={19} /></span>
-              <div className="kitchen-row-main">
-                <strong>还没有菜谱</strong>
-                <span className="kitchen-row-meta">固定搭配建成菜谱后，可一键按份量记入餐次</span>
-              </div>
-              <button className="ui-btn" onClick={() => openRecipeEditor("new", false)}><Plus size={15} /> 新建菜谱</button>
-              <button className="ui-btn" onClick={() => setRecipeDrawer(true)}><BookOpen size={15} /> 管理菜谱</button>
-            </div>
-          )}
-        </section>
-      </div>
 
       {recipeDrawer && <RecipeManagerDrawer
         recipes={recipes}

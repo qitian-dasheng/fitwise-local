@@ -125,6 +125,27 @@ describe("重置语义：食物柜随食材库保留", () => {
 });
 
 describe("食材库页食物柜分组", () => {
+  it("opens the entry modal without the React #185 update loop (regression)", async () => {
+    seedFoods();
+    await act(async () => { root.render(<FoodLibraryPage />); });
+    const pantryTab = [...host.querySelectorAll<HTMLButtonElement>(".library-tabs button")].find((tab) => tab.textContent === "食物柜")!;
+    await act(async () => pantryTab.click());
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => { errors.push(String(args[0])); });
+    try {
+      const add = [...host.querySelectorAll<HTMLButtonElement>(".pantry-toolbar button")].find((button) => button.textContent?.includes("入库"))!;
+      await act(async () => add.click());
+      // 弹窗正常打开且没有 Maximum update depth 报错（#185 根因：选择器内 map 返回新数组）。
+      expect(host.querySelector(".modal")?.textContent).toContain("入库");
+      expect(errors.join("\n")).not.toContain("Maximum update depth");
+      // 候选下拉有未入柜食材，选中默认补齐。
+      const select = host.querySelector<HTMLSelectElement>('.modal select');
+      expect(select?.options.length).toBeGreaterThan(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("切到食物柜分组显示面板与入库入口，列表带快捷增减", async () => {
     seedFoods();
     await act(async () => { root.render(<FoodLibraryPage />); });
