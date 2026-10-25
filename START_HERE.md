@@ -1,6 +1,6 @@
 # 轻衡（Fitwise Local）· 接手须知
 
-> **更新时间**：2026-10-25（0.9.1 已正式发布）
+> **更新时间**：2026-10-25（0.9.2 开发分支进行中）
 > **适用对象**：接手本项目的 AI 助手或开发者
 > **读法**：先读完本文件，再用 `git log` 与代码复核，最后才动代码。本文件中的"实测"项均为当次只读核查所得，可直接采信；标"需实测"的项必须自己验证。
 
@@ -12,31 +12,31 @@
 |---|---|
 | 是什么 | Windows 本地优先的个人营养/饮食/体重/运动记录桌面应用。无账号、无云端、无遥测，数据全在本机 SQLite |
 | 技术栈 | Tauri 2 + React 19 + TypeScript 5.7 + Rust + SQLite（rusqlite） |
-| 当前版本 | **0.9.1**，已发布 GitHub Release（私有仓库） |
+| 当前版本 | **0.9.2 开发中**（分支 `dev/0.9.2`；基线 0.9.1 已发 GitHub Release） |
 | 产品原则 | 事实可追溯、确定性计算、本地隐私、错误可纠正。**不是**聊天机器人式建议 |
 | 医疗边界 | 只做健康管理，不诊断、不治疗、不提供极端热量控制 |
 | 你该做的第一件事 | 不要编码。先按第 9 节写"接手报告" |
 
 ---
 
-## 1. 当前事实（2026-10-25 实测）
+## 1. 当前事实（2026-10-25 · 0.9.2 开发分支）
 
 | 项 | 值 |
 |---|---|
 | 仓库 | `C:\Users\21904\Projects\ai-fitness-platform` |
 | 远端 | `https://github.com/qitian-dasheng/fitwise-local.git`（**PRIVATE**） |
-| 当前分支 | `main`（已无 `dev/0.9.1` 分叉，已快进合并） |
-| HEAD | `44a378c` = `origin/main`（完全同步） |
+| 当前分支 | `dev/0.9.2`（0.9.2 开发）；`main` 领先 `origin/main` 一个提交 `47c9cb5`，**待 0.9.2 一起推送** |
 | 工作树 | 干净；仅 `GITHUB_RELEASE_REVIEW.md` 未跟踪（**故意不提交**，是 0.9.0 时期的旧审查报告） |
 | tag | `v0.8.1-fallback`(lightweight)、`v0.9.0`(annotated)、`v0.9.1`(annotated) |
 | Release | **轻衡 0.9.1**（Latest）、轻衡 0.9.0（保留） |
-| 版本号一致性 | `package.json` / `Cargo.toml` / `tauri.conf.json` / `Cargo.lock` 均为 `0.9.1` ✓ |
-| 数据库 schema | **v14**（`PRAGMA user_version`，14 个迁移 `0001`–`0014`） |
+| 版本号一致性 | 基线 0.9.1；0.9.2 发布时四处同步升级并须通过 `tests/docsGuard.test.ts`（含 START_HERE 版本声明） |
+| 数据库 schema | **v14**（`PRAGMA user_version`，14 个迁移 `0001`–`0014`）。**0.9.2 为零迁移版本** |
 | 领域持久化格式 | **v4** |
 | 已安装版本 | 0.9.1（`C:\Program Files\轻衡\fitwise-local.exe`，注意 **exe 名不是「轻衡.exe」**） |
 | 数据目录 | `%APPDATA%\cn.fitwise.local\`（当前仅 `fitwise.db`，约 300 KB） |
-| 测试规模 | Rust **102** 项 / 前端 **269** 项（34 个测试文件） |
+| 测试规模 | Rust **105** 项 / 前端 **296+** 项（含 docsGuard 守卫；以最近一次全量为准） |
 | 安装包归档 | `D:\FitwiseBackup\installers\`（0.9.0 与 0.9.1 的 MSI，哈希与验收记录一致） |
+| 文档结构 | 根目录跟踪 md 仅 5 份（README / START_HERE / DAILY_USAGE / AGENTS / THIRD_PARTY_NOTICES）；发布记录 `docs/releases/`，历史文档 `docs/history/`；docsGuard 冻结上限 |
 
 **0.9.1 发布时的一个关键事实**：发布的 MSI 就是用户实际安装验收过的那一个二进制（`SHA-256 = cdebbe1796908a0d1bad67e178c150e14059aa99d2016a308fee62a7b008b1bd`，7,114,752 B）。Rust + WiX **不是可复现构建**，重新构建会产生不同哈希。若将来需要重新发版，请在发布说明里更新哈希，不要声称"同一构建"。
 
@@ -70,7 +70,7 @@
 
 0.9.0 是一次**产品精简手术**，已删除：库存、采购、批次/熟食、收件箱与移动上传、附件与隐私遮挡、AI 云配置、加密备份、计划页与次日菜单、标签草稿、菜单草稿。前端删 19 个文件、后端删 8 个 Rust 模块。
 
-**这些不是"待补的功能"，是用户主动砍掉的范围。** 若某个需求（如 OBS-016 库存）要回来，必须**先取得用户对新边界的正式确认**，不能自行恢复。
+**边界更新（2026-10-25 用户批准）**：库存以**轻量版「食物柜」**于 0.9.4 重新立项（设计要点见第 11 节）——单表、只读缺货提示、零成本账，**不恢复**旧的成本/采购/批次体系。其余排除项维持不变，仍不要自行恢复。
 
 ### 2.5 协作
 
@@ -87,7 +87,7 @@
 
 | 目录 | 内容 |
 |---|---|
-| `pages/` | 6 页：`TodayPage` `FoodPage` `BodyPage` `WorkoutPage` `TrendsPage` `SettingsPage` |
+| `pages/` | 7 页：`TodayPage` `FoodPage` `BodyPage` `WorkoutPage` `TrendsPage`(嵌于身体页) `SettingsPage` `FoodLibraryPage`(0.9.2 新增，工具分组) |
 | `components/` | 16 个：食材库弹窗、菜谱编辑/管理抽屉、菜谱入餐草稿、照搬弹窗、各类更正弹窗、营养环、日历、趋势仪表等 |
 | `domain/` | 17 个纯逻辑模块：`nutritionDisplay` `foodLibrary` `meals` `body` `workouts` `review` `diary` `preferences` `navigation` `todayHints` `energyDisplay` `privacy` `resetState` `recipes` `seed` `time` `calculations` |
 | `store/appStore.ts` | 前端状态与领域动作入口（zustand） |
@@ -98,11 +98,11 @@
 
 **功能模块（12）**：`domain_commands`（命令白名单与分发）、`domain_store`（SQLite 仓库、迁移门闩）、`domain_queries`（投影查询、JSON 导出）、`domain_upgrade`（升级快照/对账/回滚）、`food_library`、`food_management`（在 `food_library.rs` 内）、`meal_corrections`、`recipe_meal_commands`、`recipes`、`record_commands`、`body_commands`、`workout_commands`、`data_diagnostics`
 
-**测试模块（8）**：`body_command_tests` `domain_reset_tests` `food_management_command_tests` `meal_copy_tests` `migration_scenario_tests` `recipe_meal_command_tests` `upgrade_compat_command_tests` `workout_command_tests`
+**测试接线（重要，2026-10-25 纠正）**：独立的 `*_tests.rs` 文件由 `domain_commands.rs` 内 `mod tests { include!("xxx_tests.rs"); ... }` **include! 宏**接入（六个文件：body/workout/meal_copy/recipe_meal/food_management/upgrade_compat + 0.9.2 新增 target_profile），共享 `connection()/request()/bootstrap()` 辅助函数；`lib.rs` 只声明 `domain_reset_tests` 与 `migration_scenario_tests` 两个独立 mod。**新增命令测试：建独立 `xxx_tests.rs` 文件 + 在 include! 列表追加一行**，不要往 lib.rs 加 mod（会被当成孤儿忽略——曾因此误判删除，编译器救回，见 git 历史 2337fe5/5ff7210）。
 
 ### 3.3 命令通道（三层，必须同步改）
 
-Tauri 命令只有 **13 个**（`lib.rs::generate_handler`）。真正的业务命令走 `execute_domain_command`，其 `commandKind` 白名单当前约 26 种，包括：
+Tauri 命令只有 **13 个**（`lib.rs::generate_handler`）。真正的业务命令走 `execute_domain_command`，其 `commandKind` 白名单当前 **27** 种，包括：
 
 ```
 add_meal  revise_meal  void_meal  copy_meal  record_food_meal  record_recipe_meal
@@ -110,7 +110,7 @@ add_weight  revise_weight  void_weight  set_weight_representative
 add_workout  revise_workout  void_workout  undo_workout_correction  restore_voided_workout
 save_food_definition  revise_food_definition  set_food_archived  delete_food
 correct_food_identity  set_food_favorite
-save_recipe_version  set_checkin  set_day_complete
+save_recipe_version  set_checkin  set_day_complete  set_target_profile
 ```
 
 **新增一个命令必须同一次提交改四处**：
@@ -157,56 +157,49 @@ npm run tauri build                         # 产出 MSI + NSIS，约 4 分钟
 
 | 编号 | 现象 | 0.9.1 实际状态 | 核实依据 / 说明 |
 |---|---|---|---|
-| OBS-001 | 目标热量/蛋白/纤维不可编辑 | **仍存在** | 无目标编辑命令，`profile` 集合只有默认值回退 |
-| OBS-002 | 目标区间(1700–1900) vs 环图单值(1800) | **仍存在** | 随 001 一起处理 |
-| OBS-003 | 能量单位选择器独占整行 | **待实测** | 纯 UI 布局，未改动；低优先 |
-| OBS-004 | 营养字段缺钙/铁/钾 | **仍存在** | 食材表单仍是 7 字段：能量/蛋白/碳水/脂肪/纤维/糖/钠 |
+| OBS-001 | 目标热量/蛋白/纤维不可编辑 | ✅ **0.9.2 已实现** | `set_target_profile` 命令 + 设置页编辑表单；旧值进审计（`target_profile_updated`） |
+| OBS-002 | 目标区间(1700–1900) vs 环图单值(1800) | ✅ **0.9.2 已实现** | 热量环分母显示区间（`rangeLabel`），进度仍以 target 为基准 |
+| OBS-003 | 能量单位选择器独占整行 | ✅ **0.9.2 已实现** | 食材库全页表单中能量单位与数据来源并排（`FoodEditor` layout="page"） |
+| OBS-004 | 营养字段缺钙/铁/钾 | **仍存在（0.9.3）** | 食材表单仍是 7 字段：能量/蛋白/碳水/脂肪/纤维/糖/钠 |
 | OBS-005 | 修订页无法改食物状态 | ✅ **已实现** | `correct_food_identity` 命令（`domain_commands.rs`）；生熟状态更改会拒绝并引导新建 |
-| OBS-006 | 食材库无法删除 | ✅ **已实现** | `delete_food` + `set_food_archived`；未引用可永久删除（同事务引用扫描 + 级联 + 审计），已引用可归档/恢复 |
+| OBS-006 | 食材库无法删除 | ✅ **已实现（0.9.2 迁至食材库页）** | `delete_food` + `set_food_archived`；未引用可永久删除（同事务引用扫描 + 级联 + 审计），已引用可归档/恢复 |
 | OBS-007 | 菜谱无法加入餐次 | ✅ **已实现** | `record_recipe_meal` + `RecipeMealDraftModal`；支持 ×0.5/×1/×2/自定义缩放，钉住菜谱版本并写 `recipeVersionId` |
-| OBS-008 | 逐项添加繁琐 | ✅ **已实现** | `FoodLibraryModal` 的"待确认篮子"（上限 50 项），可连续加入多种食物后统一确认 |
+| OBS-008 | 逐项添加繁琐 | ✅ **0.9.2 再提速** | 篮子之上新增常吃栏（一键按上次份量入篮）+ 选择器按「上次」预填 |
 | OBS-009 | 营养小数位过多（`507.8472275334608`） | ✅ **已实现** | `nutritionDisplay.ts` 的 `nutrientLabel` + `toFixed`；**仅展示层截断，存储精度不变** |
-| OBS-010 | 菜谱管理是 flat 下拉，不符餐次习惯 | ⚠️ **部分实现** | 改成**名称搜索 + 按名称/创建时间排序**（`RecipeManagerDrawer`）。代码注释明写"只做查找面，不动菜谱数据模型"——**没有按餐次分组**。若用户期望按餐次组织，这是未完成部分 |
+| OBS-010 | 菜谱管理是 flat 下拉，不符餐次习惯 | ⚠️ **部分实现** | 名称搜索 + 排序已有；**按餐次分组未做**，0.9.3 前问用户是否要 |
 | OBS-011 | 单位 `piece` 未中文化 | ✅ **已实现** | `foodUnitLabels = { g:"克", ml:"毫升", piece:"个", serving:"份", package:"包装" }`；另有 `normalizeAmountLabel` 归一化历史纠错文案里的英文单位 |
-| OBS-012 | 日合计区 UI 层级混乱 | **待实测** | 未改动；"9 条记录"重复、覆盖率与完整度并存等需现场确认 |
-| OBS-013 | 七日体重趋势图空白 | **代码在位，需实测** | `TrendsPage` + `WeeklyDeltaGauge` 组件存在。若仍空白，优先查：数据是否真落库、日期是否在窗口内、代表值口径 |
-| OBS-014 | 14 天热量图空白 | **代码在位，需实测** | 同上。交叉验证点：某日"9 条/覆盖率 100%/1398 kcal"若在窗口内，图应绘制——不绘制则为口径或渲染问题 |
-| OBS-015 | 顶部记录日期与称重日期不联动 | **待实测** | 补录历史时易误存为今天。注意：0.9.1 的「照搬」已改用正确的目标日期，但表单控件本身未验证 |
-| OBS-016 | 长期食材库存管理（新需求） | **未处理，且被明确排除** | 0.9.0 精简手术已删库存/采购。**须用户先正式推翻该排除，才能进候选** |
+| OBS-012 | 日合计区 UI 层级混乱 | **待实机观察** | 0.9.2 验收时观察驱动修复 |
+| OBS-013 | 七日体重趋势图空白 | ✅ **0.9.2 代码已修，待实机终验** | 根因：14 天窗口 + 单点即绘制；空态文案区分「一次称重/无记录」。此前 7 天窗口对一周一称用户永远只有 1 点 |
+| OBS-014 | 14 天热量图空白 | ✅ **0.9.2 代码已修，待实机终验** | 图下注释列明被排除天数与原因；全排除时空态点名「N 天热量不全」；loading/error 不再塌缩整页 |
+| OBS-015 | 顶部记录日期与称重日期不联动 | ✅ **0.9.2 已实现** | 空表单跟随顶部日记日期（未输入时不打断） |
+| OBS-016 | 长期食材库存管理（新需求） | 🔄 **0.9.4 已立项（轻量版）** | 用户 2026-10-25 批准重新立项，边界=食物柜轻量版（见第 12 节） |
 
-### 建议的下一步顺序（需用户确认后执行）
+### 版本路线（2026-10-25 与用户对齐）
 
-1. **OBS-013 / OBS-014 根因排查**（0.9.2 高风险点，图表空白影响核心体验）
-2. **OBS-001 / OBS-002 目标可编辑**（0.9.2，功能缺失最明显）
-3. OBS-015 控件联动、OBS-012 日合计 UI（0.9.2）
-4. OBS-004 字段扩展、OBS-003 布局（0.9.3）
-5. OBS-010 若用户要"按餐次组织"，补完 R4；OBS-016 需用户先定边界
+- **0.9.2（进行中）**：图表根因修复、目标可编辑、食材库拆页、记餐提速、借鉴五件、文档三层包、UI 三版风格原型定向。零迁移。
+- **0.9.3**：驾驶舱一屏化逐页迁移（五主页面 1080p 页面不滚/面板内滚）+ 双主题 tokens（`data-theme` 浅/深，按 0.9.2 原型选定向）+ OBS-004 营养字段 + OBS-010 问询 + 两套数据库诊断增强（候选）。
+- **0.9.4**：库存轻量版（第 11 节）+ 剩余页面迁移 + M2.5 旧样式退役收尾。
+- **0.10.0**：AI 采集通道（本地 Ollama 优先，草稿不入账；用户机器 Ollama 已就绪）。
 
 ---
 
-## 6. 文档可信度分级（重要：避免被过时文档误导）
+## 6. 文档结构与可信度（2026-10-25 收敛后）
 
-| 文档 | 可信度 | 说明 |
+**结构规则（docsGuard 测试冻结）**：根目录跟踪 md ≤ 6；活文档的相对 md 链接必须指向真实文件；版本号五处一致（package.json / Cargo.toml / tauri.conf.json / Cargo.lock / START_HERE 当前版本声明）。
+
+| 文档 | 位置 | 状态 |
 |---|---|---|
-| **本文件 `START_HERE.md`** | ✅ **最新（2026-10-25）** | 以本文件为准 |
-| `BUILD_REPORT_0.9.1.md` | ✅ 可信 | 0.9.1 交付报告：功能清单、测试结果、MSI 哈希、发布检查清单 |
-| `UPGRADE_0.9.1_ACCEPTANCE_MIN.md` | ✅ 可信 | 0.9.0→0.9.1 升级与备份恢复验收结论 |
-| `README.md` | ⚠️ 部分过时 | 功能列表混有 0.4.x–0.9.0 描述（库存/采购/收件箱/AI/计划等**已在 0.9.0 移除**）；首段与文末仍指向已删的 `FINAL_PRODUCT_PLAN.md` / `BUILD_REPORT.md`。「数据安全」与「第三方许可」两节仍准确 |
-| `AGENTS.md` | ✅ 纪律全部有效 | **唯一失效点**：首行写着 "read `START_HERE.md`, `PROJECT_MEMORY.md`, and `FINAL_PRODUCT_PLAN.md`" —— 其中 `FINAL_PRODUCT_PLAN.md` 已于 2026-10-25 删除，忽略该项即可。其余 12 条纪律照旧执行 |
-| `THIRD_PARTY_NOTICES.md` | ✅ 可信 | Noto Sans SC 字体 SIL OFL 1.1 声明 |
-| `PROJECT_MEMORY.md` | ❌ **严重过时** | 停在 2026-10-22 / 0.9.0：写的是 schema **v12**、已安装 **0.6.1**、提交 `cb71053`，且 §4 代码结构列了大量**已删除**的模块（`inventory_ops.rs` 等）。**历史价值高，现状描述不可用** |
-| `DAILY_USAGE.md` | ❌ **严重过时** | 标题「轻衡 0.4.5 一天使用清单」，内容讲库存/采购/收件箱/标签草稿——**这些模块 0.9.0 已删除** |
-| `GITHUB_RELEASE_REVIEW.md` | ⚠️ 仅历史 | 2026-10-23 针对 0.9.0 的发布前审查，未跟踪、故意不提交 |
-| 《轻衡问题台账与版本处理总览.md》 | ⚠️ OBS-005/006 已过时 | 在项目外（WorkBuddy 工作空间）；其余条目仍有参考价值 |
-| 已删除的 37 个文档 | — | `START_HERE`(旧) `FINAL_PRODUCT_PLAN` `HANDOFF` `REVIEW_*`(23) `BUILD_REPORT`(旧) 等，2026-10-25 清理。**git 历史中仍可 `git checkout 44a378c~1 -- <file>` 找回** |
+| `START_HERE.md` | 根目录 | ✅ 唯一权威接手文档（含 OBS 台账唯一权威版） |
+| `README.md` | 根目录 | ✅ 0.9.2 重写为当前能力 |
+| `DAILY_USAGE.md` | 根目录 | ✅ 0.9.2 重写为当前流程 |
+| `AGENTS.md` | 根目录 | ✅ 纪律 + 文档政策（不新建根目录文档；发布三件套） |
+| `THIRD_PARTY_NOTICES.md` | 根目录 | ✅ 静态声明 |
+| `docs/releases/v0.9.1.md` 等 | docs/releases/ | ✅ 每版一份发布记录（含升级验收） |
+| `docs/history/PROJECT_MEMORY.md` 等 | docs/history/ | ⚠️ 仅历史；PROJECT_MEMORY 停在 0.9.0（schema v12 描述已失效） |
+| `GITHUB_RELEASE_REVIEW.md` | 根目录（未跟踪） | ⚠️ 仅历史，故意不提交 |
+| 《轻衡问题台账与版本处理总览.md》 | 项目外（WorkBuddy） | ⚠️ 已废弃；以本文件 §5 为准 |
 
-### 关于悬空引用（已知情况，不必困惑）
-
-`AGENTS.md` 第 3 行与 `README.md` 首段仍指向已删除的 `FINAL_PRODUCT_PLAN.md`、`BUILD_REPORT.md`、`REVIEW_*.md`。**这是 2026-10-25 文档清理留下的已知悬空引用，不是仓库损坏。** 处理方式：
-
-- 需要 0.9.1 的发布与验收信息 → 读 `BUILD_REPORT_0.9.1.md` + `UPGRADE_0.9.1_ACCEPTANCE_MIN.md`（完整替代旧 `BUILD_REPORT.md`）。
-- 需要历史评审细节 → `git checkout 44a378c~1 -- REVIEW_0.4.1.md`（或任意 `<commit>`）取回，看完再删。
-- **不要**为了消除这些引用而去新建 `BUILD_REPORT.md` / `FINAL_PRODUCT_PLAN.md` 之类的占位文件 —— 本项目刻意保持根目录精简，只保留 9 个 `.md`。
+**发布三件套（写进 AGENTS.md 的政策）**：`docs/releases/vX.Y.Z.md` 一份记录 + 刷新本文件「当前事实」+ DAILY_USAGE（用户可见行为变化时）。开发过程中不再新建报告类文档。
 
 ---
 
@@ -252,3 +245,16 @@ npm run tauri build                         # 产出 MSI + NSIS，约 4 分钟
 - `0.9.0 → 0.9.1`：**零 schema 迁移**（`user_version` 保持 14，迁移文件 diff 为空）。纯代码升级，新增菜谱入餐、批量添加、照搬任意日期、菜谱搜索排序、食材库管理。
 - 用户此前 0.8.x → 0.9.0 的数据清空是**用户主动要求**，既不能证明无损升级成功也不能证明失败。**0.9.0 → 0.9.1 才是真正需要验证"数据保留"的那次升级**，已通过合成数据 + 真实环境覆盖安装验证。
 - 0.9.1 曾尝试用 Hyper-V 虚拟机做隔离验收，反复修订 6 轮安全脚本后因成本过高被用户叫停，VM 与测试树已于 2026-10-25 全部清除。**不要再自行重启这条路线**，除非用户明确要求。
+- `0.9.2`（开发中，零迁移）：图表根因修复（7 天窗口+2 点阈值缺陷、loading 塌缩、coverage 注释）、导出 schemaVersion 实读、食材库拆独立页（选择器瘦身 + 跨页篮子 store）、`set_target_profile` 目标可编辑、常吃栏/上次份量/还能吃/streak/餐次条、文档三层收敛（docsGuard 冻结）、六测试文件 include! 接线纠正（曾误判孤儿删除又由编译器救回，见 2337fe5/5ff7210）。
+
+---
+
+## 11. 0.9.4 库存轻量版（食物柜）设计要点（已批准，未实现）
+
+**边界**：单表「食物柜」——只回答"家里还有什么、快没了没有"。**不恢复** 0.9.0 砍掉的成本账、采购流程、批次/熟食、FEFO 三量结构。
+
+- **数据**：新表 `pantry_items`（迁移 v14→v15 走完整门闩+三场景测试）：`id`、`foodDefinitionId`（挂食材库定义）、`quantity` + `unit`、可选 `expiresAt`、`lowStockThreshold`、`note`、`createdAt/updatedAt`。与饮食记录完全解耦。
+- **操作**：入库（+数量）、取出（−数量）、改低存量阈值、删条目；快捷增减按钮为主界面。无审计链要求之外的字段约束（简单 CRUD，不进领域命令事务复杂度）。
+- **菜谱联动（只读）**：菜谱卡显示「还缺什么」提示——按当前柜内量对比菜谱原料需求量，**只提示、不自动扣减**（自动扣减是旧复杂度的入口，明确不做）。
+- **UI**：工具分组独立页或饮食页抽屉（0.9.3 驾驶舱重构时定）；列表按食材分组、低存量高亮。
+- **明确不做**：成本/单价、供应商/采购平台、批次与熟食、自动扣库存、库存与摄入互相反推。
