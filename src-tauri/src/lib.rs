@@ -4,6 +4,7 @@ mod domain_commands;
 mod domain_queries;
 mod domain_store;
 mod ai_collect;
+mod update_proxy;
 mod food_catalog;
 mod domain_upgrade;
 mod food_library;
@@ -35,6 +36,7 @@ pub fn run() {
             domain_store::reset_domain_records,
             ai_collect::ollama_list_models,
             ai_collect::ollama_draft,
+            update_proxy::get_system_proxy,
             domain_commands::execute_domain_command,
             domain_queries::query_period_summary,
             domain_queries::export_domain_json,

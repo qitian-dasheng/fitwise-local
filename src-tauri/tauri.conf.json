@@ -28,7 +28,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
@@ -45,7 +47,9 @@
         "language": "zh-CN"
       },
       "nsis": {
-        "languages": ["SimpChinese"],
+        "languages": [
+          "SimpChinese"
+        ],
         "installMode": "currentUser"
       }
     }
@@ -54,7 +58,8 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk2QTdGMjU4MjQyRkZERUUKUldUdS9TOGtXUEtubG5sdUtJaVU5L2xlMUFoZ1QvcEZ1cUVwZ0dGeWpzZit5YTlSb0JVZmQyeE4K",
       "endpoints": [
-        "https://github.com/qitian-dasheng/fitwise-local/releases/latest/download/latest.json"
+        "https://github.com/qitian-dasheng/fitwise-local/releases/latest/download/latest.json",
+        "https://ghfast.top/https://github.com/qitian-dasheng/fitwise-local/releases/latest/download/latest.json"
       ]
     }
   }

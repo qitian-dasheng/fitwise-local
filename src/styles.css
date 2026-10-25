@@ -533,6 +533,12 @@ button.calendar-cell:focus-visible { outline: 2px solid var(--ui-ink); outline-o
 /* 添加食物弹窗：右栏交易流（份量 → 篮子 → 确认） */
 .library-side { display: grid; gap: 12px; align-content: start; min-width: 0; }
 
+/* ── 0.11.0 更新失败提示条与错误详情 ──────────────────────────── */
+.update-failure-notice { display: flex; align-items: center; gap: 12px; justify-content: space-between; border: 1px solid var(--ui-warn, #b45309); }
+.update-failure-notice .text-button { flex: 0 0 auto; }
+.update-error-detail { display: grid; gap: 6px; }
+.update-error-detail code { display: block; padding: 10px 12px; border-radius: 8px; background: var(--ui-sunken); color: var(--ui-ink-2); font-size: 11px; overflow-wrap: anywhere; }
+
 /* ── 0.11.0 AI 采集：草稿编辑列表 ─────────────────────────────── */
 .ai-draft-list { display: grid; gap: 10px; }
 .ai-draft-list h3 { margin: 4px 0 0; font-size: 13px; color: var(--ui-ink); }
