@@ -9,11 +9,6 @@ import { DataExportPanel } from "../components/DataExportPanel";
 import { RuntimeDiagnostics } from "../components/RuntimeDiagnostics";
 import { UpdatePanel } from "../components/UpdatePanel";
 import { isTauriRuntime } from "../data/storage";
-import { useEnergyUnit } from "../hooks/useEnergyUnit";
-import { energyUnitLabels, toDisplayEnergy } from "../domain/energyDisplay";
-import type { EnergyUnitPref } from "../domain/preferences";
-import { useTheme } from "../hooks/useTheme";
-import type { ThemePref } from "../domain/preferences";
 
 interface DomainStorageStatus {
   initialized: boolean;
@@ -31,8 +26,6 @@ export function SettingsPage() {
   const setTargetProfile = useAppStore((state) => state.setTargetProfile);
   const [targetForm, setTargetForm] = useState<null | { min: string; target: string; max: string; protein: string; fiber: string; weight: string }>(null);
   const targetAction = useConfirmedAction();
-  const [energyUnit, setEnergyUnit] = useEnergyUnit();
-  const [theme, setTheme] = useTheme();
   const auditEventCount = useAppStore((state) => state.auditEvents.length);
   const resetDemo = useAppStore((state) => state.resetDemo);
   const [busy, setBusy] = useState(false);
@@ -91,21 +84,13 @@ export function SettingsPage() {
             </form>
           ) : (
             <>
-              <div className="settings-list"><div><span>阶段体重</span><b>{profile.startWeightKg} → {profile.targetWeightKg} kg</b></div><div><span>每日热量</span><b>{Math.round(toDisplayEnergy(profile.dailyCalories.min, energyUnit))}–{Math.round(toDisplayEnergy(profile.dailyCalories.max, energyUnit))} {energyUnitLabels[energyUnit]}</b></div><div><span>蛋白质 / 纤维</span><b>{profile.proteinTargetG} g / {profile.fiberTargetG} g</b></div><div><span>设备</span><b>{profile.equipment.join("、")}</b></div></div>
+              <div className="settings-list"><div><span>阶段体重</span><b>{profile.startWeightKg} → {profile.targetWeightKg} kg</b></div><div><span>每日热量</span><b>{profile.dailyCalories.min}–{profile.dailyCalories.max} kcal</b></div><div><span>蛋白质 / 纤维</span><b>{profile.proteinTargetG} g / {profile.fiberTargetG} g</b></div><div><span>设备</span><b>{profile.equipment.join("、")}</b></div></div>
               <button className="button secondary small" onClick={() => setTargetForm({
                 min: String(profile.dailyCalories.min), target: String(profile.dailyCalories.target), max: String(profile.dailyCalories.max),
                 protein: String(profile.proteinTargetG), fiber: String(profile.fiberTargetG), weight: String(profile.targetWeightKg),
               })}><PencilLine size={15}/> 编辑目标</button>
             </>
           )}
-        </section>
-        <section className="ui-card settings-section">
-          <div className="settings-title"><Gauge/><div><h2>显示偏好</h2><p>只影响界面显示；数据库统一以 kcal 存储，录入表单保持 kcal 口径不混排。</p></div></div>
-          <div className="form compact-form">
-            <label>能量单位<select value={energyUnit} data-testid="energy-unit-select" onChange={(event) => setEnergyUnit(event.target.value as EnergyUnitPref)}><option value="kcal">千卡 kcal（默认）</option><option value="kJ">千焦 kJ</option></select></label>
-            <label>界面主题<select value={theme} data-testid="theme-select" onChange={(event) => setTheme(event.target.value as ThemePref)}><option value="light">浅色（默认）</option><option value="dark">深色</option></select></label>
-            <p className="form-hint">换算系数与标签校验同源：1 kcal = 4.184 kJ。切换后饮食、今日、趋势的显示单位一致；导出与备份不受影响。主题随 0.9.3 页面迁移逐步覆盖全站。</p>
-          </div>
         </section>
         <section className="ui-card settings-section">
           <div className="settings-title"><HardDrive/><div><h2>数据与导出</h2><p>本地 SQLite 记录可导出为未加密 JSON；导出不会修改记录。</p></div></div>

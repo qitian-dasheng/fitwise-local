@@ -23,10 +23,12 @@ export function DataExportPanel() {
   const lock = useRef(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  // 0.9.3 板块盘点（用户决策）：回执精简为“文件名+字节数+复制哈希”，完整路径与哈希收进展开详情。
+  const [receipt, setReceipt] = useState<{ path: string; bytes: number; sha256: string; copied: boolean } | null>(null);
   const [recoveryText, setRecoveryText] = useState("");
   async function exportJson(snapshot: boolean) {
     if (lock.current) return;
-    lock.current = true; setBusy(true); setMessage("");
+    lock.current = true; setBusy(true); setMessage(""); setReceipt(null);
     // Capture in-memory records before awaiting I/O; never merge them into SQLite.
     const windowSnapshot = captureWindowSnapshot(useAppStore.getState());
     let capturedRaw = "";
@@ -42,7 +44,8 @@ export function DataExportPanel() {
         const path = await save({ defaultPath: name, filters: [{ name: "轻衡 JSON（未加密）", extensions: ["json"] }] });
         if (!path) { setMessage("已取消，未写入文件。快照仍可在下方复制。"); return; }
         const result = await invoke<{ path: string; bytes: number; sha256: string }>("write_json_export", { outputPath: path, raw });
-        setMessage(`已写入并回读校验：${result.path}（${result.bytes} 字节，SHA-256 ${result.sha256}）。${snapshot ? "这是当前窗口快照，尚未与数据库对账。" : "请核对导出记录与当前界面是否一致。"}`);
+        setReceipt({ path: result.path, bytes: result.bytes, sha256: result.sha256, copied: false });
+        setMessage(snapshot ? "这是当前窗口快照，尚未与数据库对账。" : "");
         setRecoveryText("");
       } else {
         const url = URL.createObjectURL(new Blob([raw], { type: "application/json" }));
@@ -63,7 +66,17 @@ export function DataExportPanel() {
       <button className="button secondary" disabled={busy} onClick={() => void exportJson(true)}>另存当前窗口快照</button>
     </div>
     <p className="form-hint">若界面与磁盘不一致，先保全当前窗口快照；快照不证明数据库已保存，也不含附件原件。</p>
-    {message && <p role="status">{message}</p>}
+    {receipt && (
+      <div role="status" className="export-receipt">
+        <b>已导出 ✓ {receipt.path.split(/[\\/]/).pop()}（{receipt.bytes} 字节，回读校验通过）</b>
+        <div className="button-row">
+          <button type="button" className="button secondary small" onClick={() => { void navigator.clipboard.writeText(receipt.sha256).then(() => setReceipt({ ...receipt, copied: true })); }}>{receipt.copied ? "已复制 SHA-256" : "复制 SHA-256"}</button>
+        </div>
+        {message && <p className="form-hint">{message}</p>}
+        <details><summary>完整路径与校验值</summary><p className="form-hint" style={{ overflowWrap: "anywhere" }}>路径：{receipt.path}<br />SHA-256：{receipt.sha256}</p></details>
+      </div>
+    )}
+    {!receipt && message && <p role="status">{message}</p>}
     {recoveryText && <label>备用复制文本（未加密；点击后 Ctrl+A、Ctrl+C，自行另存）<textarea aria-label="导出备用 JSON" rows={8} value={recoveryText} readOnly onFocus={event => event.currentTarget.select()}/></label>}
   </div>;
 }

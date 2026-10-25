@@ -53,20 +53,12 @@ describe("formatEnergy", () => {
   });
 });
 
-describe("能量单位偏好（localStorage）", () => {
-  it("默认 kcal；白名单外的值一律回落", () => {
+describe("能量单位偏好（0.9.3 起固定 kcal）", () => {
+  it("无论 localStorage 存了什么（含遗留 kJ），读取一律 kcal", () => {
+    expect(readEnergyUnit()).toBe("kcal");
+    window.localStorage.setItem(ENERGY_UNIT_KEY, "kJ");
     expect(readEnergyUnit()).toBe("kcal");
     window.localStorage.setItem(ENERGY_UNIT_KEY, "J");
-    expect(readEnergyUnit()).toBe("kcal");
-    window.localStorage.setItem(ENERGY_UNIT_KEY, "calories");
-    expect(readEnergyUnit()).toBe("kcal");
-  });
-
-  it("writeEnergyUnit 写入后可读回", () => {
-    writeEnergyUnit("kJ");
-    expect(readEnergyUnit()).toBe("kJ");
-    expect(window.localStorage.getItem(ENERGY_UNIT_KEY)).toBe("kJ");
-    writeEnergyUnit("kcal");
     expect(readEnergyUnit()).toBe("kcal");
   });
 });

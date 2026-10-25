@@ -142,3 +142,8 @@ body { background: var(--ui-bg); }
 .ui-theme-toggle { all: unset; display: flex; align-items: center; justify-content: center; gap: 8px; height: 30px; margin: 0 10px 6px; border: 1px solid var(--ui-line); border-radius: 8px; font-size: 11.5px; color: var(--ui-muted); cursor: pointer; }
 .ui-theme-toggle:hover { color: var(--ui-ink); border-color: var(--ui-line-2); }
 /* 主内容滚动条区域的过渡态：遗留白卡浮在 --ui-bg 画布上属预期，深层组件逐步迁移 */
+
+/* 导出回执（0.9.3 精简版）：文件名+字节数为主，完整信息收进展开 */
+.export-receipt { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--ui-sunken); font-size: 12.5px; color: var(--ui-ink-2); }
+.export-receipt b { color: var(--ui-ink); font-weight: 600; overflow-wrap: anywhere; }
+.export-receipt details summary { font-size: 11px; color: var(--ui-muted); cursor: pointer; }

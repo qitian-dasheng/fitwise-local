@@ -83,13 +83,9 @@ export type EnergyUnitPref = "kcal" | "kJ";
 const ENERGY_UNIT_PREFS: readonly EnergyUnitPref[] = ["kcal", "kJ"];
 
 export function readEnergyUnit(): EnergyUnitPref {
-  try {
-    const raw = window.localStorage.getItem(ENERGY_UNIT_KEY);
-    // 白名单外（含 null）一律回落默认 kcal；手改过的值不能接管换算。
-    return ENERGY_UNIT_PREFS.includes(raw as EnergyUnitPref) ? (raw as EnergyUnitPref) : "kcal";
-  } catch {
-    return "kcal";
-  }
+  // 0.9.3 板块盘点（用户决策）：显示单位固定 kcal——kJ 录入路径自动换算入库，
+  // 显示偏好卡整卡删除；遗留 localStorage 值一律忽略，防止老用户永远卡在 kJ。
+  return "kcal";
 }
 
 export function writeEnergyUnit(unit: EnergyUnitPref): void {

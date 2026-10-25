@@ -6,8 +6,7 @@ import { FoodPage } from "../src/pages/FoodPage";
 import { nutrition } from "../src/domain/calculations";
 import { diaryToday } from "../src/domain/diary";
 import { initialState } from "../src/domain/seed";
-import { ENERGY_UNIT_KEY, type EnergyUnitPref } from "../src/domain/preferences";
-import { toDisplayEnergy } from "../src/domain/energyDisplay";
+import { ENERGY_UNIT_KEY } from "../src/domain/preferences";
 import { useAppStore } from "../src/store/appStore";
 import type { MealEntry } from "../src/domain/types";
 
@@ -39,30 +38,30 @@ async function render(ui: React.ReactNode) {
   });
 }
 
-function select(): HTMLSelectElement {
-  return document.querySelector<HTMLSelectElement>('[data-testid="energy-unit-select"]')!;
-}
-
-function optionValueOf(page: HTMLElement, matcher: (option: HTMLOptionElement) => boolean): EnergyUnitPref {
-  return [...page.querySelectorAll("option")].filter(matcher)[0]?.value as EnergyUnitPref;
-}
-
-it("设置页默认显示 kcal，切换后写入 localStorage 且目标区间换算为 kJ", async () => {
+// 0.9.3 板块盘点（用户决策）：显示偏好卡整卡删除，显示单位固定 kcal——
+// kJ 录入路径自动换算入库；这些测试把该政策钉死，防止选择器悄悄回来。
+it("设置页不再提供能量单位/主题选择器（显示偏好卡已删除）", async () => {
   await render(<SettingsPage />);
-
-  expect(select().value).toBe("kcal");
+  expect(host.querySelector('[data-testid="energy-unit-select"]')).toBeNull();
+  expect(host.querySelector('[data-testid="theme-select"]')).toBeNull();
   const profile = useAppStore.getState().profile;
   expect(host.textContent).toContain(`${profile.dailyCalories.min}–${profile.dailyCalories.max} kcal`);
+});
+
+it("遗留的 kJ 偏好被忽略：饮食页各处始终以 kcal 显示", async () => {
+  window.localStorage.setItem(ENERGY_UNIT_KEY, "kJ");
+  await render(<FoodPage date={diaryToday()} />);
+
+  const headers = [...host.querySelectorAll(".diary-head > span")].map((cell) => cell.textContent?.trim());
+  expect(headers).toContain("热量 kcal");
+  expect(headers).not.toContain("热量 kJ");
 
   await act(async () => {
-    select().value = "kJ";
-    select().dispatchEvent(new Event("change", { bubbles: true }));
+    useAppStore.setState({ meals: [entry({ id: "燕麦", nutrition: full(300) })] });
   });
 
-  expect(window.localStorage.getItem(ENERGY_UNIT_KEY)).toBe("kJ");
-  expect(host.textContent).toContain(
-    `${Math.round(toDisplayEnergy(profile.dailyCalories.min, "kJ"))}–${Math.round(toDisplayEnergy(profile.dailyCalories.max, "kJ"))} kJ`,
-  );
+  const summaryCalories = host.querySelector('.diary-summary-cell[data-nutrient="calories"] b');
+  expect(summaryCalories?.textContent).toBe("300");
 });
 
 const day = diaryToday();
@@ -79,30 +78,8 @@ function entry(overrides: Partial<MealEntry> & { id: string }): MealEntry {
     confidence: "high",
     createdAt: `${day}T08:00:00Z`,
     ...overrides,
-  };
+  } as MealEntry;
 }
 
 const full = (calories: number) =>
   nutrition({ calories, protein: 20, carbohydrates: 30, fat: 10, fiber: 5, sugar: 4, sodium: 200 });
-
-it("饮食页在 kJ 偏好下列头、日合计与行值统一换算", async () => {
-  window.localStorage.setItem(ENERGY_UNIT_KEY, "kJ");
-  await render(<FoodPage date={day} />);
-
-  const headers = [...host.querySelectorAll(".diary-head > span")].map((cell) => cell.textContent?.trim());
-  expect(headers).toContain("热量 kJ");
-
-  await act(async () => {
-    useAppStore.setState({ meals: [entry({ id: "燕麦", nutrition: full(300) })] });
-  });
-
-  const summaryCalories = host.querySelector('.diary-summary-cell[data-nutrient="calories"] b');
-  expect(summaryCalories?.textContent).toBe(String(Math.round(toDisplayEnergy(300, "kJ"))));
-});
-
-it("选项文案明确标注默认档", async () => {
-  await render(<SettingsPage />);
-  const values = [...select().options].map((option) => option.value);
-  expect(values).toEqual(["kcal", "kJ"]);
-  expect(optionValueOf(host, (option) => option.textContent?.includes("默认") ?? false)).toBe("kcal");
-});
