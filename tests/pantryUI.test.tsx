@@ -138,9 +138,15 @@ describe("食材库页食物柜分组", () => {
       // 弹窗正常打开且没有 Maximum update depth 报错（#185 根因：选择器内 map 返回新数组）。
       expect(host.querySelector(".modal")?.textContent).toContain("入库");
       expect(errors.join("\n")).not.toContain("Maximum update depth");
-      // 候选下拉有未入柜食材，选中默认补齐。
-      const select = host.querySelector<HTMLSelectElement>('.modal select');
-      expect(select?.options.length).toBeGreaterThan(0);
+      // 自绘食材下拉（原生 select 弹层在 WebView 错位，第三轮起弃用）：展开→选择→回填。
+      const trigger = host.querySelector<HTMLButtonElement>(".pantry-picker-trigger")!;
+      expect(trigger.textContent).toContain("北豆腐");
+      await act(async () => trigger.click());
+      const options = [...host.querySelectorAll(".pantry-picker-pop button")];
+      expect(options.length).toBeGreaterThan(0);
+      await act(async () => (options[0] as HTMLButtonElement).click());
+      expect(host.querySelector(".pantry-picker-pop")).toBeNull();
+      expect(trigger.textContent).toContain("北豆腐");
     } finally {
       spy.mockRestore();
     }
@@ -155,7 +161,10 @@ describe("食材库页食物柜分组", () => {
     const pantryTab = tabs.find((tab) => tab.textContent === "食物柜")!;
     await act(async () => pantryTab.click());
     expect(host.querySelector(".pantry-panel")).not.toBeNull();
-    expect(host.querySelector(".library-search")).toBeNull();
+    // 第三轮：搜索栏在食物柜分组保持可见，且按名称/品牌过滤柜内列表。
+    const searchInput = host.querySelector<HTMLInputElement>(".library-search input")!;
+    expect(searchInput).not.toBeNull();
+    expect(searchInput.placeholder).toContain("柜内");
     expect(host.textContent).toContain("食物柜还是空的");
 
     // 入库一条后列表出现快捷 ±，且低存量高亮。
@@ -168,5 +177,16 @@ describe("食材库页食物柜分组", () => {
     expect(minus).toBeTruthy();
     await act(async () => minus.click());
     expect(store().pantryItems[0].quantity).toBe(50);
+
+    // 搜索过滤：命中显示，未命中显示空态文案。
+    const setInput = (value: string) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(searchInput, value);
+      searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    await act(async () => setInput("北豆腐"));
+    expect(host.querySelector(".pantry-item")).not.toBeNull();
+    await act(async () => setInput("不存在的词"));
+    expect(host.querySelector(".pantry-item")).toBeNull();
+    expect(host.textContent).toContain("没有匹配的柜内食材");
   });
 });

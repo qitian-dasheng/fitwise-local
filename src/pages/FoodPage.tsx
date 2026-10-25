@@ -121,40 +121,13 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
             <input type="date" aria-label="查看日期" value={date} onChange={(event) => event.target.value && onDateChange?.(event.target.value)} style={{ all: "unset", cursor: "pointer", font: "inherit", color: "var(--ui-ink-2)" }} />
             <button className="ui-navbtn" aria-label="后一天" disabled={date >= diaryToday()} onClick={() => onDateChange?.(shiftDiaryDate(date, 1))}><ChevronRight size={15} /></button>
           </div>
+          <button className="ui-btn food-recipe-btn" aria-label={recipe ? `打开菜谱管理（当前 ${recipe.name}）` : "打开菜谱管理"} onClick={() => setRecipeDrawer(true)}>
+            <ChefHat size={15} /> <span className="food-recipe-btn-text">{recipe ? `菜谱 · ${recipe.name}` : "菜谱"}</span>
+          </button>
           <button className="ui-btn" onClick={() => (goTo ? goTo("library") : setLibraryOpen(true))}><Library size={15} /> 食材库</button>
           <button className="ui-btn primary" onClick={() => openMeal()}><Plus size={15} /> 添加食物</button>
         </div>
       </header>
-
-      {/* 0.9.4 第二轮：菜谱行上移到页头正下方（右对齐细条），页面底部不再有厨房卡。 */}
-      <div className="kitchen-strip">
-        <section className="ui-card kitchen-card" aria-label="今日下厨">
-          {recipe ? (
-            <div className="kitchen-row">
-              <span className="recipe-visual-sm"><ChefHat size={19} /></span>
-              <div className="kitchen-row-main">
-                <strong>{recipe.name}</strong>
-                <span className="kitchen-row-meta">
-                  {nutrientText(recipe.nutrition, "calories", energyUnit)} {energyUnitLabels[energyUnit]} · 蛋白 {nutrientText(recipe.nutrition, "protein")} g · {recipe.totalMinutes} 分钟
-                  {!latest.some((r) => r.id === recipe.id) ? ` · 历史 v${recipe.version}` : ` · v${recipe.version}`}
-                </span>
-              </div>
-              <button className="ui-btn primary" onClick={() => setRecipeMealOpen(true)}><UtensilsCrossed size={15} /> 加入餐次</button>
-              <button className="ui-btn" onClick={() => setRecipeDrawer(true)}><BookOpen size={15} /> 管理菜谱</button>
-            </div>
-          ) : (
-            <div className="kitchen-row">
-              <span className="recipe-visual-sm"><ChefHat size={19} /></span>
-              <div className="kitchen-row-main">
-                <strong>还没有菜谱</strong>
-                <span className="kitchen-row-meta">固定搭配建成菜谱后，可一键按份量记入餐次</span>
-              </div>
-              <button className="ui-btn" onClick={() => openRecipeEditor("new", false)}><Plus size={15} /> 新建菜谱</button>
-              <button className="ui-btn" onClick={() => setRecipeDrawer(true)}><BookOpen size={15} /> 管理菜谱</button>
-            </div>
-          )}
-        </section>
-      </div>
 
       {frequent.length > 0 && (
         <section className="ui-card" aria-label="常吃食物" style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 14 }}>

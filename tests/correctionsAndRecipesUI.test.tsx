@@ -80,7 +80,7 @@ it("historical recipe picker keeps the selected version and only permits copy or
   expect(host.querySelector('select[aria-label="选择标准菜谱"]')).toBeNull();
   expect(host.querySelector(".drawer")).toBeNull();
   expect([...host.querySelectorAll("button")].filter(b=>["新建菜谱","修订当前菜谱","另存为新菜谱"].includes(b.textContent?.trim()??""))).toHaveLength(0);
-  await act(async()=>button("管理菜谱").click());
+  await act(async()=>(host.querySelector(".food-recipe-btn") as HTMLButtonElement).click());
   expect(host.querySelector(".drawer")!.textContent).toContain("管理菜谱");
   const picker=()=>host.querySelector<HTMLSelectElement>('select[aria-label="选择标准菜谱"]')!;
   expect(picker().textContent).not.toContain("（历史）");

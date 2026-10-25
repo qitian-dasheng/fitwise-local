@@ -293,14 +293,9 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 .meal-card-item-nutrients em small { color: var(--ui-faint); font-size: 10px; }
 .meal-card-item-actions { display: flex; gap: 10px; flex: 0 0 auto; }
 
-/* 菜谱细条：页头正下方右对齐（完整菜谱详情在管理菜谱抽屉） */
-.kitchen-strip { display: flex; justify-content: flex-end; }
-.kitchen-strip .kitchen-card { width: min(880px, 100%); padding: 9px 12px; }
-.kitchen-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.recipe-visual-sm { display: grid; flex: 0 0 auto; width: 34px; height: 34px; place-items: center; color: var(--ui-ink-2); border-radius: 10px; background: var(--ui-sunken); }
-.kitchen-row-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
-.kitchen-row-main strong { font-size: 13.5px; color: var(--ui-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kitchen-row-meta { font-size: 11.5px; color: var(--ui-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 菜谱页头按钮：与食材库按钮同款；菜名过长省略（完整详情在管理菜谱抽屉） */
+.food-recipe-btn { max-width: 260px; }
+.food-recipe-btn .food-recipe-btn-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .food-workbench { display: grid; }
 
 
@@ -497,7 +492,7 @@ button.calendar-cell:focus-visible { outline: 2px solid var(--ui-ink); outline-o
 
 /* ── 0.9.4 食材库独立页与全页建档表单 ─────────────────────────── */
 /* .card 基类不带内边距（惯例），编辑器整页卡在此补齐——0.9.4 实机"文字贴卡边"修复。 */
-.editor-card { padding: 24px; }
+.editor-card { margin-top: 18px; padding: 24px; }
 
 .food-library-page .library-page-body { display: block; }
 .food-library-page .library-results { max-height: calc(100vh - 330px); min-height: 220px; overflow-y: auto; padding-right: 4px; }
@@ -515,6 +510,22 @@ button.calendar-cell:focus-visible { outline: 2px solid var(--ui-ink); outline-o
 .nutrient-grid label:first-child input { font-weight: 600; }
 .food-library-page .library-notice[role="status"] { margin: 8px 0; }
 @media (max-width: 900px) { .editor-columns { grid-template-columns: 1fr; } }
+
+/* ── 0.9.4 第三轮：自绘下拉（WebView 原生 select 弹层错位的规避） ── */
+.pantry-picker { position: relative; display: block; }
+.pantry-picker-trigger { display: flex; width: 100%; height: 42px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 12px; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--ui-card); color: var(--ui-ink); font: inherit; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pantry-picker-trigger::after { content: "▾"; color: var(--ui-muted); flex: 0 0 auto; }
+.picker-overlay { position: fixed; inset: 0; z-index: calc(var(--z-popover) - 1); background: transparent; }
+.pantry-picker-pop { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: var(--z-popover); display: grid; max-height: 240px; overflow-y: auto; padding: 4px; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--ui-card); }
+.pantry-picker-pop button { all: unset; box-sizing: border-box; display: block; padding: 9px 11px; border-radius: 8px; font-size: 13px; color: var(--ui-ink-2); cursor: pointer; overflow-wrap: anywhere; }
+.pantry-picker-pop button:hover { background: var(--ui-sunken); color: var(--ui-ink); }
+.pantry-picker-pop button.active { background: var(--ui-sunken); color: var(--ui-ink); font-weight: 600; }
+.pantry-picker-pop button small { color: var(--ui-muted); }
+
+/* 添加食物弹窗右栏空态：居中虚线，替代大灰块 */
+.portion-empty { display: grid; min-height: 180px; place-content: center; justify-items: center; gap: 7px; padding: 24px; border: 1.5px dashed var(--ui-line-2); border-radius: 14px; color: var(--ui-muted); text-align: center; }
+.portion-empty strong { font-size: 13.5px; color: var(--ui-ink); }
+.portion-empty span { font-size: 12px; }
 
 /* ── 0.9.4 食物柜（库存轻量版）：食材库页分组 ─────────────────── */
 .pantry-toolbar { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }

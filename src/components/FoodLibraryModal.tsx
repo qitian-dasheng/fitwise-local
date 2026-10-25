@@ -1,5 +1,5 @@
 import { diaryToday } from "../domain/diary";
-import { Archive, ArchiveRestore, Check, PencilLine, Plus, Search, Star, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Check, PencilLine, Plus, Search, Star, Trash2, Utensils } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFoodLibrarySearch, useFoodPortionPreview } from "../data/foodLibrary";
 import { calculateFoodPortion, findFoodItem, foodBasisLabels, foodUnitLabels, nutrientLabel } from "../domain/foodLibrary";
@@ -129,7 +129,7 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
         {preview.loading && <p className="form-hint">正在换算…</p>}{preview.error && <p className="form-error" role="alert">{preview.error}</p>}
         {preview.data && <><NutritionPreview facts={preview.data.nutrition} energyUnit={displayUnit}/>{!catalogOnly&&<button className="button secondary wide" disabled={action.busy || basket.length >= 50} onClick={() => { if (!request || !preview.data) return; const facts = preview.data.nutrition; setBasket((items) => [...items, { ...request, name: selected.definition.name, facts }]); setNotice(`已把 ${selected.definition.name} 加入待确认餐食，可继续选择其他食物。`); }}><Plus size={15}/> 加入本餐</button>}</>}
         <p className="form-hint">缺少“个／份／包装”换算时，先修订规格；生重、熟重及可食部分分别建档。</p>
-      </> : <p className="form-hint">选择一个食物，查看营养和摄入量换算。</p>}</div></div>
+      </> : <div className="portion-empty"><Utensils size={22} /><strong>选择一个食物</strong><span>左侧挑选后，这里显示营养与摄入量换算。</span></div>}</div></div>
       {!catalogOnly&&<div className="library-basket"><h3>本次待确认 · {basket.length} 项</h3>
         {basket.length > 0 && <div className="basket-summary" aria-label="本批营养合计">
           <strong>本批合计 · {basket.length} 项</strong>

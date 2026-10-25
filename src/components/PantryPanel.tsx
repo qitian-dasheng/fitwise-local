@@ -15,7 +15,7 @@ import type { FoodUnit, PantryItem } from "../domain/types";
  */
 const UNIT_OPTIONS: FoodUnit[] = ["g", "ml", "piece", "serving", "package"];
 
-export function PantryPanel() {
+export function PantryPanel({ query = "" }: { /** 食材库页搜索词：按名称/品牌过滤柜内列表 */ query?: string } = {}) {
   const pantryItems = useAppStore((state) => state.pantryItems);
   const definitions = useAppStore((state) => state.foodDefinitions);
   const action = useConfirmedAction();
@@ -26,7 +26,14 @@ export function PantryPanel() {
 
   const byDefinition = new Map(definitions.map((item) => [item.id, item]));
   const today = diaryToday();
-  const sorted = [...pantryItems].sort((a, b) => {
+  const needle = query.trim().toLowerCase();
+  const sorted = [...pantryItems]
+    .filter((item) => {
+      if (!needle) return true;
+      const definition = byDefinition.get(item.foodDefinitionId);
+      return !!definition && `${definition.name} ${definition.brand ?? ""}`.toLowerCase().includes(needle);
+    })
+    .sort((a, b) => {
     const nameA = byDefinition.get(a.foodDefinitionId)?.name ?? "";
     const nameB = byDefinition.get(b.foodDefinitionId)?.name ?? "";
     return nameA.localeCompare(nameB, "zh-Hans-CN");
@@ -51,8 +58,8 @@ export function PantryPanel() {
 
       {sorted.length === 0 ? (
         <div className="library-empty">
-          <strong>食物柜还是空的</strong>
-          <p>入库后，菜谱行会提示「还缺什么」；低存量会高亮提醒补货。</p>
+          <strong>{needle ? "没有匹配的柜内食材" : "食物柜还是空的"}</strong>
+          <p>{needle ? "换个关键词，或清空搜索查看全部。" : "入库后，菜谱行会提示「还缺什么」；低存量会高亮提醒补货。"}</p>
         </div>
       ) : (
         <div className="pantry-list">
@@ -123,6 +130,8 @@ function PantryEntryModal({ onClose, action, onSaved }: { onClose: () => void; a
   useEffect(() => {
     if (!form.foodDefinitionId && target) setForm((current) => ({ ...current, foodDefinitionId: target.id }));
   }, [target, form.foodDefinitionId]);
+  // 0.9.4 第三轮：原生 select 弹层在 WebView 里错位（backdrop-filter 干扰定位），改自绘列表。
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   return (
     <Modal title="入库" onClose={() => { if (!action.busy) onClose(); }}>
@@ -146,9 +155,26 @@ function PantryEntryModal({ onClose, action, onSaved }: { onClose: () => void; a
           if (!result.error) onSaved(target.name);
         }}>
           <label><span>食材（未入柜的建档食材）</span>
-            <select value={target?.id ?? ""} onChange={(event) => setForm({ ...form, foodDefinitionId: event.target.value })}>
-              {candidates.map((item) => <option key={item.id} value={item.id}>{item.name}{item.brand ? ` · ${item.brand}` : ""}</option>)}
-            </select>
+            <span className="pantry-picker">
+              <button type="button" className="pantry-picker-trigger" aria-haspopup="listbox" aria-expanded={pickerOpen}
+                onClick={() => setPickerOpen((open) => !open)}>
+                {target ? `${target.name}${target.brand ? ` · ${target.brand}` : ""}` : "选择食材"}
+              </button>
+              {pickerOpen && (
+                <>
+                  <span className="picker-overlay" onMouseDown={() => setPickerOpen(false)} />
+                  <span className="pantry-picker-pop" role="listbox" aria-label="选择食材">
+                    {candidates.map((item) => (
+                      <button type="button" key={item.id} role="option" aria-selected={item.id === target?.id}
+                        className={item.id === target?.id ? "active" : ""}
+                        onClick={() => { setForm({ ...form, foodDefinitionId: item.id }); setPickerOpen(false); }}>
+                        {item.name}{item.brand ? <small> · {item.brand}</small> : null}
+                      </button>
+                    ))}
+                  </span>
+                </>
+              )}
+            </span>
           </label>
           <div className="form-grid">
             <label><span>数量</span><input type="number" required min="0" step="0.01" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} placeholder="例如 500" /></label>
