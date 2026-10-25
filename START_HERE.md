@@ -23,7 +23,7 @@
 
 | 项 | 值 |
 |---|---|
-| 仓库 | `C:\Users\21904\Projects\ai-fitness-platform` |
+| 仓库 | 本机克隆目录（仓库根 = README 所在目录；公开仓库不再写绝对路径） |
 | 远端 | `https://github.com/qitian-dasheng/fitwise-local.git`（**PRIVATE**） |
 | 当前分支 | `dev/0.9.2`（0.9.2 全部工作在此，含两轮验收修复与方向 D 定稿）；`main` 领先 `origin/main` 一个提交 `47c9cb5`，**随 0.9.2 一起推送** |
 | 工作树 | 干净；仅 `GITHUB_RELEASE_REVIEW.md` 未跟踪（**故意不提交**，是 0.9.0 时期的旧审查报告） |
