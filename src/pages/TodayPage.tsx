@@ -6,7 +6,7 @@ import { ArrowRight, Check, Dumbbell, Plus, Scale, Sparkles, Utensils } from "lu
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { activeMeals, summarizeMeals } from "../domain/calculations";
 import { dailyRepresentatives } from "../domain/body";
-import { bodyActionHint, mealActionHint, workoutActionHint } from "../domain/todayHints";
+import { bodyActionHint, calorieBudget, mealActionHint, recordStreak, workoutActionHint } from "../domain/todayHints";
 import type { MealType } from "../domain/types";
 import { useAppStore } from "../store/appStore";
 import { Modal } from "../components/Modal";
@@ -46,6 +46,10 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickActi
   const mealHint = mealActionHint(meals, today);
   const workoutHint = workoutActionHint(workouts, today);
   const bodyHint = bodyActionHint(measurements, today, diaryToday());
+  // 「还能吃」与连续天数是今日页最可执行的两个数字（薄荷/FatSecret/Keep 式）。
+  const budget = calorieBudget(summary.totals.calories ?? 0, summary.coverage.calories ?? 0, profile.dailyCalories, todayMeals.length > 0);
+  const streak = recordStreak(meals, checkIns, diaryToday());
+  const dayCalories = Math.round(summary.totals.calories ?? 0);
 
   if (period.loading || period.error) return <div className="page"><PageHeader eyebrow="今日" title="今日记录" description={period.error ? "读取记录失败，请重新打开此页面后重试。" : "正在读取本地记录…"}/>{period.error && <p className="form-error" role="alert">{period.error}</p>}</div>;
 
@@ -99,9 +103,20 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickActi
               <h2>{Math.round(toDisplayEnergy(summary.totals.calories, energyUnit))} {energyUnitNames[energyUnit]}</h2>
             </div>
             <span className="status-pill neutral">目标 {Math.round(toDisplayEnergy(profile.dailyCalories.min, energyUnit))}–{Math.round(toDisplayEnergy(profile.dailyCalories.max, energyUnit))}</span>
+            {streak >= 2 && <span className="status-pill neutral">连续记录 {streak} 天</span>}
           </div>
+          <p className="budget-line" data-status={budget.status}>
+            {budget.status === "no-records" &&
+              `目标区间 ${Math.round(toDisplayEnergy(profile.dailyCalories.min, energyUnit))}–${Math.round(toDisplayEnergy(profile.dailyCalories.max, energyUnit))} ${energyUnitNames[energyUnit]} · 记录第一餐后显示剩余`}
+            {budget.status === "partial" &&
+              `还能吃 至多 ${Math.round(toDisplayEnergy(budget.remainingHigh ?? 0, energyUnit))} ${energyUnitNames[energyUnit]} · 已记 ${Math.round(toDisplayEnergy(budget.consumedKnown, energyUnit))}（仍有未知）`}
+            {budget.status === "known" &&
+              `还能吃 ${Math.round(toDisplayEnergy(budget.remainingLow ?? 0, energyUnit))}–${Math.round(toDisplayEnergy(budget.remainingHigh ?? 0, energyUnit))} ${energyUnitNames[energyUnit]}`}
+            {budget.status === "over" &&
+              `已超上限 ${Math.round(toDisplayEnergy(budget.overBy ?? 0, energyUnit))} ${energyUnitNames[energyUnit]}`}
+          </p>
           <div className="rings-row">
-            <NutritionRing value={toDisplayEnergy(summary.totals.calories, energyUnit)} max={toDisplayEnergy(profile.dailyCalories.target, energyUnit)} label={`热量 · ${energyUnitLabels[energyUnit]}`} />
+            <NutritionRing value={toDisplayEnergy(summary.totals.calories, energyUnit)} max={toDisplayEnergy(profile.dailyCalories.target, energyUnit)} label={`热量 · ${energyUnitLabels[energyUnit]}`} rangeLabel={`${Math.round(toDisplayEnergy(profile.dailyCalories.min, energyUnit))}–${Math.round(toDisplayEnergy(profile.dailyCalories.max, energyUnit))}`} />
             <NutritionRing value={summary.totals.protein} max={profile.proteinTargetG} label="蛋白质 · g" color="var(--blue)" />
             <NutritionRing value={summary.totals.fiber} max={profile.fiberTargetG} label="纤维 · g" color="var(--amber)" />
           </div>
@@ -146,14 +161,18 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickActi
           <div className="meal-list">
             {(["breakfast", "lunch", "dinner", "snack"] as const).map((type) => {
               const entries = todayMeals.filter((meal) => meal.type === type);
+              const mealCalories = Math.round(toDisplayEnergy(summarizeMeals(entries).totals.calories, energyUnit));
               return (
                 <div className="meal-row" key={type}>
                   <div className={`meal-icon ${type}`}><Utensils size={17} /></div>
                   <div className="meal-content">
                     <strong>{mealLabels[type]}</strong>
                     <span>{entries.length ? entries.map((item) => item.name).join("、") : "尚未记录"}</span>
+                    <div className="meal-progress" role="presentation" aria-hidden="true">
+                      <i style={{ width: `${dayCalories > 0 ? Math.round((mealCalories / dayCalories) * 100) : 0}%` }} />
+                    </div>
                   </div>
-                  <b>{Math.round(toDisplayEnergy(summarizeMeals(entries).totals.calories, energyUnit))} <small>{energyUnitLabels[energyUnit]}</small></b>
+                  <b>{mealCalories} <small>{energyUnitLabels[energyUnit]}</small></b>
                 </div>
               );
             })}

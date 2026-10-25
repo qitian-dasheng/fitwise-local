@@ -441,8 +441,7 @@ pub(crate) fn apply(
                 return Err("食材缺少营养版本，数据异常，已终止删除。".into());
             }
             // 同一事务内完成删除与级联；被删完整内容放进 result，经审计与导出可手工恢复。
-            array_mut(state, "foodDefinitions")?
-                .retain(|food| food["id"] != food_id);
+            array_mut(state, "foodDefinitions")?.retain(|food| food["id"] != food_id);
             array_mut(state, "foodDefinitionVersions")?
                 .retain(|version| version["foodId"].as_str() != Some(food_id));
             json!({
@@ -453,10 +452,9 @@ pub(crate) fn apply(
         }
         "correct_food_identity" => {
             let food_id = payload_str(payload, "foodId")?;
-            let input: FoodIdentityInput = serde_json::from_value(
-                payload.get("input").cloned().ok_or("缺少食材身份资料。")?,
-            )
-            .map_err(|error| format!("食材身份资料无效：{error}"))?;
+            let input: FoodIdentityInput =
+                serde_json::from_value(payload.get("input").cloned().ok_or("缺少食材身份资料。")?)
+                    .map_err(|error| format!("食材身份资料无效：{error}"))?;
             if input.name.trim().is_empty()
                 || input.name.chars().count() > 120
                 || input
@@ -491,7 +489,11 @@ pub(crate) fn apply(
                 .find(|food| food["id"] == food_id)
                 .ok_or("找不到食物。")?;
             definition["name"] = json!(input.name.trim());
-            match input.brand.map(|brand| brand.trim().to_owned()).filter(|brand| !brand.is_empty()) {
+            match input
+                .brand
+                .map(|brand| brand.trim().to_owned())
+                .filter(|brand| !brand.is_empty())
+            {
                 Some(brand) => definition["brand"] = json!(brand),
                 None => {
                     if let Some(map) = definition.as_object_mut() {

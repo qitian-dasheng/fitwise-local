@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FoodLibraryModal } from "../src/components/FoodLibraryModal";
 import { initialState } from "../src/domain/seed";
 import { useAppStore } from "../src/store/appStore";
+import { useFoodPicker } from "../src/store/foodPicker";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -15,6 +16,7 @@ beforeEach(async () => {
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
   delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
   useAppStore.setState({ ...structuredClone(initialState), saveFoodDefinition: originalSave, recordFoodMeal: originalRecord });
+  useFoodPicker.setState({ basket: [], editorTarget: null, returnTicket: null });
   container = document.createElement("div"); document.body.append(container);
   root = createRoot(container);
   closed.mockReset(); manual.mockReset();

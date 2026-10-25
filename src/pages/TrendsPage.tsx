@@ -128,19 +128,9 @@ export function TrendsPage({
         ? Math.round(toDisplayEnergy(day.totals.calories ?? 0, energyUnit))
         : null,
   }));
-
-  if (period.loading || period.error) {
-    return (
-      <div className="page">
-        <PageHeader
-          eyebrow="阶段复盘"
-          title="趋势与复盘"
-          description={period.error ? "读取趋势失败，请重新打开此页面后重试。" : "正在读取本地趋势…"}
-        />
-        {period.error && <p className="form-error" role="alert">{period.error}</p>}
-      </div>
-    );
-  }
+  // 图下注释要能回答「我记了为什么没画」：区分热量不全与完全没记。
+  const incompleteDays = days.filter((day) => day.mealCount > 0 && (day.coverage.calories ?? 0) < 100).length;
+  const emptyDays = days.filter((day) => day.mealCount === 0).length;
 
   return (
     <div className="page trends-page">
@@ -230,6 +220,11 @@ export function TrendsPage({
       <p className="form-hint">
         统计区间 {start} 至 {end}（{spanDays} 天）。日均只使用「已确认 + 有餐次 + 热量全部已知」的完整日，缺失的日子不会按 0 摊薄。
       </p>
+      {period.error && (
+        <p className="form-error" role="alert">
+          趋势汇总读取失败（{period.error}）。下方按本地缓存口径展示，重新打开本页可重试。
+        </p>
+      )}
 
       <div className="metric-row five">
         <Metric
@@ -368,11 +363,20 @@ export function TrendsPage({
           ) : (
             <div className="empty-chart">
               <Flame size={24} />
-              <span>区间内还没有热量已知的记录</span>
+              <span>
+                {incompleteDays > 0
+                  ? `本区间 ${incompleteDays} 天有记录但热量不全，暂无可绘制的完整日`
+                  : "区间内还没有热量已知的记录"}
+              </span>
             </div>
           )}
         </div>
-        <p className="chart-note">未记录或热量不全的日子留空，不画成 0。</p>
+        <p className="chart-note">
+          未记录或热量不全的日子留空，不画成 0。
+          {chartData.some((item) => item.calories !== null) && incompleteDays > 0
+            ? ` 本区间 ${incompleteDays} 天热量不全未计入${emptyDays > 0 ? `，${emptyDays} 天无记录` : ""}。`
+            : ""}
+        </p>
       </section>
 
       <section className="card review-notes">

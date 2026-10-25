@@ -1,8 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import { Database, Gauge, HardDrive, RotateCcw } from "lucide-react";
+import { Database, Gauge, HardDrive, PencilLine, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { useAppStore } from "../store/appStore";
+import { useConfirmedAction } from "../components/useConfirmedAction";
+import { targetFieldsOf, validateTargetProfileInput } from "../domain/targets";
+import type { TargetProfileInput } from "../domain/types";
 import { DataExportPanel } from "../components/DataExportPanel";
 import { RuntimeDiagnostics } from "../components/RuntimeDiagnostics";
 import { isTauriRuntime } from "../data/storage";
@@ -23,6 +26,9 @@ const isTauri = isTauriRuntime;
 
 export function SettingsPage() {
   const profile = useAppStore((state) => state.profile);
+  const setTargetProfile = useAppStore((state) => state.setTargetProfile);
+  const [targetForm, setTargetForm] = useState<null | { min: string; target: string; max: string; protein: string; fiber: string; weight: string }>(null);
+  const targetAction = useConfirmedAction();
   const [energyUnit, setEnergyUnit] = useEnergyUnit();
   const auditEventCount = useAppStore((state) => state.auditEvents.length);
   const resetDemo = useAppStore((state) => state.resetDemo);
@@ -50,8 +56,45 @@ export function SettingsPage() {
       <div className="settings-grid">
         <RuntimeDiagnostics/>
         <section className="card settings-section">
-          <div className="settings-title"><Database/><div><h2>个人目标</h2><p>修改目标时创建新版本，不回写历史。</p></div></div>
-          <div className="settings-list"><div><span>阶段体重</span><b>{profile.startWeightKg} → {profile.targetWeightKg} kg</b></div><div><span>每日热量</span><b>{Math.round(toDisplayEnergy(profile.dailyCalories.min, energyUnit))}–{Math.round(toDisplayEnergy(profile.dailyCalories.max, energyUnit))} {energyUnitLabels[energyUnit]}</b></div><div><span>蛋白质 / 纤维</span><b>{profile.proteinTargetG} g / {profile.fiberTargetG} g</b></div><div><span>设备</span><b>{profile.equipment.join("、")}</b></div></div>
+          <div className="settings-title"><Database/><div><h2>个人目标</h2><p>修改只影响当前显示与之后的判定；旧值保留在审计链里，不回写历史。</p></div></div>
+          {targetForm ? (
+            <form className="form compact-form" onSubmit={async (event) => {
+              event.preventDefault();
+              const input: TargetProfileInput = {
+                dailyCalories: { min: Number(targetForm.min), target: Number(targetForm.target), max: Number(targetForm.max) },
+                proteinTargetG: Number(targetForm.protein),
+                fiberTargetG: Number(targetForm.fiber),
+                targetWeightKg: Number(targetForm.weight),
+              };
+              const checked = validateTargetProfileInput(input);
+              if (checked.error || !checked.payload) { targetAction.setMessage(checked.error ?? "目标值无效。"); return; }
+              const result = await targetAction.run(JSON.stringify(input), (id) => setTargetProfile(checked.payload!, id));
+              if (!result.error) { setTargetForm(null); targetAction.setMessage(""); }
+            }}>
+              <div className="form-grid">
+                <label><span>热量下限 kcal</span><input type="number" required min={500} max={8000} value={targetForm.min} onChange={(event) => setTargetForm({ ...targetForm, min: event.target.value })}/></label>
+                <label><span>热量目标 kcal</span><input type="number" required min={500} max={8000} value={targetForm.target} onChange={(event) => setTargetForm({ ...targetForm, target: event.target.value })}/></label>
+                <label><span>热量上限 kcal</span><input type="number" required min={500} max={8000} value={targetForm.max} onChange={(event) => setTargetForm({ ...targetForm, max: event.target.value })}/></label>
+                <label><span>蛋白质目标 g</span><input type="number" required min={1} max={500} value={targetForm.protein} onChange={(event) => setTargetForm({ ...targetForm, protein: event.target.value })}/></label>
+                <label><span>纤维目标 g</span><input type="number" required min={0} max={200} value={targetForm.fiber} onChange={(event) => setTargetForm({ ...targetForm, fiber: event.target.value })}/></label>
+                <label><span>目标体重 kg</span><input type="number" required min={20} max={400} step="0.01" value={targetForm.weight} onChange={(event) => setTargetForm({ ...targetForm, weight: event.target.value })}/></label>
+              </div>
+              <p className="form-hint">区间需满足 下限 ≤ 目标 ≤ 上限；目标体重最多两位小数。</p>
+              {targetAction.message && <p className="form-error" role="alert">{targetAction.message}</p>}
+              <div className="button-row">
+                <button className="button primary small" type="submit" disabled={targetAction.busy}>保存目标</button>
+                <button className="button secondary small" type="button" disabled={targetAction.busy} onClick={() => { setTargetForm(null); targetAction.setMessage(""); }}>取消</button>
+              </div>
+            </form>
+          ) : (
+            <>
+              <div className="settings-list"><div><span>阶段体重</span><b>{profile.startWeightKg} → {profile.targetWeightKg} kg</b></div><div><span>每日热量</span><b>{Math.round(toDisplayEnergy(profile.dailyCalories.min, energyUnit))}–{Math.round(toDisplayEnergy(profile.dailyCalories.max, energyUnit))} {energyUnitLabels[energyUnit]}</b></div><div><span>蛋白质 / 纤维</span><b>{profile.proteinTargetG} g / {profile.fiberTargetG} g</b></div><div><span>设备</span><b>{profile.equipment.join("、")}</b></div></div>
+              <button className="button secondary small" onClick={() => setTargetForm({
+                min: String(profile.dailyCalories.min), target: String(profile.dailyCalories.target), max: String(profile.dailyCalories.max),
+                protein: String(profile.proteinTargetG), fiber: String(profile.fiberTargetG), weight: String(profile.targetWeightKg),
+              })}><PencilLine size={15}/> 编辑目标</button>
+            </>
+          )}
         </section>
         <section className="card settings-section">
           <div className="settings-title"><Gauge/><div><h2>显示偏好</h2><p>只影响界面显示；数据库统一以 kcal 存储，录入表单保持 kcal 口径不混排。</p></div></div>

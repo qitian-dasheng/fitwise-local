@@ -12,6 +12,7 @@ const BodyPage = lazy(() => import("./pages/BodyPage").then((module) => ({ defau
 const WorkoutPage = lazy(() => import("./pages/WorkoutPage").then((module) => ({ default: module.WorkoutPage })));
 const TrendsPage = lazy(() => import("./pages/TrendsPage").then((module) => ({ default: module.TrendsPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
+const FoodLibraryPage = lazy(() => import("./pages/FoodLibraryPage").then((module) => ({ default: module.FoodLibraryPage })));
 
 
 
@@ -104,6 +105,7 @@ export default function App() {
         <FoodPage
           date={date}
           onDateChange={setDate}
+          goTo={setPage}
           autoOpenMeal={quick === "food"}
           autoOpenMealType={quickMeal}
           onAutoOpenConsumed={() => setQuick(null)}
@@ -125,6 +127,7 @@ export default function App() {
       />
     ),
     settings: <SettingsPage />,
+    library: <FoodLibraryPage goTo={setPage} />,
   }[active] ?? <TodayPage goTo={setPage} />;
 
   if (!hydrated) return <div className="loading-screen"><Wheat size={34}/><strong>{storageFailure ? "本地记录未能安全打开" : "正在打开轻衡…"}</strong>{storageFailure && <><p role="alert">{storageFailure}</p><p>未改用演示数据。请保留当前窗口，不要重置或清理应用数据。</p></>}</div>;

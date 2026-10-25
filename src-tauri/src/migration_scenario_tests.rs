@@ -157,7 +157,10 @@ fn schema_inventory_stays_frozen_for_0_9_1() {
     );
     assert_eq!(
         object_names(&connection, "index"),
-        vec!["idx_domain_command_receipts_created", "idx_domain_entities_order"]
+        vec![
+            "idx_domain_command_receipts_created",
+            "idx_domain_entities_order"
+        ]
     );
 
     drop(connection);

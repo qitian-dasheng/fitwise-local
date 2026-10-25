@@ -9,7 +9,8 @@ describe("0.9 信息架构", () => {
   });
 
   it("低频页面归入工具分组", () => {
-    expect(toolItems.map((item) => item.id)).toEqual(["settings"]);
+    // 0.9.2 起食材库成为独立资产页（建档/管理），与设置同属工具分组；记餐的「选」仍在饮食页弹窗。
+    expect(toolItems.map((item) => item.id)).toEqual(["library", "settings"]);
     // 工具组里不允许再混入主入口。
     expect(toolItems.every((item) => !navItems.some((main) => main.id === item.id))).toBe(true);
   });

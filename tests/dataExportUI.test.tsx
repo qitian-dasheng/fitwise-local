@@ -39,6 +39,8 @@ it("preserves separate-day morning weights and excludes credential-shaped extra 
   state.measurements = [{ id: "w1", date: "2025-01-01", weightKg: 78.3, createdAt: "" }, { id: "w2", date: "2025-01-02", weightKg: 78.55, createdAt: "" }];
   const raw = JSON.stringify(captureWindowSnapshot(state));
   expect(JSON.parse(raw).measurements).toEqual(state.measurements);
+  // 窗口快照不得谎报 schema 版本，须与 SQLite user_version 同步
+  expect(JSON.parse(raw).schemaVersion).toBe(14);
   expect(raw).toContain("window_snapshot_unverified"); expect(raw).not.toContain("must-not-export");
 });
 
