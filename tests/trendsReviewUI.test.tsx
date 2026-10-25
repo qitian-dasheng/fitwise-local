@@ -91,9 +91,9 @@ it("renders the review sections on an empty database without NaN", async () => {
   await renderPage();
 
   expect(host.querySelector(".trends-page")).toBeTruthy();
-  expect(host.querySelectorAll(".metric-card")).toHaveLength(5);
-  expect(host.querySelector(".review-gauge")).toBeTruthy();
-  expect(host.textContent).toContain("待记录");
+  // 0.9.4：区间完全无记录时指标行收成一行空态，不再铺五张「数据不足」卡。
+  expect(host.querySelectorAll(".metric-card")).toHaveLength(0);
+  expect(host.textContent).toContain("区间内还没有任何记录");
   expect(host.querySelectorAll(".calendar-grid .calendar-cell.calendar-none")).toHaveLength(7);
   expect(host.textContent).not.toContain("NaN");
   expect(host.textContent).not.toContain("目标调整建议尚未启用");
@@ -213,7 +213,7 @@ it("draws workouts into the calendar and the range metric", async () => {
   expect(host.querySelectorAll(".calendar-dot:not(.calendar-dot-legend)")).toHaveLength(1);
 });
 
-it("shows the weekly delta once both windows have enough weigh-ins", async () => {
+it("no longer renders the weekly delta gauge even with dense weigh-ins", async () => {
   const measure = (date: string, weightKg: number): BodyMeasurement => ({
     id: `m-${date}`,
     date,
@@ -230,9 +230,12 @@ it("shows the weekly delta once both windows have enough weigh-ins", async () =>
       measure("2026-10-19", 83.0),
     ],
   });
-  expect(host.querySelector(".gauge-value")?.textContent).toContain("0.60");
-  expect(host.textContent).toContain("周降幅在安全速率内");
-  expect(host.querySelector(".gauge-pin")).toBeTruthy();
+  // 0.9.4 删除周降幅仪表：它的口径要求两个 7 天窗各 ≥3 次称重，实际使用中长期停在
+  // 「待记录」；区间变化仍由指标行的「区间体重变化」承担（域函数 rollingDelta 保留）。
+  expect(host.querySelector(".review-gauge")).toBeNull();
+  expect(host.querySelector(".gauge-value")).toBeNull();
+  const cards = [...host.querySelectorAll(".metric-card")].map((item) => item.textContent ?? "");
+  expect(cards.find((text) => text.includes("区间体重变化"))).toContain("kg");
 });
 
 it("always states that the verdicts are not a health assessment", async () => {
@@ -303,10 +306,14 @@ it("puts the waist change next to the weight change", async () => {
 });
 
 it("says so plainly when the range has no waist measurement", async () => {
-  await renderPage();
+  // 只给体重：区间非空（指标行照常铺开），但腰围缺失。
+  await renderPage({
+    measurements: [{ id: "w1", date: "2026-10-20", weightKg: 82.9, createdAt: "2026-10-20T06:00:00+08:00" }],
+  });
   const cards = [...host.querySelectorAll(".metric-card")].map((item) => item.textContent ?? "");
   const waist = cards.find((text) => text.includes("区间腰围变化"))!;
-  expect(waist).toContain("区间内未量");
+  // 0.9.4 第四轮：数值位改「—」避免五字折行撑高卡片；文案进 note。
+  expect(waist).toContain("—");
   expect(waist).toContain("在「身体」页记一次腰围");
 });
 

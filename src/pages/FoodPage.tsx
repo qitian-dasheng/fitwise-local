@@ -1,5 +1,5 @@
 import { diaryToday, shiftDiaryDate, type DiaryDateProps } from "../domain/diary";
-import { BookOpen, ChefHat, ChevronLeft, ChevronRight, Library, Plus, ShieldCheck, UtensilsCrossed } from "lucide-react";
+import { BookOpen, ChefHat, ChevronLeft, ChevronRight, Library, Plus, UtensilsCrossed } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { MealEntry, RecipeVersion, MealType } from "../domain/types";
 import { useAppStore } from "../store/appStore";
@@ -13,7 +13,9 @@ import { RecipeEditor } from "../components/RecipeEditor";
 import { RecipeManagerDrawer } from "../components/RecipeManagerDrawer";
 import { RecipeMealDraftModal } from "../components/RecipeMealDraftModal";
 import { latestRecipes } from "../domain/recipes";
+import { recipeShortage } from "../domain/pantry";
 import { MealDiaryTable } from "../components/MealDiaryTable";
+import { BasketBar } from "../components/BasketBar";
 import { CopyMealModal } from "../components/CopyMealModal";
 import { mealCopySource, mealLabels, mealTypes, frequentFoods, type FrequentFood, type MealCopySource } from "../domain/meals";
 import { readDiaryShowSodium, writeDiaryShowSodium } from "../domain/preferences";
@@ -96,6 +98,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
       >,
     [meals, today],
   );
+  const pantryItems = useAppStore((state) => state.pantryItems);
   const latest=latestRecipes(recipes);
   const recipeOptions=showHistory?recipes:latest;
   const recipe = recipeOptions.find(r=>r.id===selectedRecipeId)??recipeOptions[0];
@@ -119,6 +122,9 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
             <input type="date" aria-label="查看日期" value={date} onChange={(event) => event.target.value && onDateChange?.(event.target.value)} style={{ all: "unset", cursor: "pointer", font: "inherit", color: "var(--ui-ink-2)" }} />
             <button className="ui-navbtn" aria-label="后一天" disabled={date >= diaryToday()} onClick={() => onDateChange?.(shiftDiaryDate(date, 1))}><ChevronRight size={15} /></button>
           </div>
+          <button className="ui-btn food-recipe-btn" aria-label="打开菜谱管理" onClick={() => setRecipeDrawer(true)}>
+            <ChefHat size={15} /> <span className="food-recipe-btn-text">菜谱</span>
+          </button>
           <button className="ui-btn" onClick={() => (goTo ? goTo("library") : setLibraryOpen(true))}><Library size={15} /> 食材库</button>
           <button className="ui-btn primary" onClick={() => openMeal()}><Plus size={15} /> 添加食物</button>
         </div>
@@ -144,6 +150,8 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
         </section>
       )}
       <p className="ui-chart-foot" style={{ marginTop: 0, paddingTop: 0 }}>补录或新增餐食会把该日重新标为待核对，请在日报再次确认完成。</p>
+      {/* 0.9.4 第六轮分离式：核对与确认从记餐弹窗迁到页面，篮子空则整条隐藏。 */}
+      <BasketBar onRecorded={(recorded) => onDateChange?.(recorded)} />
       <MealDiaryTable
         date={today}
         entries={meals}
@@ -157,42 +165,6 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
         onVoid={(meal) => setCorrection({ meal, mode: "void" })}
       />
 
-      <div className="food-workbench">
-        <section className="ui-card kitchen-card">
-          <div className="ui-panel-head">
-            <h2>今日下厨</h2>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="ui-btn" disabled={!recipe} onClick={() => setRecipeMealOpen(true)}><UtensilsCrossed size={15} /> 加入餐次</button>
-              <button className="ui-btn" onClick={() => setRecipeDrawer(true)}><BookOpen size={15} /> 管理菜谱</button>
-            </div>
-          </div>
-
-          {recipe ? (
-            <div className="kitchen-body">
-              <div className="kitchen-top">
-                <div className="recipe-visual"><ChefHat size={30} /></div>
-                <div className="kitchen-meta">
-                  <p className="ui-chart-foot" style={{ marginTop: 0, paddingTop: 0 }}>v{recipe.version} · {recipe.totalMinutes} 分钟</p>
-                  <h3>{recipe.name}</h3>
-                  <p>标准菜谱只作营养与分量参考；实际摄入请按餐次在日记中记录。</p>
-                </div>
-              </div>
-              {!latest.some(r=>r.id===recipe.id)&&<p className="library-notice">正在复用历史 v{recipe.version}：展示沿用原版本的原料和营养，不会替换为最新版。</p>}
-              <div className="recipe-macros"><span><b>{nutrientText(recipe.nutrition, "calories", energyUnit)}</b> {energyUnitLabels[energyUnit]}</span><span><b>{nutrientText(recipe.nutrition, "protein")}</b> g 蛋白质</span><span><b>{recipe.totalMinutes}</b> 分钟</span></div>
-              <ul className="ingredient-list">{recipe.ingredients.map((item) => <li key={item.foodId}><span>{item.name}</span><b>{item.nutritionQuantity ?? item.amount} {foodUnitLabels[item.nutritionUnit ?? item.unit] ?? item.unit}</b></li>)}</ul>
-            </div>
-          ) : (
-            <div className="kitchen-empty">
-              <ChefHat size={26} />
-              <strong>暂无标准菜谱</strong>
-              <p>仍可通过食材库或仅记录本次入口记餐；固定搭配建议先建成菜谱，方便每次快速核对。</p>
-              <button className="ui-btn" onClick={() => openRecipeEditor("new", false)}>新建第一个菜谱</button>
-            </div>
-          )}
-
-          <p className="kitchen-footnote"><ShieldCheck size={15} /><span>营养值不会把空白当成零：首次商品会校验千焦／千卡、每份／每百克和净含量。</span></p>
-        </section>
-      </div>
 
       {recipeDrawer && <RecipeManagerDrawer
         recipes={recipes}
@@ -216,7 +188,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
       {copyTarget && <CopyMealModal date={today} type={copyTarget.type} source={copyTarget.source} onClose={() => setCopyTarget(null)} />}
       {recipeEditor&&<RecipeEditor copyMode={copyRecipe} recipe={recipeEditor==="new"?undefined:recipeEditor} onClose={()=>setRecipeEditor(null)} onSaved={setSelectedRecipeId}/>}
       {meals.some(m=>m.date===date&&m.status&&m.status!=="active")&&<details className="card meal-correction-history"><summary>查看所选日修订／作废的原始记录</summary>{meals.filter(m=>m.date===date&&m.status&&m.status!=="active").map(m=><article key={m.id}><strong>{m.name} · {m.status==="void"?"已作废":"已修订"}</strong><p>{m.date} · {m.amountLabel} · 原始营养 {nutrientText(m.nutrition, "calories", energyUnit)} {energyUnitLabels[energyUnit]}（参考规格，非重新入账）</p><p>原因：{m.correctionReason}；原记录 ID：{m.id}</p></article>)}</details>}
-      {mealOpen && <><div hidden={manualMeal}><FoodLibraryModal initialType={initialMealType} initialDate={date} onRecorded={onDateChange} preselectFoodId={preselectFoodId ?? undefined} onClose={() => { setMealOpen(false); setPreselectFoodId(null); }} onManual={() => setManualMeal(true)} onOpenEditor={goTo ? (target) => { useFoodPicker.getState().setEditorTarget(target); goTo("library"); } : undefined} /></div>{manualMeal && <MealModal initialType={initialMealType} initialDate={date} onBack={() => setManualMeal(false)} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onSave={addMeal}/>}</>}
+      {mealOpen && <><div hidden={manualMeal}><FoodLibraryModal preselectFoodId={preselectFoodId ?? undefined} onClose={() => { setMealOpen(false); setPreselectFoodId(null); }} onManual={() => setManualMeal(true)} onOpenEditor={goTo ? (target) => { useFoodPicker.getState().setEditorTarget(target); goTo("library"); } : undefined} /></div>{manualMeal && <MealModal initialType={initialMealType} initialDate={date} onBack={() => setManualMeal(false)} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onSave={addMeal}/>}</>}
     </div>
   );
 }

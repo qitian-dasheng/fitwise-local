@@ -27,7 +27,10 @@ export type DomainCommandKind =
   | "restore_voided_workout"
   | "set_checkin"
   | "set_day_complete"
-  | "set_target_profile";
+  | "set_target_profile"
+  | "pantry_adjust"
+  | "pantry_update_item"
+  | "pantry_delete_item";
 
 export interface DomainCommandResponse<TResult = Record<string, never>> {
   applied: boolean;
@@ -56,6 +59,7 @@ const stateKeys = [
   "workouts",
   "recipes",
   "auditEvents",
+  "pantryItems",
 ] as const satisfies readonly (keyof AppState)[];
 
 function serializeBootstrapState(state: AppState) {

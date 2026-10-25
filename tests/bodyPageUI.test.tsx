@@ -44,6 +44,11 @@ async function renderPage(measurements: BodyMeasurement[]) {
 
 const button = (text: string) =>
   [...host.querySelectorAll("button")].find((item) => item.textContent?.includes(text)) as HTMLButtonElement;
+
+// 0.9.4 第二轮：历史表挂在「全部记录」标签下，历史相关用例先切标签。
+async function openTab(label: string) {
+  await act(async () => button(label).click());
+}
 const rowFor = (weight: string) =>
   [...host.querySelectorAll(".body-row:not(.body-head)")].find((item) =>
     item.textContent?.includes(weight),
@@ -51,6 +56,7 @@ const rowFor = (weight: string) =>
 
 it("shows an empty history instead of a blank table", async () => {
   await renderPage([]);
+  await openTab("全部记录");
   expect(host.querySelector(".body-empty")?.textContent).toContain("还没有体重记录");
   expect(host.querySelectorAll(".body-row:not(.body-head)")).toHaveLength(0);
 });
@@ -102,6 +108,7 @@ it("renders the nine history columns and same-day badges", async () => {
     measurement({ id: "b", weightKg: 82.9, measuredAt: "2026-10-19T21:10:00+08:00", condition: "other" }),
     measurement({ id: "c", date: "2026-10-18", weightKg: 83.9, measuredAt: "2026-10-18T06:40:00+08:00" }),
   ]);
+  await openTab("全部记录");
 
   const heads = [...host.querySelectorAll(".body-head > span")].map((item) => item.textContent);
   expect(heads).toEqual(["日期", "时刻", "体重 kg", "变化", "腰围 cm", "体脂 %", "条件", "备注", "操作"]);
@@ -121,6 +128,7 @@ it("keeps voided rows visible with their reason and hides them from the change c
     measurement({ id: "a", weightKg: 83.4, measuredAt: "2026-10-19T06:30:00+08:00" }),
     measurement({ id: "b", weightKg: 90, measuredAt: "2026-10-19T09:00:00+08:00", status: "void", correctionReason: "称重时穿了鞋" }),
   ]);
+  await openTab("全部记录");
   const voided = rowFor("90.00");
   expect(voided.className).toContain("body-row-inactive");
   expect(voided.textContent).toContain("已作废");
@@ -142,6 +150,7 @@ it("does not glue a unit onto the 「持平」 wording in the seven-day metric",
 
 it("opens the correction dialog with a before/after diff and requires a reason", async () => {
   await renderPage([measurement({ id: "a", weightKg: 83.4, measuredAt: "2026-10-19T06:30:00+08:00" })]);
+  await openTab("全部记录");
   await act(async () => rowFor("83.40").querySelectorAll("button")[0].click());
 
   const dialog = document.querySelector(".modal") as HTMLElement;

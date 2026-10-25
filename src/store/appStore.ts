@@ -6,6 +6,8 @@ import { createPersonalState, initialState } from "../domain/seed";
 import { buildResetState, type ResetSummary } from "../domain/resetState";
 import type {
   AppState,
+  FoodUnit,
+  PantryItem,
   MealEntry,
   MealType,
   WorkoutSession,
@@ -142,6 +144,9 @@ interface AppActions {
   setFoodFavorite: (foodId: string, favorite: boolean, commandId?: string) => Promise<ActionResult>;
   setFoodArchived: (foodId: string, archived: boolean, commandId?: string) => Promise<ActionResult>;
   deleteFood: (foodId: string, commandId?: string) => Promise<ActionResult>;
+  pantryAdjust: (input: { foodDefinitionId: string; delta: number; unit: FoodUnit; expiresAt?: string | null; lowStockThreshold?: number; note?: string }, commandId?: string) => Promise<ActionResult & { pantryItemId?: string }>;
+  pantryUpdateItem: (input: { id: string; lowStockThreshold?: number | null; expiresAt?: string | null; note?: string | null }, commandId?: string) => Promise<ActionResult>;
+  pantryDeleteItem: (id: string, commandId?: string) => Promise<ActionResult>;
   correctFoodIdentity: (input: { foodId: string; name: string; brand?: string; measurementBasis: FoodMeasurementBasis }, commandId?: string) => Promise<ActionResult>;
   recordFoodMeal: (input: FoodMealInput, commandId?: string) => Promise<ActionResult>;
   recordRecipeMeal: (input: RecipeMealInput, commandId?: string) => Promise<ActionResult>;
@@ -222,6 +227,74 @@ export const useAppStore = create<AppStore>()(
         // 永久删除依赖 Rust 同事务引用检查；预览环境不模拟，避免误判安全。
         if (!isTauriRuntime()) return { error: "永久删除需要桌面版在同一事务中完成引用检查，浏览器预览不模拟正式保存。" };
         return submit("delete_food", { foodId }, commandId);
+      },
+      async pantryAdjust(input, commandId = uid()) {
+        const round2 = (value: number) => Math.round(value * 100) / 100;
+        const delta = round2(input.delta);
+        const definition = get().foodDefinitions.find((item) => item.id === input.foodDefinitionId);
+        if (!definition) return { error: "食材库中找不到该食材，请先在食材库建档。" };
+        if (definition.archived === true) return { error: "该食材已归档，先在食材库恢复后再入柜。" };
+        if (delta === 0) return { error: "数量变化不能为 0。" };
+        if (isTauriRuntime()) return submit("pantry_adjust", { ...input, delta }, commandId);
+        // 浏览器预览镜像：与 Rust pantry_commands 同一套守卫（单位一致、取出不超存量）。
+        const now = new Date().toISOString();
+        const existing = get().pantryItems.find((item) => item.foodDefinitionId === input.foodDefinitionId);
+        if (existing) {
+          if (existing.unit !== input.unit) return { error: `单位与柜内现有条目（${existing.unit}）不一致；请按既有单位增减。` };
+          const after = round2(existing.quantity + delta);
+          if (after < 0) return { error: `取出量超过柜内存量（${existing.quantity} ${existing.unit}）。` };
+          set((state) => ({
+            pantryItems: state.pantryItems.map((item) => item.id === existing.id ? { ...item, quantity: after, updatedAt: now } : item),
+          }));
+          return { pantryItemId: existing.id };
+        }
+        if (delta < 0) return { error: "柜内还没有这个食材，请先入库。" };
+        const id = `${commandId}:pantry`;
+        const entry: PantryItem = {
+          id,
+          foodDefinitionId: input.foodDefinitionId,
+          quantity: delta,
+          unit: input.unit,
+          ...(input.expiresAt ? { expiresAt: input.expiresAt } : {}),
+          ...(input.lowStockThreshold !== undefined ? { lowStockThreshold: input.lowStockThreshold } : {}),
+          ...(input.note ? { note: input.note } : {}),
+          createdAt: now,
+          updatedAt: now,
+        };
+        set((state) => ({ pantryItems: [...state.pantryItems, entry] }));
+        return { pantryItemId: id };
+      },
+      async pantryUpdateItem(input, commandId = uid()) {
+        if (isTauriRuntime()) return submit("pantry_update_item", { ...input }, commandId);
+        const existing = get().pantryItems.find((item) => item.id === input.id);
+        if (!existing) return { error: "柜内没有这个条目，可能已被删除，请刷新。" };
+        const now = new Date().toISOString();
+        set((state) => ({
+          pantryItems: state.pantryItems.map((item) => {
+            if (item.id !== input.id) return item;
+            const next: PantryItem = { ...item, updatedAt: now };
+            if (input.lowStockThreshold !== undefined) {
+              if (input.lowStockThreshold === null) delete next.lowStockThreshold;
+              else next.lowStockThreshold = input.lowStockThreshold;
+            }
+            if (input.expiresAt !== undefined) {
+              if (input.expiresAt === null) delete next.expiresAt;
+              else next.expiresAt = input.expiresAt;
+            }
+            if (input.note !== undefined) {
+              if (input.note === null) delete next.note;
+              else next.note = input.note;
+            }
+            return next;
+          }),
+        }));
+        return {};
+      },
+      async pantryDeleteItem(id, commandId = uid()) {
+        if (isTauriRuntime()) return submit("pantry_delete_item", { id }, commandId);
+        if (!get().pantryItems.some((item) => item.id === id)) return { error: "柜内没有这个条目，可能已被删除，请刷新。" };
+        set((state) => ({ pantryItems: state.pantryItems.filter((item) => item.id !== id) }));
+        return {};
       },
       async correctFoodIdentity(input, commandId = uid()) {
         // 身份纠错依赖 Rust 引用检查与生熟状态守卫；预览环境不模拟。

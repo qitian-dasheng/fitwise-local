@@ -232,6 +232,8 @@ export interface RecipeVersion {
   nutrition: NutritionFacts;
   totalMinutes: number;
   equipment: string[];
+  /** 适用餐次（OBS-010，0.9.4）：多选标签；缺失 = 未分类。 */
+  mealTags?: MealType[];
   source: DataSource;
   confirmedBy?: string;
   confirmedAt?: string;
@@ -257,6 +259,23 @@ export interface AppState {
   workouts: WorkoutSession[];
   recipes: RecipeVersion[];
   auditEvents: AuditEvent[];
+  /** 食物柜（0.9.4 库存轻量版）：家里有什么、快没了没；与饮食记录解耦，不自动扣减。 */
+  pantryItems: PantryItem[];
+}
+
+/** 食物柜条目：挂食材库定义；同一定义只有一条（数量增减，不叠条目）。 */
+export interface PantryItem {
+  id: string;
+  foodDefinitionId: string;
+  quantity: number;
+  unit: FoodUnit;
+  /** 到期日（YYYY-MM-DD），可空。 */
+  expiresAt?: string;
+  /** 低存量阈值：低于它就高亮提醒补货。 */
+  lowStockThreshold?: number;
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const nutrientKeys = [
@@ -288,6 +307,7 @@ export interface RecipeInput {
   name: string;
   totalMinutes: number;
   equipment: string[];
+  mealTags?: MealType[];
   ingredients: { foodVersionId: string; quantity: number; unit: FoodUnit }[];
   recipeId?: string;
   expectedVersionId?: string;

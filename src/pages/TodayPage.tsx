@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { diaryToday, shiftDiaryDate, type DiaryDateProps } from "../domain/diary";
-import { ArrowRight, Check, ChevronLeft, ChevronRight, Dumbbell, Plus, Scale, Utensils } from "lucide-react";
+import { ArrowRight, Check, ChevronLeft, ChevronRight, Dumbbell, Plus, Scale, SlidersHorizontal, Utensils } from "lucide-react";
+import { TargetGoalModal } from "../components/TargetGoalModal";
 import { activeMeals, summarizeMeals } from "../domain/calculations";
 import { dailyRepresentatives } from "../domain/body";
 import { bodyActionHint, calorieBudget, mealActionHint, recordStreak, workoutActionHint } from "../domain/todayHints";
@@ -26,6 +28,7 @@ export type QuickActionHandler = (kind: QuickActionKind, mealType?: MealType) =>
  * 数字优先、语义色只进数据、一屏不滚；数据口径与 0.9.2 完全一致（calorieBudget/recordStreak/frequentFoods）。
  */
 export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickAction }: { goTo: (page: string) => void; onQuickAction?: QuickActionHandler } & DiaryDateProps) {
+  const [targetOpen, setTargetOpen] = useState(false);
   const action = useConfirmedAction();
   const [energyUnit] = useEnergyUnit();
   const profile = useAppStore((state) => state.profile);
@@ -96,8 +99,8 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickActi
 
       <section className="ui-kpi-row">
         <div className="ui-card ui-kpi">
-          <div className="label"><span>还能吃</span><span className="ui-badge flat">区间 {Math.round(toDisplayEnergy(profile.dailyCalories.min, energyUnit))}–{Math.round(toDisplayEnergy(profile.dailyCalories.max, energyUnit))}</span></div>
-          <div className="value">{budget.status === "no-records" ? "—" : budget.status === "over" ? `超 ${budget.overBy}` : `${budget.remainingLow ?? budget.remainingHigh}–${budget.remainingHigh}`}<small>{energyUnitNames[energyUnit]}</small></div>
+          <div className="label"><span>还能吃</span><span className="ui-badge flat">区间 {Math.round(toDisplayEnergy(profile.dailyCalories.min, energyUnit))}–{Math.round(toDisplayEnergy(profile.dailyCalories.max, energyUnit))}</span><button className="ui-navbtn" aria-label="个人目标" title="个人目标" onClick={() => setTargetOpen(true)}><SlidersHorizontal size={14} /></button></div>
+          <div className="value">{budget.status === "no-records" ? "—" : budget.status === "over" ? `超 ${budget.overBy}` : budget.status === "partial" ? `≤ ${budget.remainingHigh}` : `${budget.remainingLow}–${budget.remainingHigh}`}<small>{energyUnitNames[energyUnit]}</small></div>
           <div className="sub">{budget.status === "no-records" ? "记录第一餐后显示剩余" : budget.status === "over" ? `已摄入 ${Math.round(toDisplayEnergy(budget.consumedKnown, energyUnit))}，超上限 ${Math.round(toDisplayEnergy(budget.overBy ?? 0, energyUnit))}` : budget.status === "partial" ? `已知部分 ${Math.round(toDisplayEnergy(budget.consumedKnown, energyUnit))} · 还有未计入` : `已摄入 ${Math.round(toDisplayEnergy(budget.consumedKnown, energyUnit))}`}</div>
           {budget.status !== "no-records" && (
             <div className="ui-microbar"><i style={{ width: `${Math.min(100, Math.round((summary.totals.calories / profile.dailyCalories.max) * 100))}%`, background: budget.status === "over" ? "var(--ui-danger)" : budget.status === "partial" ? "var(--ui-warn)" : "var(--ui-ok)" }} /></div>
@@ -206,6 +209,7 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickActi
       </section>
 
       {action.message && <div className="ui-card" role="alert" style={{ padding: "8px 14px" }}><p className="ui-chart-foot" style={{ marginTop: 0, paddingTop: 0 }}>{action.message}</p></div>}
+      {targetOpen && <TargetGoalModal profile={profile} onClose={() => setTargetOpen(false)} />}
     </div>
   );
 }

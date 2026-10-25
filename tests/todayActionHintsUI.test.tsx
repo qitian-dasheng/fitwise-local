@@ -37,6 +37,20 @@ function nutrients(calories: number) {
     sodium: known(300),
   };
 }
+/** 全营养未知（第六轮 1900–1900 显示 bug 的复现口径：部分已知状态）。 */
+function unknownNutrients() {
+  const unknown = { state: "unknown" as const, source: "manual" as const, confidence: "high" as const };
+  return {
+    calories: { ...unknown, unit: "kcal" as const },
+    protein: { ...unknown, unit: "g" as const },
+    carbohydrates: { ...unknown, unit: "g" as const },
+    fat: { ...unknown, unit: "g" as const },
+    fiber: { ...unknown, unit: "g" as const },
+    sugar: { ...unknown, unit: "g" as const },
+    sodium: { ...unknown, unit: "mg" as const },
+  };
+}
+
 function meal(id: string, date: string, type: MealType): MealEntry {
   return {
     id, date, type, name: `${type}测试`,
@@ -96,6 +110,8 @@ it("passes the pending meal slot to the quick action so the form opens on the ri
 });
 
 /** 表单里的餐次是「餐次」标签下的 select；直接读它的值才算真验证。 */
+const button = (text: string) => [...container.querySelectorAll("button")].find((item) => item.textContent?.includes(text))!;
+
 function selectedMealType() {
   const label = [...container.querySelectorAll("label")].find((item) => item.querySelector("span")?.textContent === "餐次");
   return label?.querySelector<HTMLSelectElement>("select")?.value ?? null;
@@ -107,6 +123,8 @@ it("opens the meal form on the requested meal type instead of always breakfast",
   await act(async () => root.render(<FoodPage date={date} autoOpenMeal autoOpenMealType="dinner" onAutoOpenConsumed={onConsumed}/>));
   // 表单已开且回报过一次，避免同一次意图重复触发。
   expect(onConsumed).toHaveBeenCalledTimes(1);
+  // 第六轮分离式：选择器弹窗不再有餐次下拉；餐次随「仅记录本次」进入单条表单。
+  await act(async () => button("仅记录本次").click());
   expect(selectedMealType()).toBe("dinner");
   // 选项本身要齐全，否则「开在晚餐」可能只是因为根本没有别的可选项。
   const label = [...container.querySelectorAll("label")].find((item) => item.querySelector("span")?.textContent === "餐次");
@@ -115,5 +133,19 @@ it("opens the meal form on the requested meal type instead of always breakfast",
 
 it("falls back to breakfast when no meal type is handed over", async () => {
   await act(async () => root.render(<FoodPage date={diaryToday()} autoOpenMeal/>));
+  await act(async () => button("仅记录本次").click());
   expect(selectedMealType()).toBe("breakfast");
+});
+
+it("shows the upper bound only (≤) when a meal has unknown calories — never a fake interval", async () => {
+  // 第六轮回归：partial 状态下下界未知，旧显示层把上界填两遍成 "1900–1900"。
+  const entry: MealEntry = { id: "u1", date: diaryToday(), type: "lunch", name: "未知餐", amountLabel: "1 份", nutrition: unknownNutrients(), consumedRatio: 1, source: "manual", confidence: "high", createdAt: `${diaryToday()}T12:00:00Z` };
+  await act(async () => {
+    useAppStore.setState({ meals: [entry] });
+    root.render(<TodayPage goTo={() => undefined} />);
+  });
+  const text = container.textContent ?? "";
+  expect(text).toContain("≤ 1900");
+  expect(text).not.toContain("1900–1900");
+  expect(text).toContain("还有未计入");
 });

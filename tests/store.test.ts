@@ -10,7 +10,8 @@ it("desktop onboarding does not seed fictional measurements or data", () => {
   const state = createPersonalState();
   expect(state.measurements).toEqual([]);
   expect(state.checkIns).toEqual([]);
-  expect(state.recipes).toHaveLength(1);
+  // 0.9.4 第五轮：演示菜谱不再随种子下发（桌面首启从零开始，菜谱由用户自建）。
+  expect(state.recipes).toEqual([]);
 });
 
 describe("body measurement revisions", () => {

@@ -2,7 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { RecipeEditor } from "../src/components/RecipeEditor";
-import { initialState } from "../src/domain/seed";
+import { initialState, seedRecipe } from "../src/domain/seed";
 import { useAppStore } from "../src/store/appStore";
 import type { FoodDefinitionInput, RecipeVersion } from "../src/domain/types";
 
@@ -30,7 +30,7 @@ async function submit() { await act(async () => host.querySelector("form")!.disp
 async function food(overrides: Partial<FoodDefinitionInput> = {}) {
   return useAppStore.getState().saveFoodDefinition({ name: "北豆腐", measurementBasis: "raw", basis: { quantity: 100, unit: "g" }, energyUnit: "kcal", nutrients: { calories: 100, protein: 10 }, conversions: [], source: "label", ...overrides });
 }
-const legacy = (): RecipeVersion => ({ ...structuredClone(initialState.recipes[0]), ingredients: [{ foodId: "tofu", name: "北豆腐", amount: 300, unit: "g", measurementBasis: "raw" }] });
+const legacy = (): RecipeVersion => ({ ...structuredClone(seedRecipe), ingredients: [{ foodId: "tofu", name: "北豆腐", amount: 300, unit: "g", measurementBasis: "raw" }] });
 
 it("puts metadata and the first named ingredient before optional rules, with one empty-catalog cue", async () => {
   await act(async () => root.render(<RecipeEditor recipe={legacy()} copyMode onClose={close} onSaved={saved} />));

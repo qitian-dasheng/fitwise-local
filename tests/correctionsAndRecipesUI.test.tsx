@@ -7,7 +7,7 @@ import { FoodPage } from "../src/pages/FoodPage";
 import { activeMeals, completedDayCalorieAverage, nutrition, summarizeMeals } from "../src/domain/calculations";
 import { latestRecipes, previewRecipe } from "../src/domain/recipes";
 import { diaryToday } from "../src/domain/diary";
-import { initialState } from "../src/domain/seed";
+import { initialState, seedRecipe } from "../src/domain/seed";
 import { useAppStore } from "../src/store/appStore";
 import type { MealEntry } from "../src/domain/types";
 let host:HTMLDivElement;let root:Root;
@@ -60,7 +60,7 @@ it("ignores superseded and void meals in summaries but exposes their original ev
 });
 
 it("deduplicates recipe identities to the latest version without changing prepared snapshots",()=>{
-  const old=structuredClone(initialState.recipes[0]);const newer={...old,id:"new-v2",version:2,name:"新版"};expect(latestRecipes([old,newer])).toEqual([newer]);expect(old.version).toBe(1);
+  const old=structuredClone(seedRecipe);const newer={...old,id:"new-v2",version:2,name:"新版"};expect(latestRecipes([old,newer])).toEqual([newer]);expect(old.version).toBe(1);
 });
 it("visits catalog-only food management without losing unfinished recipe fields or recording a meal",async()=>{
   await act(async()=>root.render(<RecipeEditor onClose={close} onSaved={saved}/>));await fill(input("菜谱名称"),"写到一半的菜谱");
@@ -74,25 +74,31 @@ it("does not fabricate successful desktop-only writes in browser previews",async
   expect(()=>previewRecipe({foodDefinitionVersions:[]},{name:"空",totalMinutes:1,equipment:[],ingredients:[]})).toThrow("至少一种原料");
 });
 it("historical recipe picker keeps the selected version and only permits copy or original-version cooking", async () => {
-  const old=structuredClone(initialState.recipes[0]),newer={...old,id:"recipe-v2",name:"新版配方",version:2};
+  const old=structuredClone(seedRecipe),newer={...old,id:"recipe-v2",name:"新版配方",version:2};
   useAppStore.setState({recipes:[old,newer]});await act(async()=>root.render(<FoodPage/>));
   // 菜谱管理控件已收进抽屉：主页不再出现下拉与管理按钮组。
   expect(host.querySelector('select[aria-label="选择标准菜谱"]')).toBeNull();
   expect(host.querySelector(".drawer")).toBeNull();
   expect([...host.querySelectorAll("button")].filter(b=>["新建菜谱","修订当前菜谱","另存为新菜谱"].includes(b.textContent?.trim()??""))).toHaveLength(0);
-  await act(async()=>button("管理菜谱").click());
+  await act(async()=>(host.querySelector(".food-recipe-btn") as HTMLButtonElement).click());
   expect(host.querySelector(".drawer")!.textContent).toContain("管理菜谱");
-  const picker=()=>host.querySelector<HTMLSelectElement>('select[aria-label="选择标准菜谱"]')!;
-  expect(picker().textContent).not.toContain("（历史）");
-  await act(async()=>input("菜谱管理：显示历史版本").click());await select(picker(),old.id);
-  expect(host.textContent).toContain("正在复用历史 v1");expect(button("修订当前菜谱").disabled).toBe(true);
-  await act(async()=>button("另存为新菜谱").click());
+  const itemOf=(id:string)=>[...host.querySelectorAll(".recipe-list-item")].find(b=>b.querySelector("strong")?.textContent===[old,newer].find(r=>r.id===id)?.name) as HTMLButtonElement;
+  // 默认只显示最新版（v2）；历史 badge 只在勾选后出现。
+  expect([...host.querySelectorAll(".recipe-list-item")].map(b=>b.querySelector("strong")?.textContent)).toEqual(["新版配方"]);
+  // 第四轮：历史版本开关收进列表工具行（文案「历史版本」）。
+  await act(async()=>(host.querySelector<HTMLInputElement>(".recipe-history-toggle input")!).click());
+  await act(async()=>itemOf(old.id).click());
+    // 第四轮：历史复用提示为通用文案（卡片显示 v1（历史））。
+  expect(host.textContent).toContain("正在复用历史版本");
+  expect(host.textContent).toContain("（历史）");
+  expect(button("修订").disabled).toBe(true);
+  await act(async()=>button("另存").click());
   expect(host.querySelector(".drawer")).toBeNull();
   expect(host.textContent).toContain("另存历史配方");expect(input("菜谱名称").value).toBe(old.name+"（副本）");
 });
 it("save-as creates independent recipe identity while pinning historical food versions and source", async () => {
   const food=await makeFood(),save=vi.fn().mockResolvedValue({recipeVersionId:"copy-v1"});useAppStore.setState({saveRecipe:save});
-  const recipe={...structuredClone(initialState.recipes[0]),ingredients:[{foodId:food.foodId!,name:"原味燕麦",amount:50,unit:"g" as const,measurementBasis:"package" as const,foodVersionId:food.foodVersionId,nutritionQuantity:50,nutritionUnit:"g" as const}]};
+  const recipe={...structuredClone(seedRecipe),ingredients:[{foodId:food.foodId!,name:"原味燕麦",amount:50,unit:"g" as const,measurementBasis:"package" as const,foodVersionId:food.foodVersionId,nutritionQuantity:50,nutritionUnit:"g" as const}]};
   await act(async()=>root.render(<RecipeEditor recipe={recipe} copyMode onClose={close} onSaved={saved}/>));
   await submit();
   expect(save).toHaveBeenCalledOnce();const payload=save.mock.calls[0][0];expect(payload.recipeId).toBeUndefined();expect(payload.expectedVersionId).toBeUndefined();expect(payload.copiedFromVersionId).toBe(recipe.id);expect(payload.ingredients[0].foodVersionId).toBe(food.foodVersionId);expect(payload.ingredients[0].quantity).toBe(50);

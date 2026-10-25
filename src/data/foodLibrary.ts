@@ -6,21 +6,24 @@ import { useAppStore } from "../store/appStore";
 import { enqueueDomainCommand } from "./domainCommands";
 import { isTauriRuntime } from "./storage";
 
-export function useFoodLibrarySearch(query: string, mode: "all" | "recent" | "favorites" | "archived") {
+export type FoodLibrarySearchMode = "all" | "recent" | "favorites" | "archived" | "pantry";
+export function useFoodLibrarySearch(query: string, mode: FoodLibrarySearchMode) {
   const state = useAppStore();
   const [remote, setRemote] = useState<{ key: string; data: FoodLibraryItem[]; error: string }>({ key: "", data: [], error: "" });
-  const key = JSON.stringify([query, mode]);
+  // pantry 分组（食物柜）不走食材搜索；查询按 all 口径，结果在该分组下不被消费。
+  const effective = mode === "pantry" ? "all" : mode;
+  const key = JSON.stringify([query, effective]);
   useEffect(() => {
     if (!isTauriRuntime()) return;
     let disposed = false;
-    void enqueueDomainCommand(() => invoke<FoodLibraryItem[]>("search_food_library", { query, mode }))
+    void enqueueDomainCommand(() => invoke<FoodLibraryItem[]>("search_food_library", { query, mode: effective }))
       .then((data) => { if (!disposed) setRemote({ key, data, error: "" }); })
       .catch((cause) => { if (!disposed) setRemote({ key, data: [], error: String(cause) }); });
     return () => { disposed = true; };
-  }, [query, mode, key, state.foodDefinitions, state.foodDefinitionVersions, state.meals]);
+  }, [query, effective, key, state.foodDefinitions, state.foodDefinitionVersions, state.meals]);
   return isTauriRuntime()
     ? { items: remote.key === key ? remote.data : [], error: remote.key === key ? remote.error : "", loading: remote.key !== key }
-    : { items: searchFoodState(state, query, mode), error: "", loading: false };
+    : { items: searchFoodState(state, query, effective), error: "", loading: false };
 }
 
 export function useFoodPortionPreview(entry: FoodMealInput["entries"][number] | null) {

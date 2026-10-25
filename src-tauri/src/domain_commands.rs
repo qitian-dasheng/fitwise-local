@@ -163,6 +163,9 @@ fn execute_with_connection(
             | "set_checkin"
             | "set_day_complete"
             | "set_target_profile"
+            | "pantry_adjust"
+            | "pantry_update_item"
+            | "pantry_delete_item"
     ) {
         return Err("未知的领域命令。".into());
     }
@@ -238,6 +241,15 @@ fn execute_with_connection(
         )?,
         "add_weight" | "revise_weight" | "void_weight" | "set_weight_representative" => {
             crate::body_commands::apply(
+                &mut state,
+                &request.kind,
+                &request.payload,
+                &request.command_id,
+            )?
+        }
+        // 食物柜（0.9.4）：库存轻量版，简单命令信封，不做跨集合事务。
+        "pantry_adjust" | "pantry_update_item" | "pantry_delete_item" => {
+            crate::pantry_commands::apply(
                 &mut state,
                 &request.kind,
                 &request.payload,
@@ -348,6 +360,7 @@ mod tests {
     include!("meal_copy_tests.rs");
     include!("workout_command_tests.rs");
     include!("recipe_meal_command_tests.rs");
+    include!("pantry_command_tests.rs");
     include!("food_management_command_tests.rs");
     include!("upgrade_compat_command_tests.rs");
     include!("target_profile_tests.rs");
@@ -590,6 +603,69 @@ mod tests {
 
     fn recipe_payload(quantity: f64) -> Value {
         json!({"name":"自制燕麦","totalMinutes":10,"equipment":["电磁炉"],"ingredients":[{"foodVersionId":"food-version-recipe-food","quantity":quantity,"unit":"package"}]})
+    }
+
+    #[test]
+    fn recipe_meal_tags_are_validated_and_persisted() {
+        // OBS-010（0.9.4）：适用餐次只认四个合法值；乱序去重后按固定顺序落库，空则不写字段。
+        let mut c = connection();
+        execute_with_connection(
+            &mut c,
+            request(
+                "recipe-food",
+                "save_food_definition",
+                food_payload(),
+                Some(bootstrap()),
+            ),
+        )
+        .unwrap();
+        let tagged = execute_with_connection(
+            &mut c,
+            request(
+                "recipe-tagged-01",
+                "save_recipe_version",
+                json!({"name":"燕麦碗","totalMinutes":10,"equipment":["电磁炉"],"mealTags":["snack","breakfast"],"ingredients":[{"foodVersionId":"food-version-recipe-food","quantity":1,"unit":"package"}]}),
+                None,
+            ),
+        )
+        .unwrap();
+        let recipe = tagged.state["recipes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["name"] == "燕麦碗")
+            .unwrap();
+        assert_eq!(recipe["mealTags"], json!(["breakfast", "snack"]));
+
+        let untagged = execute_with_connection(
+            &mut c,
+            request(
+                "recipe-untagd-01",
+                "save_recipe_version",
+                json!({"name":"无餐次","totalMinutes":10,"equipment":["电磁炉"],"ingredients":[{"foodVersionId":"food-version-recipe-food","quantity":1,"unit":"package"}]}),
+                None,
+            ),
+        )
+        .unwrap();
+        let untagged_recipe = untagged.state["recipes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["name"] == "无餐次")
+            .unwrap();
+        assert!(untagged_recipe.get("mealTags").is_none());
+
+        let invalid = execute_with_connection(
+            &mut c,
+            request(
+                "recipe-badtag-01",
+                "save_recipe_version",
+                json!({"name":"坏标签","totalMinutes":10,"equipment":["电磁炉"],"mealTags":["supper"],"ingredients":[{"foodVersionId":"food-version-recipe-food","quantity":1,"unit":"package"}]}),
+                None,
+            ),
+        )
+        .unwrap_err();
+        assert!(invalid.contains("早餐/午餐/晚餐/加餐"));
     }
 
     #[test]

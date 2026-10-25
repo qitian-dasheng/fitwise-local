@@ -20,7 +20,7 @@ beforeEach(async () => {
   container = document.createElement("div"); document.body.append(container);
   root = createRoot(container);
   closed.mockReset(); manual.mockReset();
-  await act(async () => { root.render(<FoodLibraryModal onClose={closed} onManual={manual} initialType="lunch"/>); });
+  await act(async () => { root.render(<FoodLibraryModal onClose={closed} onManual={manual}/>); });
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); });
 
@@ -51,7 +51,7 @@ async function enterFood() {
 }
 async function submit() { await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))); }
 
-it("creates once, previews 50 g and records only after confirming the basket", async () => {
+it("creates once, previews 50 g and hands the entry to the page basket (弹窗只加不确认)", async () => {
   expect(container.textContent).toContain("从食材库记录饮食");
   await enterFood();
   await submit();
@@ -63,10 +63,16 @@ it("creates once, previews 50 g and records only after confirming the basket", a
   expect(preview.textContent).toContain("6 g");
   expect(preview.textContent).toContain("未知");
   await click("加入本餐");
+  // 第六轮分离式：加入后弹窗不关、不写库，条目进跨页篮子 store，确认写在饮食页。
   expect(useAppStore.getState().meals).toHaveLength(0);
-  await click("确认写入 1 项食物");
-  expect(useAppStore.getState().meals[0]).toMatchObject({ type: "lunch", nutrition: { calories: { value: 200 }, protein: { value: 6 } } });
-  expect(closed).toHaveBeenCalledTimes(1);
+  expect(useFoodPicker.getState().basket).toHaveLength(1);
+  expect(useFoodPicker.getState().basket[0]).toMatchObject({ name: "原味燕麦", quantity: 50, unit: "g" });
+  expect(container.textContent).toContain("回饮食页展开核对并确认写入");
+  // 弹窗内容不随篮子增长：确认按钮/日期/餐次/本批合计都不再出现（提示文案里的字样不算）。
+  expect([...container.querySelectorAll("button")].some((b) => b.textContent?.includes("确认写入"))).toBe(false);
+  expect(container.textContent).not.toContain("本次待确认");
+  expect(container.querySelector('[aria-label="本批营养合计"]')).toBeNull();
+  expect(closed).not.toHaveBeenCalled();
 });
 
 it("retains inputs and retries with the same command ID after save failure", async () => {
@@ -100,53 +106,5 @@ it("blocks closing during save and does not submit a double-click twice", async 
   await act(async () => useAppStore.setState({ saveFoodDefinition: original }));
 });
 
-it("retains a multi-food basket on recording failure and retries it once", async () => {
-  await enterFood(); await submit();
-  await fill(container.querySelector<HTMLInputElement>('[aria-label="摄入数量"]')!, "50");
-  await click("加入本餐");
-  await fill(container.querySelector<HTMLInputElement>('[aria-label="摄入数量"]')!, "25");
-  await click("加入本餐");
-  const record = vi.fn(originalRecord).mockResolvedValueOnce({ error: "记录保存失败" });
-  await act(async () => useAppStore.setState({ recordFoodMeal: record }));
-  await click("确认写入 2 项食物");
-  expect(container.textContent).toContain("记录保存失败");
-  expect(container.textContent).toContain("本次待确认 · 2 项");
-  expect(useAppStore.getState().meals).toHaveLength(0);
-  await click("确认写入 2 项食物");
-  expect(record.mock.calls[0][1]).toBe(record.mock.calls[1][1]);
-  expect(useAppStore.getState().meals.map((item) => item.nutrition.calories.value)).toEqual([200, 100]);
-  expect(closed).toHaveBeenCalledTimes(1);
-});
 
-it("previews the batch total and corrects a basket quantity in place", async () => {
-  await enterFood(); await submit();
-  await fill(container.querySelector<HTMLInputElement>('[aria-label="摄入数量"]')!, "50");
-  await click("加入本餐");
-  await fill(container.querySelector<HTMLInputElement>('[aria-label="摄入数量"]')!, "25");
-  await click("加入本餐");
-  // 50g=200kcal/6g 蛋白 + 25g=100kcal/3g 蛋白 → 300 kcal / 9 g；纤维未知，不得按 0 显示。
-  const summary = container.querySelector('[aria-label="本批营养合计"]')!;
-  expect(summary.textContent).toContain("300");
-  expect(summary.textContent).toContain("9");
-  expect(summary.textContent).toContain("未知");
-  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="修改原味燕麦数量"]')!.click());
-  await fill(container.querySelector<HTMLInputElement>('[aria-label="修改原味燕麦的数量"]')!, "100");
-  expect(container.querySelector('[aria-label="本批营养合计"]')!.textContent).toContain("500");
-  await click("确认写入 2 项食物");
-  expect(useAppStore.getState().meals.map((item) => item.nutrition.calories.value)).toEqual([400, 100]);
-  expect(closed).toHaveBeenCalledTimes(1);
-});
 
-it("invalidates only the revised food in the basket and preserves historical meals", async () => {
-  await enterFood(); await submit();
-  await click("加入本餐");
-  await click("修订规格");
-  await fill(input("能量（"), "600");
-  await act(async () => input("我已核对").click());
-  await submit();
-  expect(container.textContent).toContain("本次待确认 · 0 项");
-  expect(container.textContent).toContain("v2");
-  expect(useAppStore.getState().foodDefinitionVersions).toHaveLength(2);
-  expect(useAppStore.getState().meals).toHaveLength(0);
-  expect(useAppStore.getState().foodDefinitionVersions[0].nutrition.calories.value).toBe(400);
-});

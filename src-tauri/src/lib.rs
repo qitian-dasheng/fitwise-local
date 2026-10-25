@@ -6,6 +6,7 @@ mod domain_store;
 mod domain_upgrade;
 mod food_library;
 mod meal_corrections;
+mod pantry_commands;
 mod recipe_meal_commands;
 mod recipes;
 mod record_commands;

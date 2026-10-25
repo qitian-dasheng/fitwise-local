@@ -7,6 +7,7 @@ import { useAppStore } from "../store/appStore";
 import { useFoodPicker } from "../store/foodPicker";
 import { useConfirmedAction } from "../components/useConfirmedAction";
 import { FoodEditor, FoodIdentityEditor } from "../components/FoodEditor";
+import { PantryPanel } from "../components/PantryPanel";
 import { useEnergyUnit } from "../hooks/useEnergyUnit";
 import { energyUnitLabels } from "../domain/energyDisplay";
 
@@ -16,7 +17,7 @@ import { energyUnitLabels } from "../domain/energyDisplay";
  */
 export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}) {
   const [query, setQuery] = useState("");
-  const [mode, setMode] = useState<"all" | "recent" | "favorites" | "archived">("all");
+  const [mode, setMode] = useState<"all" | "recent" | "favorites" | "archived" | "pantry">("all");
   const [editing, setEditing] = useState<FoodLibraryItem | "new" | null>(null);
   const [identity, setIdentity] = useState<FoodLibraryItem | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -25,6 +26,7 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
   const search = useFoodLibrarySearch(query, mode);
   const action = useConfirmedAction();
   const state = useAppStore();
+  const hasArchived = state.foodDefinitions.some((item) => item.archived === true);
   const returnTicket = useFoodPicker((picker) => picker.returnTicket);
   const [displayUnit] = useEnergyUnit();
 
@@ -52,7 +54,7 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
           </div>
         </header>
         {fromPicker && <p className="library-notice">从记餐转来：保存后可一键返回饮食页，待确认篮子仍在。</p>}
-        <section className="card">
+        <section className="card editor-card">
           <FoodEditor
             key={editing === "new" ? "new" : editing.version.id}
             item={editing === "new" ? undefined : editing}
@@ -97,7 +99,7 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
             <button className="ui-btn" onClick={() => { action.setMessage(""); setIdentity(null); }}><ArrowLeft size={15}/> 返回食材库</button>
           </div>
         </header>
-        <section className="card">
+        <section className="card editor-card">
           <FoodIdentityEditor
             item={identity}
             action={action}
@@ -124,13 +126,15 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
       </header>
       {notice && <p className="library-notice" role="status">{notice}</p>}
       <div className="library-toolbar">
-        <label className="library-search"><Search size={17}/><input aria-label="搜索食物或品牌" placeholder="搜索食物名称或品牌" value={query} onChange={(event) => setQuery(event.target.value)}/></label>
+        <label className="library-search"><Search size={17}/><input aria-label="搜索食物或品牌" placeholder={mode === "pantry" ? "搜索柜内食材名称或品牌" : "搜索食物名称或品牌"} value={query} onChange={(event) => setQuery(event.target.value)}/></label>
       </div>
       <div className="library-tabs" role="group" aria-label="食材筛选">
-        {([["all", "全部"], ["recent", "最近使用"], ["favorites", "常用收藏"], ["archived", "已归档"]] as const).map(([value, label]) => (
+        {/* 已归档分组只在确有归档食材时出现（归档是「被引用食材的软删除」，无归档时隐藏减少占位）。 */}
+        {([["all", "全部"], ["recent", "最近使用"], ["favorites", "常用收藏"], ...((hasArchived || mode === "archived") ? [["archived", "已归档"]] as const : []), ["pantry", "食物柜"]] as const).map(([value, label]) => (
           <button key={value} className={mode === value ? "active" : ""} onClick={() => { setMode(value); setPendingDelete(null); }}>{label}</button>
         ))}
       </div>
+      {mode === "pantry" ? <PantryPanel query={query}/> : (<>
       {search.error && <p className="form-error" role="alert">{search.error}</p>}
       <div className="library-body library-page-body">
         <div className="library-results">
@@ -171,6 +175,7 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
         </div>
       </div>
       <p className="form-hint">这里只管理营养资料，不写入饮食；记餐请到「饮食」页。</p>
+      </>)}
     </div>
   );
 }

@@ -318,4 +318,27 @@ mod export_tests {
         assert_eq!(std::fs::read(&path).unwrap(), before);
         std::fs::remove_file(path).unwrap();
     }
+
+    #[test]
+    fn export_includes_pantry_items_collection() {
+        // 0.9.4 食物柜：导出是备份恢复依据，新集合必须随 state 一起导出。
+        let path = std::env::temp_dir().join(format!(
+            "fitwise-pantry-export-{}.db",
+            rand::random::<u64>()
+        ));
+        let connection = Connection::open(&path).unwrap();
+        crate::domain_store::ensure_repository_schema(&connection).unwrap();
+        connection.execute_batch(
+            "INSERT INTO domain_singletons(key,payload_json,updated_at) VALUES('profile','{}','test');
+             INSERT INTO domain_state_meta(id,persist_version,revision,content_sha256,updated_at) VALUES(1,4,7,'test','test');
+             INSERT INTO domain_entities(collection,entity_id,payload_json,sort_index,updated_at)
+               VALUES('pantryItems','pantry-1','{\"id\":\"pantry-1\",\"foodDefinitionId\":\"food-tofu\",\"quantity\":500,\"unit\":\"g\"}',0,'test');",
+        )
+        .unwrap();
+        drop(connection);
+        let exported = export_domain_at_path(&path).unwrap();
+        assert_eq!(exported["pantryItems"][0]["id"], "pantry-1");
+        assert_eq!(exported["pantryItems"][0]["quantity"], 500.0);
+        std::fs::remove_file(path).unwrap();
+    }
 }

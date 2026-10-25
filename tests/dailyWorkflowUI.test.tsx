@@ -51,7 +51,10 @@ it("keeps a food-library basket mounted when visiting one-off entry and returnin
 it("can render an empty recipe store and does not offer an empty day as complete", async () => {
   useAppStore.setState({ recipes: [], meals: [], measurements: [], workouts: [], checkIns: [] });
   await act(async () => root.render(<FoodPage/>));
-  expect(container.textContent).toContain("暂无标准菜谱");
+  // 0.9.4 厨房卡压成一行入口后的空态文案。
+  // 0.9.4 第三轮：无菜谱时页头按钮不带菜名。
+  const recipeBtn = container.querySelector(".food-recipe-btn");
+  expect(recipeBtn?.textContent?.trim()).toBe("菜谱");
   await act(async () => root.render(<TodayPage goTo={() => undefined}/>));
   expect(button("确认该日完整").disabled).toBe(true);
 });

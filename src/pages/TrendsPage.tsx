@@ -30,7 +30,6 @@ import { useAppStore } from "../store/appStore";
 import { usePeriodSummary } from "../data/domainQueries";
 import { buildReview, RANGE_PRESETS, type RangePreset, type ReviewDay } from "../domain/review";
 import { ReviewCalendar } from "../components/ReviewCalendar";
-import { WeeklyDeltaGauge } from "../components/WeeklyDeltaGauge";
 import { isActiveWorkout } from "../domain/workouts";
 import { formatCm, formatPercent, formatWeight, girthDeltaText } from "../domain/body";
 import { readTrendsRange, writeTrendsRange } from "../domain/preferences";
@@ -120,6 +119,13 @@ export function TrendsPage({
   );
   const { metrics } = review;
   const [energyUnit] = useEnergyUnit();
+  // 区间完全无记录时不铺五张「数据不足」卡（0.9.4 身体页缩短）：一行空态带引导。
+  const rangeEmpty =
+    metrics.averageCalories === null &&
+    metrics.recordedDays === 0 &&
+    metrics.latestWeightKg === null &&
+    metrics.waist === null &&
+    metrics.workoutCount === 0;
 
   const chartData = days.map((day) => ({
     date: day.date.slice(5),
@@ -133,16 +139,20 @@ export function TrendsPage({
   const emptyDays = days.filter((day) => day.mealCount === 0).length;
 
   return (
-    <div className="page trends-page">
-      <PageHeader
-        eyebrow="只看确认过的事实"
-        title="阶段复盘"
-        description="把一段时间的热量、蛋白与体重均值放在一起看。所有判断都由本地规则算出，不接云端模型，也不构成健康评估。"
-        action={goTo && !embedded ? <button className="button secondary" onClick={() => goTo("body")}><Scale size={15}/> 查看身体记录</button> : undefined}
-      />
+    // 嵌入身体页标签时不再套 .page（BodyPage 已有页面内边距，嵌套会双重缩进导致 UI 无法对齐）。
+    <div className={embedded ? "trends-page" : "page trends-page"}>
+      {!embedded && (
+        <PageHeader
+          eyebrow="只看确认过的事实"
+          title="阶段复盘"
+          description="把一段时间的热量、蛋白与体重均值放在一起看。所有判断都由本地规则算出，不接云端模型，也不构成健康评估。"
+          action={goTo ? <button className="button secondary" onClick={() => goTo("body")}><Scale size={15}/> 查看身体记录</button> : undefined}
+        />
+      )}
 
       <div className="review-controls">
-        <DiaryDateControl date={date} onChange={onDateChange} />
+        {/* 嵌入身体页时不渲染日期控件：页头日期条就在上方，重复控件只会挤占版面。 */}
+        {!embedded && <DiaryDateControl date={date} onChange={onDateChange} />}
         <div className="range-tabs" role="group" aria-label="统计区间">
           {RANGE_PRESETS.map((preset) => (
             <button
@@ -226,6 +236,9 @@ export function TrendsPage({
         </p>
       )}
 
+      {rangeEmpty ? (
+        <p className="form-hint">区间内还没有任何记录——记一笔饮食或称一次重，这里会出现区间统计（热量、蛋白、体重、腰围、运动）。</p>
+      ) : (
       <div className="metric-row five">
         <Metric
           icon={<Flame />}
@@ -263,7 +276,7 @@ export function TrendsPage({
           label="区间腰围变化"
           value={
             metrics.waist === null
-              ? "区间内未量"
+              ? "—"
               : metrics.waist.change === null
                 ? formatCm(metrics.waist.latest)
                 : girthDeltaText(metrics.waist.change, " cm")
@@ -277,7 +290,7 @@ export function TrendsPage({
           }
           note={
             metrics.waist === null
-              ? "在「身体」页记一次腰围"
+              ? (embedded ? "区间内没有腰围记录" : "在「身体」页记一次腰围")
               : metrics.waist.change === null
                 ? `${metrics.waist.latestDate.slice(5)} 只有一次`
                 : `最新 ${formatCm(metrics.waist.latest)}${
@@ -292,8 +305,7 @@ export function TrendsPage({
           note={`共 ${Math.round(metrics.workoutMinutes)} 分钟 · 不抵扣饮食`}
         />
       </div>
-
-      <WeeklyDeltaGauge delta={metrics.weeklyDelta} minRate={metrics.safeMinRate} maxRate={metrics.safeMaxRate} />
+      )}
 
       <ReviewCalendar
         cells={review.calendar}
@@ -324,7 +336,7 @@ export function TrendsPage({
       />
 
       <section className="ui-card chart-card">
-        <div className="ui-card-heading compact">
+        <div className="card-heading compact">
           <div>
             <p className="eyebrow">图示摄入 · 完整日计均值</p>
             <h2>{spanDays} 天热量</h2>
@@ -335,16 +347,16 @@ export function TrendsPage({
             <ResponsiveContainer width="100%" height="100%">
               {spanDays <= 14 ? (
               <BarChart data={chartData}>
-                <CartesianGrid vertical={false} stroke="#e8ebe5" />
+                <CartesianGrid vertical={false} stroke="var(--ui-line)" />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} />
                 <YAxis axisLine={false} tickLine={false} />
                 <Tooltip />
-                <Bar dataKey="calories" name={`热量 ${energyUnitLabels[energyUnit]}`} fill="#d9a441" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="calories" name={`热量 ${energyUnitLabels[energyUnit]}`} fill="var(--ui-ink)" radius={[8, 8, 0, 0]} />
               </BarChart>
             ) : (
               // 30 天用柱会挤成一片，改折线，缺口（未知热量）自然断开。
               <LineChart data={chartData}>
-                <CartesianGrid vertical={false} stroke="#e8ebe5" />
+                <CartesianGrid vertical={false} stroke="var(--ui-line)" />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} interval="preserveStartEnd" />
                 <YAxis axisLine={false} tickLine={false} />
                 <Tooltip />
@@ -352,7 +364,7 @@ export function TrendsPage({
                   type="monotone"
                   dataKey="calories"
                   name={`热量 ${energyUnitLabels[energyUnit]}`}
-                  stroke="#d9a441"
+                  stroke="var(--ui-ink)"
                   strokeWidth={2.5}
                   dot={{ r: 2.5 }}
                   connectNulls={false}
@@ -379,14 +391,14 @@ export function TrendsPage({
         </p>
       </section>
 
-      <section className="ui-card review-notes">
-        <div className="ui-card-heading compact">
+      <details className="ui-card review-notes" open={review.verdicts.some((verdict) => verdict.level === "warn")}>
+        <summary className="card-heading compact review-notes-summary">
           <div>
             <p className="eyebrow">确定性规则 · 不接模型</p>
             <h2>复盘提示</h2>
           </div>
           <span className="calendar-total">{metrics.judgedDays} 天可判定</span>
-        </div>
+        </summary>
         <ul className="notes-list">
           {review.verdicts.map((verdict) => (
             <li key={verdict.title} className={`note-${verdict.level}`}>
@@ -403,7 +415,7 @@ export function TrendsPage({
         <p className="review-disclaimer">
           以上均为基于已有记录的算术结果，不构成健康评估，也不会自动修改你的目标。目标与方案由你自己决定。
         </p>
-      </section>
+      </details>
     </div>
   );
 }

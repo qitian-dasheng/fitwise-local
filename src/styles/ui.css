@@ -66,7 +66,7 @@
 .ui-trend-bars .day .bar { flex: 1; width: 100%; max-width: 22px; margin: 0 auto; display: flex; flex-direction: column; justify-content: flex-end; }
 .ui-trend-bars .day .bar i { display: block; width: 100%; height: 100%; border-radius: 4px 4px 2px 2px; background: var(--ui-line-2); }
 .ui-trend-bars .day.hot .bar i { background: var(--ui-primary); }
-.ui-trend-bars .day em { font-style: normal; font-size: 9.5px; color: var(--ui-faint); font-variant-numeric: tabular-nums; flex: none; }
+.ui-trend-bars .day em { font-style: normal; font-size: 10px; color: var(--ui-faint); font-variant-numeric: tabular-nums; flex: none; }
 
 /* ── 明细行 / chips ─────────────────────────────────────── */
 .ui-bottom { display: grid; grid-template-columns: 1.5fr 1fr; gap: 12px; }
@@ -141,7 +141,7 @@ body { background: var(--ui-bg); }
 .app-shell .collapse-button { border-color: var(--ui-line); color: var(--ui-muted); background: var(--ui-card); }
 .ui-theme-toggle { all: unset; display: flex; align-items: center; justify-content: center; gap: 8px; height: 30px; margin: 0 10px 6px; border: 1px solid var(--ui-line); border-radius: 8px; font-size: 11.5px; color: var(--ui-muted); cursor: pointer; }
 .ui-theme-toggle:hover { color: var(--ui-ink); border-color: var(--ui-line-2); }
-/* 主内容滚动条区域的过渡态：遗留白卡浮在 --ui-bg 画布上属预期，深层组件逐步迁移 */
+/* 主内容滚动条区域：0.9.4 起 styles.css 全量 --ui-* 令牌化，legacy 卡片同样跟随主题 */
 
 /* 导出回执（0.9.3 精简版）：文件名+字节数为主，完整信息收进展开 */
 .export-receipt { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--ui-sunken); font-size: 12.5px; color: var(--ui-ink-2); }
