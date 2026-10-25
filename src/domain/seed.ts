@@ -35,6 +35,7 @@ export const initialState: AppState = {
   recipes: [],
   auditEvents: [],
   pantryItems: [],
+  catalogTombstones: [],
 };
 
 /** Desktop onboarding starts without fictional health records. */

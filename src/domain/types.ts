@@ -46,6 +46,9 @@ export interface FoodDefinition {
   measurementBasis: FoodMeasurementBasis;
   activeVersionId: string;
   favorite: boolean;
+  /** 内置目录条目（0.11.0）：catalog-<catalogId>；修改生成个人副本，原条目保留。 */
+  catalogId?: string;
+  category?: string;
   /** 归档：从日常挑选入口隐藏；历史记录与菜谱快照不受影响。旧数据缺省为未归档。 */
   archived?: boolean;
   createdAt: string;
@@ -261,6 +264,8 @@ export interface AppState {
   auditEvents: AuditEvent[];
   /** 食物柜（0.9.4 库存轻量版）：家里有什么、快没了没；与饮食记录解耦，不自动扣减。 */
   pantryItems: PantryItem[];
+  /** 内置目录墓碑（0.11.0）：用户删除过的目录条目 catalogId，升级不复活。由 Rust 维护。 */
+  catalogTombstones: string[];
 }
 
 /** 食物柜条目：挂食材库定义；同一定义只有一条（数量增减，不叠条目）。 */

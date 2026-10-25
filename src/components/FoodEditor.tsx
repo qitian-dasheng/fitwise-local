@@ -47,17 +47,22 @@ export function FoodIdentityEditor({ item, action, onSaved, onCancel }: { item: 
  * - page：食材库独立页的全页两栏布局，能量单位与来源并排（OBS-003），营养表独立成栏。
  */
 export function FoodEditor({ item, action, onSaved, onCancel, layout = "modal" }: { item?: FoodLibraryItem; action: ReturnType<typeof useConfirmedAction>; onSaved: (foodId: string) => void; onCancel: () => void; layout?: "modal" | "page" }) {
+  // 0.11.0：目录条目编辑 = fork 成个人副本（新 id、无 catalogId），原目录条目保留。
+  const forkCatalog = item?.definition.catalogId !== undefined;
+  const effectiveItem = forkCatalog ? undefined : item;
+  const prefilled = forkCatalog ? item : undefined;
   const [name, setName] = useState(item?.definition.name ?? "");
   const [brand, setBrand] = useState(item?.definition.brand ?? "");
   const [measurementBasis, setMeasurementBasis] = useState<FoodDefinitionInput["measurementBasis"]>(item?.definition.measurementBasis ?? "packaged");
   const [basisQuantity, setBasisQuantity] = useState(String(item?.version.basis.quantity ?? 100));
   const [basisUnit, setBasisUnit] = useState<FoodUnit>(item?.version.basis.unit ?? "g");
   const [energyUnit, setEnergyUnit] = useState<"kcal" | "kJ">(item?.version.energyUnit ?? "kcal");
-  const [source, setSource] = useState<FoodDefinitionInput["source"]>(item?.version.source ?? "label");
+  const [source, setSource] = useState<FoodDefinitionInput["source"]>(forkCatalog ? "personal" : (item?.version.source ?? "label"));
   const [values, setValues] = useState<Record<string, string>>(Object.fromEntries(nutrientKeys.map((key) => [key, item?.version.labelNutrients[key] === undefined ? "" : String(item.version.labelNutrients[key])])));
   const [conversions, setConversions] = useState((item?.version.conversions ?? []).map((conversion) => ({ unit: conversion.unit, quantity: String(conversion.quantity), basisQuantity: String(conversion.basisQuantity) })));
   const [confirmed, setConfirmed] = useState(false);
   const save = useAppStore((state) => state.saveFoodDefinition);
+  const reviseItem = forkCatalog ? undefined : item;
   const nutrientFields = (
     <div className="form-grid nutrient-grid">{nutrientKeys.map((key) => <label key={key}><span>{nutrientLabels[key]}（{key === "calories" ? energyUnit : key === "sodium" ? "mg" : "g"}，可留空）</span><input type="number" min="0" step="any" value={values[key]} onChange={(event) => setValues({ ...values, [key]: event.target.value })}/></label>)}</div>
   );
@@ -70,9 +75,10 @@ export function FoodEditor({ item, action, onSaved, onCancel, layout = "modal" }
   const submitInput = (): FoodDefinitionInput => ({ name, brand: brand || undefined, measurementBasis, basis: { quantity: Number(basisQuantity), unit: basisUnit }, energyUnit, nutrients: Object.fromEntries(nutrientKeys.filter((key) => values[key] !== "").map((key) => [key, Number(values[key])])), conversions: conversions.map((conversion) => ({ unit: conversion.unit, quantity: Number(conversion.quantity), basisQuantity: Number(conversion.basisQuantity) })), source });
   const identityFields = (
     <>
-      <div className="form-grid"><label><span>食物名称</span><input required maxLength={120} disabled={!!item} value={name} onChange={(event) => setName(event.target.value)} placeholder="例如 原味燕麦片"/></label><label><span>品牌（可选）</span><input maxLength={120} disabled={!!item} value={brand} onChange={(event) => setBrand(event.target.value)} placeholder="不同品牌分别保存"/></label></div>
-      <label><span>食物状态</span><select disabled={!!item} value={measurementBasis} onChange={(event) => setMeasurementBasis(event.target.value as FoodDefinitionInput["measurementBasis"])}>{Object.entries(foodBasisLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      {item && <p className="form-hint">将保存为 v{item.version.version + 1}。历史餐食和旧版本保持不变；更换品牌或生熟状态请新建食物。</p>}
+      <div className="form-grid"><label><span>食物名称</span><input required maxLength={120} disabled={!!item && !forkCatalog} value={name} onChange={(event) => setName(event.target.value)} placeholder="例如 原味燕麦片"/></label><label><span>品牌（可选）</span><input maxLength={120} disabled={!!item && !forkCatalog} value={brand} onChange={(event) => setBrand(event.target.value)} placeholder="不同品牌分别保存"/></label></div>
+      <label><span>食物状态</span><select disabled={!!item && !forkCatalog} value={measurementBasis} onChange={(event) => setMeasurementBasis(event.target.value as FoodDefinitionInput["measurementBasis"])}>{Object.entries(foodBasisLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      {item && !forkCatalog && <p className="form-hint">将保存为 v{item.version.version + 1}。历史餐食和旧版本保持不变；更换品牌或生熟状态请新建食物。</p>}
+      {forkCatalog && <p className="form-hint">保存后将生成一份个人食材副本（可自由改名）；内置目录原条目保持不变。</p>}
       <div className="form-grid"><label><span>标签参考数量</span><input required type="number" min="0" step="any" value={basisQuantity} onChange={(event) => setBasisQuantity(event.target.value)}/></label><label><span>参考单位</span><select value={basisUnit} onChange={(event) => { setBasisUnit(event.target.value as FoodUnit); setConversions([]); }}>{Object.entries(foodUnitLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
     </>
   );
@@ -84,7 +90,7 @@ export function FoodEditor({ item, action, onSaved, onCancel, layout = "modal" }
   );
   return <form className="form" onSubmit={async (event) => {
     event.preventDefault();
-    const result = await action.run(JSON.stringify(submitInput()), (id) => save(submitInput(), item?.definition.id, item?.version.id, id));
+    const result = await action.run(JSON.stringify(submitInput()), (id) => save(submitInput(), reviseItem?.definition.id, reviseItem?.version.id, id));
     if (!result.error && result.foodId) onSaved(result.foodId);
   }}>
     <fieldset className="library-fields" disabled={action.busy}>

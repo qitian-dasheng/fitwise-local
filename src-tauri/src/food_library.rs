@@ -444,6 +444,10 @@ pub(crate) fn apply(
             array_mut(state, "foodDefinitions")?.retain(|food| food["id"] != food_id);
             array_mut(state, "foodDefinitionVersions")?
                 .retain(|version| version["foodId"].as_str() != Some(food_id));
+            // 内置目录条目删除时登记墓碑（0.11.0）：目录升级不复活已删除条目。
+            if let Some(catalog_id) = definition["catalogId"].as_str() {
+                crate::food_catalog::record_catalog_tombstone(state, catalog_id);
+            }
             json!({
                 "foodId": food_id,
                 "deletedDefinition": definition,
