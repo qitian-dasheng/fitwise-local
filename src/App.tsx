@@ -4,6 +4,8 @@ import { Component, lazy, Suspense, useEffect, useLayoutEffect, useState, useSyn
 import { useAppStore } from "./store/appStore";
 import { diaryToday } from "./domain/diary";
 import { getStorageFailure, subscribeStorageFailure } from "./data/storage";
+import { useSilentUpdateCheck } from "./hooks/useSilentUpdateCheck";
+import { useTheme } from "./hooks/useTheme";
 import type { MealType } from "./domain/types";
 
 const TodayPage = lazy(() => import("./pages/TodayPage").then((module) => ({ default: module.TodayPage })));
@@ -68,6 +70,10 @@ export default function App() {
   const hydrated = useAppStore.persist.hasHydrated();
   const storageFailure = useSyncExternalStore(subscribeStorageFailure, getStorageFailure);
   const [, forceRender] = useState(0);
+  // 主题（0.9.3 起）：把偏好挂到 <html data-theme>，--ui-* 令牌层随之切换；侧栏底部提供快捷切换。
+  const [theme, setTheme] = useTheme();
+  // 启动静默检查更新（设置页可关）：失败静默，绝不因更新打扰记录。
+  useSilentUpdateCheck();
   useEffect(() => useAppStore.persist.onFinishHydration(() => forceRender((value) => value + 1)), []);
   useLayoutEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -141,7 +147,7 @@ export default function App() {
           <div className="nav-tool-label">工具</div>
           {toolItems.map((item) => <button key={item.id} className={page === item.id ? "active" : ""} onClick={() => setPage(item.id)} title={item.label}><item.icon size={19}/><span>{item.label}</span></button>)}
         </nav>
-        <div className="sidebar-bottom"><div className="profile-mini"><div>{profile.name.slice(0, 1)}</div><span><strong>{profile.name}</strong><small>本地账户</small></span></div></div>
+        <div className="sidebar-bottom"><button className="ui-theme-toggle" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="切换浅色/深色主题">{theme === "dark" ? "☀ 浅色" : "◑ 深色"}</button><div className="profile-mini"><div>{profile.name.slice(0, 1)}</div><span><strong>{profile.name}</strong><small>本地账户</small></span></div></div>
         <button className="collapse-button" onClick={() => setCollapsed((value) => !value)}>{collapsed ? <ChevronRight size={16}/> : <ChevronLeft size={16}/>}</button>
       </aside>
       <main className="main-content">{storageFailure && <div className="settings-notice card" role="alert">保存状态异常：{storageFailure}。请保留输入，不要重置数据。</div>}<PageErrorBoundary><Suspense fallback={<div className="page page-loading"><Wheat size={28}/><span>正在加载页面…</span></div>}><PageScrollReset key={page}/>{content}</Suspense></PageErrorBoundary></main>

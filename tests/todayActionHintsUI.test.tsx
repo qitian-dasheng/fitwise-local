@@ -46,9 +46,10 @@ function meal(id: string, date: string, type: MealType): MealEntry {
     createdAt: `${date}T08:00:00+08:00`,
   } as unknown as MealEntry;
 }
-const quickAction = (label: string) =>
-  [...container.querySelectorAll<HTMLButtonElement>(".quick-action")].find((item) => item.textContent?.includes(label))!;
-const hintOf = (label: string) => quickAction(label).querySelector(".quick-hint")?.textContent;
+const headerButton = (label: string) =>
+  [...container.querySelectorAll<HTMLButtonElement>(".ui-page-head button, .ui-bottom button")].find((item) => item.textContent?.includes(label))!;
+const weighTitle = () => headerButton("称重").getAttribute("title");
+const workoutHint = () => [...container.querySelectorAll(".ui-panel-head")].find((item) => item.textContent?.includes("这一天感觉怎么样"))?.querySelector("span")?.textContent;
 
 it("renders every quick hint from the stored records instead of hardcoded copy", async () => {
   const date = diaryToday();
@@ -61,12 +62,12 @@ it("renders every quick hint from the stored records instead of hardcoded copy",
   });
   await act(async () => root.render(<TodayPage goTo={() => undefined}/>));
 
-  expect(hintOf("吃了什么")).toBe("午餐还没记");
-  expect(hintOf("练了什么")).toBe("上次 哑铃循环 · 35 分钟");
-  expect(hintOf("称了多少")).toBe("今晨还没称重");
-  // 0.6.1 之前这三条是写死的假数据，任何一条回来都算回归。
-  expect(container.querySelector(".quick-actions")!.textContent).not.toContain("照搬上次早餐");
-  expect(container.querySelector(".quick-actions")!.textContent).not.toContain("上次 22 分钟");
+  // 方向 D：吃了什么的提示进「记一笔」的直达餐次，称重提示进按钮 title，运动提示在主观状态卡头。
+  expect(weighTitle()).toBe("今晨还没称重");
+  expect(workoutHint()).toBe("上次 哑铃循环 · 35 分钟");
+  // 0.6.1 之前这些是写死的假数据，任何一条回来都算回归。
+  expect(container.textContent).not.toContain("照搬上次早餐");
+  expect(container.textContent).not.toContain("上次 22 分钟");
 });
 
 it("tells the truth after the record changes, including the all-recorded and weighed states", async () => {
@@ -78,9 +79,8 @@ it("tells the truth after the record changes, including the all-recorded and wei
   });
   await act(async () => root.render(<TodayPage goTo={() => undefined}/>));
 
-  expect(hintOf("吃了什么")).toBe("四餐都已记录");
-  expect(hintOf("练了什么")).toBe("今日已记 22 分钟");
-  expect(hintOf("称了多少")).toBe("已记 83.8 kg");
+  expect(weighTitle()).toBe("已记 83.8 kg");
+  expect(workoutHint()).toBe("今日已记 22 分钟");
 });
 
 it("passes the pending meal slot to the quick action so the form opens on the right meal", async () => {
@@ -89,9 +89,9 @@ it("passes the pending meal slot to the quick action so the form opens on the ri
   const calls: Array<[string, MealType | undefined]> = [];
   await act(async () => root.render(<TodayPage goTo={() => undefined} onQuickAction={(kind, mealType) => calls.push([kind, mealType])}/>));
 
-  await act(async () => quickAction("吃了什么").click());
-  expect(calls).toEqual([["food", "dinner"]]);
-  await act(async () => quickAction("练了什么").click());
+  await act(async () => headerButton("记一笔").click());
+  expect(calls.at(-1)).toEqual(["food", "dinner"]);
+  await act(async () => headerButton("记运动").click());
   expect(calls.at(-1)).toEqual(["workout", undefined]);
 });
 

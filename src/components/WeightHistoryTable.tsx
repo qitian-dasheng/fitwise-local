@@ -23,8 +23,8 @@ export function WeightHistoryTable({
   const rows = measurementRows(measurements);
 
   return (
-    <section className="card body-history">
-      <div className="card-heading compact">
+    <section className="ui-card body-history">
+      <div className="ui-card-heading compact">
         <div>
           <p className="eyebrow">含已更正与已作废，可随时回查</p>
           <h2>全部记录</h2>

@@ -1,9 +1,7 @@
-import { diaryToday, type DiaryDateProps } from "../domain/diary";
-import { DiaryDateControl } from "../components/DiaryDateControl";
-import { Activity, Clock3, Dumbbell, Flame, HeartPulse, Plus } from "lucide-react";
+import { diaryToday, shiftDiaryDate, type DiaryDateProps } from "../domain/diary";
+import { Activity, ChevronLeft, ChevronRight, Clock3, Dumbbell, Flame, HeartPulse, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Modal } from "../components/Modal";
-import { PageHeader } from "../components/PageHeader";
 import { useAppStore } from "../store/appStore";
 import type { WorkoutSession } from "../domain/types";
 import { useConfirmedAction } from "../components/useConfirmedAction";
@@ -46,12 +44,24 @@ export function WorkoutPage({ date = diaryToday(), onDateChange, autoOpen, onAut
   const avgHeartRate = heartMinutes ? heartWorkouts.reduce((sum, item) => sum + item.averageHeartRate! * item.durationMinutes, 0) / heartMinutes : 0;
   const calorieCount = workouts.filter((item) => item.caloriesKcal != null).length;
   const inactiveCount = dayWorkouts.length - workouts.length;
-  return <div className="page">
-    <PageHeader eyebrow="消耗独立展示" title="运动记录" description="运动热量不会增加饮食额度。当前支持手工记录；Keep 截图自动识别尚未接通。" action={<button className="button primary" onClick={() => setOpen(true)}><Plus size={17}/> 记录运动</button>}/>
-    <DiaryDateControl date={date} onChange={onDateChange}/>
-    <p className="form-hint">仅统计 {date} 的有效记录：热量已知 {calorieCount}/{workouts.length} 次；平均心率按已知记录时长加权，不是逐秒测量。{inactiveCount > 0 ? `另有 ${inactiveCount} 条已更正或作废，不计入统计。` : ""}</p>
+  return <div className="page" style={{ display: "flex", flexDirection: "column", gap: 13, flex: 1, minHeight: 0 }}>
+    <header className="ui-page-head">
+      <div>
+        <div className="date">消耗独立展示 · 运动热量不会增加饮食额度</div>
+        <h1>运动记录</h1>
+      </div>
+      <div className="actions" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="ui-datestrip">
+          <button className="ui-navbtn" aria-label="前一天" onClick={() => onDateChange?.(shiftDiaryDate(date, -1))}><ChevronLeft size={15} /></button>
+          <input type="date" aria-label="查看日期" value={date} onChange={(event) => event.target.value && onDateChange?.(event.target.value)} style={{ all: "unset", cursor: "pointer", font: "inherit", color: "var(--ui-ink-2)" }} />
+          <button className="ui-navbtn" aria-label="后一天" disabled={date >= diaryToday()} onClick={() => onDateChange?.(shiftDiaryDate(date, 1))}><ChevronRight size={15} /></button>
+        </div>
+        <button className="ui-btn primary" onClick={() => setOpen(true)}><Plus size={15}/> 记录运动</button>
+      </div>
+    </header>
+    <p className="ui-chart-foot" style={{ marginTop: 0, paddingTop: 0 }}>仅统计 {date} 的有效记录：热量已知 {calorieCount}/{workouts.length} 次；平均心率按已知记录时长加权，不是逐秒测量。{inactiveCount > 0 ? `另有 ${inactiveCount} 条已更正或作废，不计入统计。` : ""}</p>
     <div className="metric-row"><Metric icon={<Clock3/>} label="所选日时长" value={`${totalMinutes} 分钟`}/><Metric icon={<Flame/>} label="运动消耗" value={calorieCount ? `${Math.round(toDisplayEnergy(totalCalories, energyUnit))} ${energyUnitLabels[energyUnit]}${calorieCount < workouts.length ? "（部分已知）" : ""}` : "未知"}/><Metric icon={<HeartPulse/>} label="时长加权心率" value={avgHeartRate ? `${Math.round(avgHeartRate)} 次/分` : "暂无"}/><Metric icon={<Activity/>} label="训练次数" value={`${workouts.length} 次`}/></div>
-    <section className="card workout-list"><div className="card-heading compact"><div><p className="eyebrow">训练历史</p><h2>本日记录</h2></div></div>    {dayWorkouts.length ? dayWorkouts.slice().reverse().map((item) => {
+    <section className="ui-card workout-list"><div className="ui-panel-head"><h2>本日记录</h2><span>含更正与作废，可回查</span></div>    {dayWorkouts.length ? dayWorkouts.slice().reverse().map((item) => {
       const active = isActiveWorkout(item);
       // 旧行也给撤销入口：更正时改过日期的话，新行会跑到另一天去。
       const undoHead = active ? null : undoHeadFor(item, allWorkouts);

@@ -83,13 +83,9 @@ export type EnergyUnitPref = "kcal" | "kJ";
 const ENERGY_UNIT_PREFS: readonly EnergyUnitPref[] = ["kcal", "kJ"];
 
 export function readEnergyUnit(): EnergyUnitPref {
-  try {
-    const raw = window.localStorage.getItem(ENERGY_UNIT_KEY);
-    // 白名单外（含 null）一律回落默认 kcal；手改过的值不能接管换算。
-    return ENERGY_UNIT_PREFS.includes(raw as EnergyUnitPref) ? (raw as EnergyUnitPref) : "kcal";
-  } catch {
-    return "kcal";
-  }
+  // 0.9.3 板块盘点（用户决策）：显示单位固定 kcal——kJ 录入路径自动换算入库，
+  // 显示偏好卡整卡删除；遗留 localStorage 值一律忽略，防止老用户永远卡在 kJ。
+  return "kcal";
 }
 
 export function writeEnergyUnit(unit: EnergyUnitPref): void {
@@ -97,5 +93,53 @@ export function writeEnergyUnit(unit: EnergyUnitPref): void {
     window.localStorage.setItem(ENERGY_UNIT_KEY, unit);
   } catch {
     // 写不进去也要让本次会话的单位照常生效。
+  }
+}
+
+/**
+ * 启动时静默检查更新（0.9.3 起）。默认开：更新检查是本应用唯一的网络行为（README 隐私声明同口径），
+ * 用户可在设置页关闭。存 localStorage，与能量单位同一纪律：不进 AppState、不写领域库。
+ */
+export const UPDATE_SILENT_CHECK_KEY = "qingheng.updates.silent-check";
+
+export function readUpdateSilentCheck(): boolean {
+  try {
+    // 显式写 0 才算关；从未设置 = 默认开。
+    return window.localStorage.getItem(UPDATE_SILENT_CHECK_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+export function writeUpdateSilentCheck(enabled: boolean): void {
+  try {
+    window.localStorage.setItem(UPDATE_SILENT_CHECK_KEY, enabled ? "1" : "0");
+  } catch {
+    // 写失败时本次会话的开关状态照常生效。
+  }
+}
+
+/**
+ * 界面主题（0.9.3 起，方向 D 双令牌层）。light 为默认；dark 依赖 [data-theme="dark"]。
+ * 与其他界面偏好同一纪律：只存 localStorage，不进 AppState、不写领域库、不参与导出。
+ */
+export const THEME_KEY = "qingheng.display.theme";
+
+export type ThemePref = "light" | "dark";
+
+export function readTheme(): ThemePref {
+  try {
+    const raw = window.localStorage.getItem(THEME_KEY);
+    return raw === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
+export function writeTheme(theme: ThemePref): void {
+  try {
+    window.localStorage.setItem(THEME_KEY, theme);
+  } catch {
+    // 写失败时本次会话的主题照常生效。
   }
 }

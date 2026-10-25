@@ -30,7 +30,9 @@ it("uses the native save dialog and verified backend write, not a browser downlo
   await act(async () => root.render(<DataExportPanel/>)); await click(0);
   expect(save).toHaveBeenCalledOnce();
   expect(invoke).toHaveBeenCalledExactlyOnceWith("write_json_export", { outputPath: "C:\\private\\new.json", raw: JSON.stringify(database, null, 2) });
-  expect(host.textContent).toContain("已写入并回读校验"); expect(host.querySelector("a")).toBeNull();
+  expect(host.textContent).toContain("已导出 ✓ new.json（80 字节，回读校验通过）");
+  expect(host.querySelector("details")?.textContent).toContain("C:\\private\\new.json");
+  expect(host.querySelector("a")).toBeNull();
 });
 
 it("preserves separate-day morning weights and excludes credential-shaped extra properties", () => {

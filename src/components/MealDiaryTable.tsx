@@ -71,7 +71,7 @@ export function MealDiaryTable({
       : { tone: "success", label: "数据完整" };
 
   return (
-    <section className="card diary-card">
+    <section className="ui-card diary-card">
       <div className="card-heading compact">
         <div>
           <p className="eyebrow">{date} 明细</p>

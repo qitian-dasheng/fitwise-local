@@ -5,7 +5,6 @@ import { findFoodItem, foodBasisLabels, foodUnitLabels, nutrientLabel } from "..
 import type { FoodLibraryItem } from "../domain/types";
 import { useAppStore } from "../store/appStore";
 import { useFoodPicker } from "../store/foodPicker";
-import { PageHeader } from "../components/PageHeader";
 import { useConfirmedAction } from "../components/useConfirmedAction";
 import { FoodEditor, FoodIdentityEditor } from "../components/FoodEditor";
 import { useEnergyUnit } from "../hooks/useEnergyUnit";
@@ -43,12 +42,15 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
     const savedName = editing === "new" ? "" : editing.definition.name;
     return (
       <div className="page food-library-page">
-        <PageHeader
-          eyebrow="营养资料 · 保存不记餐"
-          title={editing === "new" ? "新建食物" : `修订 ${savedName}`}
-          description="对着包装标签转录营养值；留空是未知，明确填 0 才是零。修订生成新版本，历史餐食保持当时的快照。"
-          action={<button className="button secondary" onClick={() => { action.setMessage(""); setEditing(null); }}><ArrowLeft size={15}/> 返回食材库</button>}
-        />
+        <header className="ui-page-head">
+          <div>
+            <div className="date">营养资料 · 保存不记餐 · 留空是未知，明确填 0 才是零</div>
+            <h1>{editing === "new" ? "新建食物" : `修订 ${savedName}`}</h1>
+          </div>
+          <div className="actions" style={{ display: "flex", gap: 8 }}>
+            <button className="ui-btn" onClick={() => { action.setMessage(""); setEditing(null); }}><ArrowLeft size={15}/> 返回食材库</button>
+          </div>
+        </header>
         {fromPicker && <p className="library-notice">从记餐转来：保存后可一键返回饮食页，待确认篮子仍在。</p>}
         <section className="card">
           <FoodEditor
@@ -86,12 +88,15 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
   if (identity) {
     return (
       <div className="page food-library-page">
-        <PageHeader
-          eyebrow="营养资料 · 纠错"
-          title={`纠错 ${identity.definition.name}`}
-          description="只更正名称与品牌；营养规格与历史记录不被改写。"
-          action={<button className="button secondary" onClick={() => { action.setMessage(""); setIdentity(null); }}><ArrowLeft size={15}/> 返回食材库</button>}
-        />
+        <header className="ui-page-head">
+          <div>
+            <div className="date">营养资料 · 纠错 · 只更正名称与品牌，营养规格与历史记录不被改写</div>
+            <h1>纠错 {identity.definition.name}</h1>
+          </div>
+          <div className="actions" style={{ display: "flex", gap: 8 }}>
+            <button className="ui-btn" onClick={() => { action.setMessage(""); setIdentity(null); }}><ArrowLeft size={15}/> 返回食材库</button>
+          </div>
+        </header>
         <section className="card">
           <FoodIdentityEditor
             item={identity}
@@ -107,18 +112,17 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
 
   return (
     <div className="page food-library-page">
-      <PageHeader
-        eyebrow="营养资料 · 本地资产库"
-        title="食材库"
-        description="一次建档、长期复用。修订生成新版本；归档从日常挑选隐藏；未被引用的食材可永久删除。"
-        action={<button className="button primary" onClick={() => { action.setMessage(""); setEditing("new"); }}><Plus size={16}/> 新建食物</button>}
-      />
+      <header className="ui-page-head">
+        <div>
+          <div className="date">营养资料 · 本地资产库 · 一次建档、长期复用；修订生成新版本，未被引用可删</div>
+          <h1>食材库</h1>
+        </div>
+        <div className="actions" style={{ display: "flex", gap: 8 }}>
+          {returnTicket && goTo && <button className="ui-btn" onClick={() => goTo("food")}><UtensilsCrossed size={15}/> 返回记餐（篮子已保留）</button>}
+          <button className="ui-btn primary" onClick={() => { action.setMessage(""); setEditing("new"); }}><Plus size={16}/> 新建食物</button>
+        </div>
+      </header>
       {notice && <p className="library-notice" role="status">{notice}</p>}
-      {returnTicket && goTo && (
-        <p className="library-notice">
-          <button className="button primary" onClick={() => goTo("food")}><UtensilsCrossed size={15}/> 返回记餐（篮子已保留）</button>
-        </p>
-      )}
       <div className="library-toolbar">
         <label className="library-search"><Search size={17}/><input aria-label="搜索食物或品牌" placeholder="搜索食物名称或品牌" value={query} onChange={(event) => setQuery(event.target.value)}/></label>
       </div>

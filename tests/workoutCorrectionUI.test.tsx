@@ -79,7 +79,7 @@ it("shows an empty state and counts only active records", async () => {
   ]);
   expect(card("所选日时长").textContent).toContain("22 分钟");
   expect(card("训练次数").textContent).toContain("1 次");
-  expect(host.querySelector(".form-hint")?.textContent).toContain("另有 1 条已更正或作废");
+  expect(host.querySelector(".ui-chart-foot")?.textContent).toContain("另有 1 条已更正或作废");
 });
 
 it("keeps inactive rows visible with their reason and no action buttons", async () => {

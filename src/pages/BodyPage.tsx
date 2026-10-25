@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-import { Activity, CalendarCheck, Percent, Ruler, Scale } from "lucide-react";
+import { Activity, CalendarCheck, ChevronLeft, ChevronRight, Percent, Ruler, Scale } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { DiaryDateControl } from "../components/DiaryDateControl";
-import { PageHeader } from "../components/PageHeader";
 import { WeightCorrectionModal } from "../components/WeightCorrectionModal";
 import { WeightHistoryTable } from "../components/WeightHistoryTable";
 import { useConfirmedAction } from "../components/useConfirmedAction";
@@ -117,22 +115,26 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   const fatSeries = circumferenceSeries("bodyFatPercent");
 
   return (
-    <div className="page body-page">
-      <PageHeader
-        eyebrow="身体记录"
-        title="身体"
-        description="同一天可以记录多次；趋势默认取当日最新一次，也可以手动指定当天代表值。"
-      />
-      <DiaryDateControl date={date} onChange={onDateChange} />
-      <p className="form-hint">统计区间 {start} 至 {date}。旧记录没有保存称重时刻时显示「未标注」，不会拿入库时间顶替。</p>
-
-      <section className="card body-entry">
-        <div className="card-heading compact">
-          <div>
-            <p className="eyebrow">两次称重之间不要更换衣着与时间</p>
-            <h2>记录一次称重</h2>
+    <div className="page body-page" style={{ display: "flex", flexDirection: "column", gap: 13, flex: 1, minHeight: 0 }}>
+      <header className="ui-page-head">
+        <div>
+          <div className="date">身体记录 · 同一天可多次，趋势取当日最新</div>
+          <h1>身体</h1>
+        </div>
+        <div className="actions" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div className="ui-datestrip">
+            <button className="ui-navbtn" aria-label="前一天" onClick={() => onDateChange?.(shiftDiaryDate(date, -1))}><ChevronLeft size={15} /></button>
+            <input type="date" aria-label="查看日期" value={date} onChange={(event) => event.target.value && onDateChange?.(event.target.value)} style={{ all: "unset", cursor: "pointer", font: "inherit", color: "var(--ui-ink-2)" }} />
+            <button className="ui-navbtn" aria-label="后一天" disabled={date >= diaryToday()} onClick={() => onDateChange?.(shiftDiaryDate(date, 1))}><ChevronRight size={15} /></button>
           </div>
-          <span className="status-pill neutral">两位小数</span>
+        </div>
+      </header>
+      <p className="ui-chart-foot" style={{ marginTop: 0, paddingTop: 0 }}>统计区间 {start} 至 {date}。旧记录没有保存称重时刻时显示「未标注」，不会拿入库时间顶替。</p>
+
+      <section className="ui-card body-entry">
+        <div className="ui-panel-head">
+          <h2>记录一次称重</h2>
+          <span className="ui-badge flat">两位小数 · 两次称重之间不要更换衣着与时间</span>
         </div>
         <form
           className="body-entry-form"
@@ -287,12 +289,10 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
         />
       </div>
 
-      <section className="card chart-card">
-        <div className="card-heading compact">
-          <div>
-            <p className="eyebrow">近 14 天 · 虚线为每次称重，实线为七日移动平均</p>
-            <h2>体重趋势</h2>
-          </div>
+      <section className="ui-card chart-card">
+        <div className="ui-panel-head">
+          <h2>体重趋势</h2>
+          <span>近 14 天 · 虚线为每次称重，实线为七日移动平均</span>
         </div>
         <div className="chart-large">
           {chartData.length > 0 ? (
@@ -300,23 +300,23 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="bodyWeightFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor="#276a53" stopOpacity={0.25} />
-                    <stop offset="1" stopColor="#276a53" stopOpacity={0} />
+                    <stop offset="0" stopColor="var(--ui-ink)" stopOpacity={0.25} />
+                    <stop offset="1" stopColor="var(--ui-ink)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid vertical={false} stroke="#e8ebe5" />
+                <CartesianGrid vertical={false} stroke="var(--ui-line)" />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} />
                 <YAxis domain={yDomain} axisLine={false} tickLine={false} />
                 <Tooltip />
                 {/* 只有一个点时面积线会隐形，散点必须保留标记 */}
-                <Area type="monotone" dataKey="weight" stroke="#b6bcb4" fill="none" strokeDasharray="4 4" dot={{ r: 2.5 }} />
-                <Area type="monotone" dataKey="average" stroke="#276a53" strokeWidth={3} fill="url(#bodyWeightFill)" />
+                <Area type="monotone" dataKey="weight" stroke="var(--ui-faint)" fill="none" strokeDasharray="4 4" dot={{ r: 2.5 }} />
+                <Area type="monotone" dataKey="average" stroke="var(--ui-ink)" strokeWidth={3} fill="url(#bodyWeightFill)" />
                 {profile.targetWeightKg > 0 && (
                   <ReferenceLine
                     y={profile.targetWeightKg}
-                    stroke="#9aa19b"
+                    stroke="var(--ui-faint)"
                     strokeDasharray="6 4"
-                    label={{ value: `目标 ${formatWeight(profile.targetWeightKg)} kg`, position: "insideTopRight", fontSize: 11, fill: "#5f665f" }}
+                    label={{ value: `目标 ${formatWeight(profile.targetWeightKg)} kg`, position: "insideTopRight", fontSize: 11, fill: "var(--ui-muted)" }}
                   />
                 )}
               </AreaChart>
@@ -357,11 +357,11 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
               <div className="chart-large girth-chart">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={waistSeries}>
-                    <CartesianGrid vertical={false} stroke="#e8ebe5" />
+                    <CartesianGrid vertical={false} stroke="var(--ui-line)" />
                     <XAxis dataKey="date" axisLine={false} tickLine={false} />
                     <YAxis domain={["dataMin - 1", "dataMax + 1"]} axisLine={false} tickLine={false} />
                     <Tooltip />
-                    <Area type="monotone" dataKey="value" name="腰围 cm" stroke="#2c5a7c" strokeWidth={2.5} fill="none" dot={{ r: 2 }} />
+                    <Area type="monotone" dataKey="value" name="腰围 cm" stroke="var(--ui-ink)" strokeWidth={2.5} fill="none" dot={{ r: 2 }} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -379,11 +379,11 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
               <div className="chart-large girth-chart">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={fatSeries}>
-                    <CartesianGrid vertical={false} stroke="#e8ebe5" />
+                    <CartesianGrid vertical={false} stroke="var(--ui-line)" />
                     <XAxis dataKey="date" axisLine={false} tickLine={false} />
                     <YAxis domain={["dataMin - 1", "dataMax + 1"]} axisLine={false} tickLine={false} />
                     <Tooltip />
-                    <Area type="monotone" dataKey="value" name="体脂 %" stroke="#8a6100" strokeWidth={2.5} fill="none" dot={{ r: 2 }} />
+                    <Area type="monotone" dataKey="value" name="体脂 %" stroke="var(--ui-ink)" strokeWidth={2.5} fill="none" dot={{ r: 2 }} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
