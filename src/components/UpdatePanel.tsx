@@ -1,7 +1,7 @@
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { getVersion } from "@tauri-apps/api/app";
-import { RotateCcw, SearchCheck, ShieldCheck } from "lucide-react";
+import { RotateCcw, SearchCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { readUpdateSilentCheck, writeUpdateSilentCheck } from "../domain/preferences";
 import { isTauriRuntime } from "../data/storage";
@@ -54,9 +54,10 @@ export function UpdatePanel() {
   }
 
   return (
-    <section className="card settings-section">
-      <div className="settings-title"><ShieldCheck /><div><h2>关于与更新</h2><p>更新包带签名校验；更新检查是本应用唯一的网络行为。</p></div></div>
-      <div className="form compact-form">
+    <div>
+      {/* 0.9.4 起挂在设置页弹窗里，卡片壳与标题由 Modal 提供。 */}
+      <p className="form-hint">更新包带签名校验；更新检查是本应用唯一的网络行为。</p>
+      <div className="form">
         <label>当前版本<input readOnly value={desktop ? (version || "读取中…") : "浏览器预览（无桌面更新能力）"} /></label>
         <label className="checkbox-label"><input type="checkbox" checked={silentCheck} disabled={!desktop} onChange={(event) => { setSilentCheck(event.target.checked); writeUpdateSilentCheck(event.target.checked); }} /><span>启动时静默检查更新（发现新版本会下载并在确认后重启安装）</span></label>
         <div className="button-row">
@@ -68,6 +69,6 @@ export function UpdatePanel() {
         </div>
         {note && <p className="form-hint" role="status">{note}</p>}
       </div>
-    </section>
+    </div>
   );
 }

@@ -56,6 +56,9 @@ it("validates the target mirror with the same rules as Rust", () => {
 
 it("edits targets from the settings page and keeps an audit trail", async () => {
   await act(async () => { root.render(<SettingsPage />); });
+  // 0.9.4 设置行 + 弹窗：先开「个人目标」弹窗，再进编辑表单。
+  await act(async () => button("个人目标").click());
+  expect(host.querySelector(".modal")).not.toBeNull();
   await act(async () => button("编辑目标").click());
   expect(input("热量下限 kcal").value).toBe("1700");
   await fill(input("蛋白质目标 g"), "120");
@@ -68,13 +71,15 @@ it("edits targets from the settings page and keeps an audit trail", async () => 
   const details = (events[0].payload as { details: { before: { proteinTargetG: number }; after: { proteinTargetG: number } } }).details;
   expect(details.before.proteinTargetG).toBe(100);
   expect(details.after.proteinTargetG).toBe(120);
-  // 保存成功后表单收起，展示新值。
+  // 保存成功后编辑表单收起，弹窗内展示新值；设置行摘要同步。
   expect(host.querySelector("form")).toBeNull();
   expect(host.textContent).toContain("120 g / 25 g");
+  expect(host.textContent).toContain("蛋白 120 g");
 });
 
 it("rejects a disordered range client-side without touching the store", async () => {
   await act(async () => { root.render(<SettingsPage />); });
+  await act(async () => button("个人目标").click());
   await act(async () => button("编辑目标").click());
   await fill(input("热量下限 kcal"), "2000");
   await act(async () => host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
