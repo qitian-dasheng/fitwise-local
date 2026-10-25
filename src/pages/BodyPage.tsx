@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Activity, CalendarCheck, Percent, Ruler, Scale } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DiaryDateControl } from "../components/DiaryDateControl";
 import { PageHeader } from "../components/PageHeader";
 import { WeightCorrectionModal } from "../components/WeightCorrectionModal";
@@ -47,6 +47,15 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
     bodyFat: "",
     note: "",
   });
+  // OBS-015：顶部切换日记日期时，尚未填写的表单跟随到所选日，避免补录误存为今天。
+  useEffect(() => {
+    setForm((current) =>
+      current.weight.trim() || current.waist.trim() || current.bodyFat.trim() || current.note.trim()
+        ? current
+        : { ...current, date },
+    );
+  }, [date]);
+
   const parsed = validateWeightInput(form.weight);
   const weightError = form.weight.trim() ? parsed.error : undefined;
   // 围度与体脂可留空：留空就真的不写字段，不能落一个 0。
@@ -56,12 +65,15 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
 
   const start = shiftDiaryDate(date, -6);
   const period = usePeriodSummary(start, date);
+  // OBS-013：图表窗口比指标宽（14 天），一周只称一次也能看到点；指标行仍按 7 日口径。
+  const chartStart = shiftDiaryDate(date, -13);
+  const chartPeriod = usePeriodSummary(chartStart, date);
   const representatives = dailyRepresentatives(measurements.filter((item) => item.date <= date));
 
-  const chartData = period.data
-    ? period.data.measurements.map((item) => ({ date: item.date.slice(5), weight: item.weightKg, average: item.average }))
+  const chartData = chartPeriod.data
+    ? chartPeriod.data.measurements.map((item) => ({ date: item.date.slice(5), weight: item.weightKg, average: item.average }))
     : (() => {
-        const points = representatives.filter((item) => item.date >= start).map((item) => ({ date: item.date, value: item.weightKg }));
+        const points = representatives.filter((item) => item.date >= chartStart).map((item) => ({ date: item.date, value: item.weightKg }));
         const averaged = movingAverage(points);
         return points.map((point, index) => ({
           date: point.date.slice(5),
@@ -69,6 +81,13 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
           average: averaged[index]?.value ?? point.value,
         }));
       })();
+  const chartLoading = chartPeriod.loading && chartData.length === 0;
+  // 纵轴范围把目标线也算进去，目标线落在数据范围外时不至于被裁掉。
+  const chartValues = chartData.flatMap((point) => [point.weight, point.average]);
+  if (profile.targetWeightKg > 0) chartValues.push(profile.targetWeightKg);
+  const yDomain: [number, number] = chartValues.length
+    ? [Math.min(...chartValues) - 1, Math.max(...chartValues) + 1]
+    : [40, 100];
 
   const latest = period.data ? period.data.latestWeightKg : representatives.at(-1)?.weightKg ?? null;
   const sevenDayAverage = representatives.length
@@ -82,19 +101,6 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   const toTarget = latest !== null ? latest - profile.targetWeightKg : null;
   const waist = latestCircumference(measurements, "waistCm", date);
   const bodyFat = latestCircumference(measurements, "bodyFatPercent", date);
-
-  if (period.loading || period.error) {
-    return (
-      <div className="page body-page">
-        <PageHeader
-          eyebrow="身体记录"
-          title="身体"
-          description={period.error ? "读取体重趋势失败，请重新打开此页面后重试。" : "正在读取本地体重记录…"}
-        />
-        {period.error && <p className="form-error" role="alert">{period.error}</p>}
-      </div>
-    );
-  }
 
   return (
     <div className="page body-page">
@@ -270,12 +276,12 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
       <section className="card chart-card">
         <div className="card-heading compact">
           <div>
-            <p className="eyebrow">虚线为每次称重，实线为七日移动平均</p>
-            <h2>七日体重趋势</h2>
+            <p className="eyebrow">近 14 天 · 虚线为每次称重，实线为七日移动平均</p>
+            <h2>体重趋势</h2>
           </div>
         </div>
         <div className="chart-large">
-          {chartData.length > 1 ? (
+          {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
                 <defs>
@@ -286,19 +292,41 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
                 </defs>
                 <CartesianGrid vertical={false} stroke="#e8ebe5" />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} />
-                <YAxis domain={["dataMin - 1", "dataMax + 1"]} axisLine={false} tickLine={false} />
+                <YAxis domain={yDomain} axisLine={false} tickLine={false} />
                 <Tooltip />
-                <Area type="monotone" dataKey="weight" stroke="#b6bcb4" fill="none" strokeDasharray="4 4" />
+                {/* 只有一个点时面积线会隐形，散点必须保留标记 */}
+                <Area type="monotone" dataKey="weight" stroke="#b6bcb4" fill="none" strokeDasharray="4 4" dot={{ r: 2.5 }} />
                 <Area type="monotone" dataKey="average" stroke="#276a53" strokeWidth={3} fill="url(#bodyWeightFill)" />
+                {profile.targetWeightKg > 0 && (
+                  <ReferenceLine
+                    y={profile.targetWeightKg}
+                    stroke="#9aa19b"
+                    strokeDasharray="6 4"
+                    label={{ value: `目标 ${formatWeight(profile.targetWeightKg)} kg`, position: "insideTopRight", fontSize: 11, fill: "#5f665f" }}
+                  />
+                )}
               </AreaChart>
             </ResponsiveContainer>
+          ) : chartPeriod.error ? (
+            <div className="empty-chart">
+              <Scale />
+              <span>趋势读取失败，重新打开本页可重试</span>
+            </div>
+          ) : chartLoading ? (
+            <div className="empty-chart">
+              <Scale />
+              <span>正在读取本地体重记录…</span>
+            </div>
           ) : (
             <div className="empty-chart">
               <Scale />
-              <span>再记录一次就能形成趋势</span>
+              <span>近 14 天还没有称重记录，记录一次就能看到趋势</span>
             </div>
           )}
         </div>
+        {chartPeriod.error && chartData.length > 0 && (
+          <p className="form-hint" role="alert">趋势读取失败，图示为本地缓存数据；重新打开本页可重试。</p>
+        )}
       </section>
 
       <WeightHistoryTable

@@ -261,3 +261,51 @@ it("falls back to a dash when only weight was ever recorded", async () => {
   expect(metricCard("最新腰围").textContent).toContain("还没有腰围记录");
   expect(metricCard("最新体脂").textContent).toContain("还没有体脂记录");
 });
+
+it("shows the 14-day placeholder copy when no weigh-in exists", async () => {
+  await renderPage([]);
+  expect(host.querySelector(".empty-chart")?.textContent).toContain("近 14 天还没有称重记录");
+});
+
+it("draws the trend from a single weigh-in instead of hiding the chart", async () => {
+  await renderPage([measurement({ id: "only", date: "2026-10-18", weightKg: 83.2 })]);
+  expect(host.querySelector(".empty-chart")).toBeNull();
+});
+
+it("keeps the page shell while the desktop trend query is pending", async () => {
+  (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {
+    invoke: () => new Promise(() => {}),
+  };
+  await renderPage([]);
+  expect(host.querySelector(".body-entry-form")).toBeTruthy();
+  expect(host.querySelector(".empty-chart")?.textContent).toContain("正在读取本地体重记录");
+});
+
+it("follows the diary date while the entry form is untouched", async () => {
+  await act(async () => {
+    root.render(<BodyPage date="2026-10-18" />);
+  });
+  const dateInput = () => host.querySelector('.body-entry-form input[type="date"]') as HTMLInputElement;
+  expect(dateInput().value).toBe("2026-10-18");
+  await act(async () => {
+    root.render(<BodyPage date="2026-10-16" />);
+  });
+  expect(dateInput().value).toBe("2026-10-16");
+});
+
+it("keeps the original date once the form has input", async () => {
+  await act(async () => {
+    root.render(<BodyPage date="2026-10-19" />);
+  });
+  const weightInput = host.querySelector('.body-entry-form input[type="number"]') as HTMLInputElement;
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    setter.call(weightInput, "82.5");
+    weightInput.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    root.render(<BodyPage date="2026-10-15" />);
+  });
+  const dateInput = host.querySelector('.body-entry-form input[type="date"]') as HTMLInputElement;
+  expect(dateInput.value).toBe("2026-10-19");
+});

@@ -132,6 +132,31 @@ it("counts only complete days into the daily average", async () => {
   expect(average).toContain("完整日 2 天");
 });
 
+function unknownCalorieMeal(date: string): MealEntry {
+  const entry = meal(date, 0, 110);
+  return {
+    ...entry,
+    id: `unknown-${date}`,
+    nutrition: { ...entry.nutrition, calories: { state: "unknown", unit: "kcal", source: "manual", confidence: "high" } },
+  };
+}
+
+it("explains why days are missing from the calorie chart", async () => {
+  await renderPage({
+    meals: [meal("2026-10-18", 1800, 110), unknownCalorieMeal("2026-10-20")],
+    checkIns: [checkIn("2026-10-18"), checkIn("2026-10-20")],
+  });
+  expect(host.querySelector(".chart-note")?.textContent).toContain("1 天热量不全未计入");
+});
+
+it("names the incomplete days when the chart has nothing to draw", async () => {
+  await renderPage({
+    meals: [unknownCalorieMeal("2026-10-19"), unknownCalorieMeal("2026-10-20")],
+    checkIns: [checkIn("2026-10-19"), checkIn("2026-10-20")],
+  });
+  expect(host.querySelector(".empty-chart")?.textContent).toContain("2 天有记录但热量不全");
+});
+
 it("marks hit, miss and unconfirmed days apart in the calendar", async () => {
   await renderPage({
     meals: [

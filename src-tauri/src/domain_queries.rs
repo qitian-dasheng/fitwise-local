@@ -255,6 +255,10 @@ fn export_domain_at_path(path: &std::path::Path) -> Result<Value, String> {
     let transaction = connection
         .unchecked_transaction()
         .map_err(|error| error.to_string())?;
+    // schemaVersion 必须实读 PRAGMA，不能硬编码：导出文件是备份恢复与外部工具的依据。
+    let schema_version: i64 = transaction
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .map_err(|error| error.to_string())?;
     let raw = load_envelope(&transaction)?
         .ok_or("数据库没有已初始化记录。请先另存当前窗口快照，不要重置或关闭窗口。")?;
     let envelope: Value = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
@@ -262,7 +266,7 @@ fn export_domain_at_path(path: &std::path::Path) -> Result<Value, String> {
         .as_object()
         .ok_or("领域仓库格式无效。")?
         .clone();
-    data.insert("schemaVersion".into(), json!(12));
+    data.insert("schemaVersion".into(), json!(schema_version));
     data.insert("persistVersion".into(), envelope["version"].clone());
     data.insert("exportedAt".into(), json!(Utc::now().to_rfc3339()));
     data.insert("app".into(), json!("Fitwise Local"));
@@ -308,7 +312,8 @@ mod export_tests {
         let exported = export_domain_at_path(&path).unwrap();
         assert_eq!(exported["source"], "sqlite_domain_repository");
         assert_eq!(exported["meals"][0]["id"], "synthetic-meal");
-        assert_eq!(exported["schemaVersion"], 12);
+        // schemaVersion 实读 PRAGMA user_version（ensure_repository_schema 建库后即为当前版本）。
+        assert_eq!(exported["schemaVersion"], 14);
         assert_eq!(exported["persistVersion"], 4);
         assert_eq!(std::fs::read(&path).unwrap(), before);
         std::fs::remove_file(path).unwrap();
