@@ -1,0 +1,352 @@
+{
+ "168914": {
+  "category": "主食谷物",
+  "name": "米粉(熟)",
+  "sourceDesc": "rice noodles, cooked"
+ },
+ "168919": {
+  "category": "主食谷物",
+  "name": "鸡蛋面(熟)",
+  "sourceDesc": "noodles, egg, cooked, enriched, with added salt"
+ },
+ "170686": {
+  "category": "主食谷物",
+  "name": "荞麦(熟)",
+  "sourceDesc": "buckwheat groats, roasted, cooked"
+ },
+ "174925": {
+  "category": "主食谷物",
+  "name": "馒头/白面包",
+  "sourceDesc": "bread, white, commercially prepared, toasted"
+ },
+ "172688": {
+  "category": "主食谷物",
+  "name": "全麦面包",
+  "sourceDesc": "bread, whole-wheat, commercially prepared"
+ },
+ "171287": {
+  "category": "蛋奶",
+  "name": "鸡蛋",
+  "sourceDesc": "egg, whole, raw, fresh"
+ },
+ "171265": {
+  "category": "蛋奶",
+  "name": "全脂牛奶",
+  "sourceDesc": "milk, whole, 3.25% milkfat, with added vitamin d"
+ },
+ "170872": {
+  "category": "蛋奶",
+  "name": "低脂牛奶",
+  "sourceDesc": "milk, lowfat, fluid, 1% milkfat, with added vitamin a and vitamin d"
+ },
+ "170886": {
+  "category": "蛋奶",
+  "name": "原味酸奶(低脂)",
+  "sourceDesc": "yogurt, plain, low fat"
+ },
+ "173625": {
+  "category": "畜禽肉",
+  "name": "鸡腿(带皮,烤)",
+  "sourceDesc": "chicken, broilers or fryers, thigh, meat and skin, cooked, roasted"
+ },
+ "168230": {
+  "category": "畜禽肉",
+  "name": "猪里脊(生)",
+  "sourceDesc": "pork, fresh, loin, whole, separable lean only, raw"
+ },
+ "167812": {
+  "category": "畜禽肉",
+  "name": "猪五花肉(生)",
+  "sourceDesc": "pork, fresh, belly, raw"
+ },
+ "170235": {
+  "category": "畜禽肉",
+  "name": "牛腱(熟)",
+  "sourceDesc": "beef, round, top round, separable lean only, trimmed to 0\" fat, choice, cooked, braised"
+ },
+ "172486": {
+  "category": "畜禽肉",
+  "name": "羊腿(生)",
+  "sourceDesc": "lamb, leg, shank half, separable lean only, trimmed to 1/4\" fat, choice, raw"
+ },
+ "172408": {
+  "category": "畜禽肉",
+  "name": "鸭(生)",
+  "sourceDesc": "duck, domesticated, meat and skin, raw"
+ },
+ "173686": {
+  "category": "水产",
+  "name": "三文鱼(大西洋,野生)",
+  "sourceDesc": "fish, salmon, atlantic, wild, raw"
+ },
+ "175167": {
+  "category": "水产",
+  "name": "三文鱼(养殖)",
+  "sourceDesc": "fish, salmon, atlantic, farmed, raw"
+ },
+ "171955": {
+  "category": "水产",
+  "name": "鳕鱼",
+  "sourceDesc": "fish, cod, atlantic, raw"
+ },
+ "175179": {
+  "category": "水产",
+  "name": "虾(生)",
+  "sourceDesc": "crustaceans, shrimp, raw"
+ },
+ "175119": {
+  "category": "水产",
+  "name": "鲭鱼",
+  "sourceDesc": "fish, mackerel, atlantic, raw"
+ },
+ "171986": {
+  "category": "水产",
+  "name": "金枪鱼罐头(水浸)",
+  "sourceDesc": "fish, tuna, light, canned in water, without salt, drained solids"
+ },
+ "174205": {
+  "category": "水产",
+  "name": "蟹肉(熟)",
+  "sourceDesc": "crustaceans, crab, blue, cooked, moist heat"
+ },
+ "174220": {
+  "category": "水产",
+  "name": "扇贝",
+  "sourceDesc": "mollusks, scallop, mixed species, raw"
+ },
+ "172475": {
+  "category": "豆制品",
+  "name": "豆腐(老)",
+  "sourceDesc": "tofu, raw, firm, prepared with calcium sulfate"
+ },
+ "172449": {
+  "category": "豆制品",
+  "name": "豆腐(内酯)",
+  "sourceDesc": "tofu, soft, prepared with calcium sulfate and magnesium chloride (nigari)"
+ },
+ "174270": {
+  "category": "豆制品",
+  "name": "黄豆(干)",
+  "sourceDesc": "soybeans, mature seeds, raw"
+ },
+ "169282": {
+  "category": "豆制品",
+  "name": "毛豆",
+  "sourceDesc": "soybeans, green, raw"
+ },
+ "170379": {
+  "category": "蔬菜",
+  "name": "西兰花",
+  "sourceDesc": "broccoli, raw"
+ },
+ "170390": {
+  "category": "蔬菜",
+  "name": "大白菜",
+  "sourceDesc": "cabbage, chinese (pak-choi), raw"
+ },
+ "168462": {
+  "category": "蔬菜",
+  "name": "菠菜",
+  "sourceDesc": "spinach, raw"
+ },
+ "169249": {
+  "category": "蔬菜",
+  "name": "生菜",
+  "sourceDesc": "lettuce, green leaf, raw"
+ },
+ "170457": {
+  "category": "蔬菜",
+  "name": "番茄",
+  "sourceDesc": "tomatoes, red, ripe, raw, year round average"
+ },
+ "168409": {
+  "category": "蔬菜",
+  "name": "黄瓜",
+  "sourceDesc": "cucumber, with peel, raw"
+ },
+ "170393": {
+  "category": "蔬菜",
+  "name": "胡萝卜",
+  "sourceDesc": "carrots, raw"
+ },
+ "170026": {
+  "category": "蔬菜",
+  "name": "土豆",
+  "sourceDesc": "potatoes, flesh and skin, raw"
+ },
+ "170008": {
+  "category": "蔬菜",
+  "name": "洋葱",
+  "sourceDesc": "onions, sweet, raw"
+ },
+ "170108": {
+  "category": "蔬菜",
+  "name": "红甜椒",
+  "sourceDesc": "peppers, sweet, red, raw"
+ },
+ "169228": {
+  "category": "蔬菜",
+  "name": "茄子",
+  "sourceDesc": "eggplant, raw"
+ },
+ "169295": {
+  "category": "蔬菜",
+  "name": "南瓜(笋瓜)",
+  "sourceDesc": "squash, winter, butternut, raw"
+ },
+ "169291": {
+  "category": "蔬菜",
+  "name": "西葫芦",
+  "sourceDesc": "squash, summer, zucchini, includes skin, raw"
+ },
+ "169251": {
+  "category": "蔬菜",
+  "name": "口蘑",
+  "sourceDesc": "mushrooms, white, raw"
+ },
+ "169988": {
+  "category": "蔬菜",
+  "name": "芹菜",
+  "sourceDesc": "celery, raw"
+ },
+ "173944": {
+  "category": "水果",
+  "name": "香蕉",
+  "sourceDesc": "bananas, raw"
+ },
+ "169097": {
+  "category": "水果",
+  "name": "橙子",
+  "sourceDesc": "oranges, raw, all commercial varieties"
+ },
+ "167765": {
+  "category": "水果",
+  "name": "西瓜",
+  "sourceDesc": "watermelon, raw"
+ },
+ "169928": {
+  "category": "水果",
+  "name": "黄桃",
+  "sourceDesc": "peaches, yellow, raw"
+ },
+ "167762": {
+  "category": "水果",
+  "name": "草莓",
+  "sourceDesc": "strawberries, raw"
+ },
+ "171711": {
+  "category": "水果",
+  "name": "蓝莓",
+  "sourceDesc": "blueberries, raw"
+ },
+ "169910": {
+  "category": "水果",
+  "name": "芒果",
+  "sourceDesc": "mangos, raw"
+ },
+ "169124": {
+  "category": "水果",
+  "name": "菠萝",
+  "sourceDesc": "pineapple, raw, all varieties"
+ },
+ "168153": {
+  "category": "水果",
+  "name": "绿猕猴桃",
+  "sourceDesc": "kiwifruit, green, raw"
+ },
+ "173033": {
+  "category": "水果",
+  "name": "西柚",
+  "sourceDesc": "grapefruit, raw, pink and red and white, all areas"
+ },
+ "169949": {
+  "category": "水果",
+  "name": "李子",
+  "sourceDesc": "plums, raw"
+ },
+ "171413": {
+  "category": "油脂调味",
+  "name": "橄榄油",
+  "sourceDesc": "oil, olive, salad or cooking"
+ },
+ "171411": {
+  "category": "油脂调味",
+  "name": "大豆油",
+  "sourceDesc": "oil, soybean, salad or cooking"
+ },
+ "171410": {
+  "category": "油脂调味",
+  "name": "花生油",
+  "sourceDesc": "oil, peanut, salad or cooking"
+ },
+ "171016": {
+  "category": "油脂调味",
+  "name": "芝麻油",
+  "sourceDesc": "oil, sesame, salad or cooking"
+ },
+ "173430": {
+  "category": "油脂调味",
+  "name": "黄油",
+  "sourceDesc": "butter, without salt"
+ },
+ "173468": {
+  "category": "油脂调味",
+  "name": "食盐",
+  "sourceDesc": "salt, table"
+ },
+ "173469": {
+  "category": "油脂调味",
+  "name": "苹果醋",
+  "sourceDesc": "vinegar, cider"
+ },
+ "169640": {
+  "category": "油脂调味",
+  "name": "蜂蜜",
+  "sourceDesc": "honey"
+ },
+ "169655": {
+  "category": "油脂调味",
+  "name": "白糖",
+  "sourceDesc": "sugars, granulated"
+ },
+ "172470": {
+  "category": "油脂调味",
+  "name": "花生酱",
+  "sourceDesc": "peanut butter, smooth style, without salt"
+ },
+ "169704": {
+  "category": "主食谷物",
+  "name": "糙米饭(熟)",
+  "sourceDesc": "rice, brown, long-grain, cooked (includes foods for usda's food distribution program)"
+ },
+ "169705": {
+  "category": "主食谷物",
+  "name": "燕麦",
+  "sourceDesc": "oats (includes foods for usda's food distribution program)"
+ },
+ "170894": {
+  "category": "蛋奶",
+  "name": "希腊酸奶(脱脂)",
+  "sourceDesc": "yogurt, greek, plain, nonfat (includes foods for usda's food distribution program)"
+ },
+ "170899": {
+  "category": "蛋奶",
+  "name": "切达奶酪",
+  "sourceDesc": "cheese, cheddar, sharp, sliced"
+ },
+ "168482": {
+  "category": "蔬菜",
+  "name": "红薯",
+  "sourceDesc": "sweet potato, raw, unprepared (includes foods for usda's food distribution program)"
+ },
+ "171688": {
+  "category": "水果",
+  "name": "苹果(带皮)",
+  "sourceDesc": "apples, raw, with skin (includes foods for usda's food distribution program)"
+ },
+ "167776": {
+  "category": "水果",
+  "name": "啤梨",
+  "sourceDesc": "pears, raw, bartlett (includes foods for usda's food distribution program)"
+ }
+}

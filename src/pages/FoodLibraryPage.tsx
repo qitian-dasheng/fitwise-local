@@ -138,17 +138,21 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
       {search.error && <p className="form-error" role="alert">{search.error}</p>}
       <div className="library-body library-page-body">
         <div className="library-results">
-          {search.loading ? <p className="form-hint">正在读取食材库…</p> : search.items.length ? search.items.map((item) => (
+          {search.loading ? <p className="form-hint">正在读取食材库…</p> : search.items.length ? <>{(() => {
+              {/* 0.11.0 分组：个人食材在前、内置目录在后（目录条目带徽标）。 */}
+              const personal = search.items.filter((item) => item.definition.catalogId === undefined);
+              const catalog = search.items.filter((item) => item.definition.catalogId !== undefined);
+              const renderItem = (item: FoodLibraryItem) => (
             <div key={item.definition.id}>
               <div className="library-item">
                 <div className="library-select">
-                  <strong>{item.definition.name}</strong>
+                  <strong>{item.definition.name}{item.definition.catalogId !== undefined && <span className="ui-badge flat catalog-badge">内置</span>}</strong>
                   <span>{item.definition.brand || "无品牌"} · {foodBasisLabels[item.definition.measurementBasis]}</span>
-                  <small>每 {item.version.basis.quantity}{foodUnitLabels[item.version.basis.unit]} · {nutrientLabel(item.version.nutrition, "calories", 1, displayUnit)} {energyUnitLabels[displayUnit]} · v{item.version.version}</small>
+                  <small>每 {item.version.basis.quantity}{foodUnitLabels[item.version.basis.unit]} · {nutrientLabel(item.version.nutrition, "calories", 1, displayUnit)} {energyUnitLabels[displayUnit]} · v{item.version.version}{item.definition.catalogId !== undefined ? " · 来源见悬浮" : ""}</small>
                 </div>
                 <span className="library-item-actions">
                   <button className={`icon-button ${item.definition.favorite ? "favorite" : ""}`} aria-label={`${item.definition.favorite ? "取消收藏" : "收藏"}${item.definition.name}`} disabled={action.busy} onClick={() => { void action.run(`favorite:${item.definition.id}:${!item.definition.favorite}`, (id) => state.setFoodFavorite(item.definition.id, !item.definition.favorite, id)); }}><Star size={17} fill={item.definition.favorite ? "currentColor" : "none"}/></button>
-                  <button className="icon-button" aria-label={`修订${item.definition.name}的营养规格`} title="修订营养规格（生成新版本）" disabled={action.busy} onClick={() => { action.setMessage(""); setPendingDelete(null); setEditing(item); }}><PencilLine size={16}/></button>
+                  <button className="icon-button" aria-label={`${item.definition.catalogId !== undefined ? "基于内置食材" : "修订"}${item.definition.name}的营养规格`} title={item.definition.catalogId !== undefined ? "修改内置食材会生成个人副本，原条目保持不变" : "修订营养规格（生成新版本）"} disabled={action.busy} onClick={() => { action.setMessage(""); setPendingDelete(null); setEditing(item); }}><PencilLine size={16}/></button>
                   <button className={`icon-button ${item.definition.archived ? "favorite" : ""}`} aria-label={`${item.definition.archived ? "取消归档" : "归档"}${item.definition.name}`} title={item.definition.archived ? "取消归档后重新出现在日常挑选" : "归档后从日常挑选隐藏，历史记录不受影响"} disabled={action.busy} onClick={() => { const archived = item.definition.archived === true; void action.run(`archive:${item.definition.id}:${!archived}`, async (id) => { const result = await state.setFoodArchived(item.definition.id, !archived, id); if (!result.error) setNotice(archived ? `已取消归档「${item.definition.name}」。` : `已归档「${item.definition.name}」，日常挑选将不再显示。`); return result; }); }}>{item.definition.archived ? <ArchiveRestore size={16}/> : <Archive size={16}/>}</button>
                   <button className="icon-button" aria-label={`纠错${item.definition.name}的名称或品牌`} title="纠错名称/品牌（未引用食材）" disabled={action.busy} onClick={() => { action.setMessage(""); setPendingDelete(null); setIdentity(item); }}><Type size={16}/></button>
                   <button className="icon-button" aria-label={`永久删除${item.definition.name}`} title="永久删除（仅无引用食材）" disabled={action.busy} onClick={() => { action.setMessage(""); setPendingDelete(item.definition.id); }}><Trash2 size={16}/></button>
@@ -165,7 +169,14 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
                 </div>
               )}
             </div>
-          )) : (
+          );
+              const nodes: React.ReactNode[] = personal.map((item) => renderItem(item));
+              if (personal.length > 0 && catalog.length > 0) {
+                nodes.push(<p key="catalog-group-head" className="library-group-head">内置目录（数据来自权威营养资料库，修改会生成个人副本）</p>);
+              }
+              nodes.push(...catalog.map((item) => renderItem(item)));
+              return nodes;
+          })()}</> : (
             <div className="library-empty">
               <strong>{mode === "recent" ? "尚无食材库记餐记录" : mode === "favorites" ? "还没有收藏食物" : mode === "archived" ? "没有已归档的食材" : query ? "没有找到食物" : "食材库还是空的"}</strong>
               <p>新食物先保存一次规格，之后记餐时就可以直接选择。</p>

@@ -4,6 +4,7 @@ import { zhCN } from "date-fns/locale";
 import { diaryToday, shiftDiaryDate, type DiaryDateProps } from "../domain/diary";
 import { ArrowRight, Check, ChevronLeft, ChevronRight, Dumbbell, Plus, Scale, SlidersHorizontal, Utensils } from "lucide-react";
 import { TargetGoalModal } from "../components/TargetGoalModal";
+import { readLastCheck } from "../hooks/useSilentUpdateCheck";
 import { activeMeals, summarizeMeals } from "../domain/calculations";
 import { dailyRepresentatives } from "../domain/body";
 import { bodyActionHint, calorieBudget, mealActionHint, recordStreak, workoutActionHint } from "../domain/todayHints";
@@ -29,6 +30,9 @@ export type QuickActionHandler = (kind: QuickActionKind, mealType?: MealType) =>
  */
 export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickAction }: { goTo: (page: string) => void; onQuickAction?: QuickActionHandler } & DiaryDateProps) {
   const [targetOpen, setTargetOpen] = useState(false);
+  // 静默检查失败的一次性提示（0.11.0）：读上次记录，关闭后记住已读（直到下一次失败重现）。
+  const lastCheck = readLastCheck();
+  const [checkNoticeOpen, setCheckNoticeOpen] = useState(lastCheck?.ok === false);
   const action = useConfirmedAction();
   const [energyUnit] = useEnergyUnit();
   const profile = useAppStore((state) => state.profile);
@@ -209,6 +213,12 @@ export function TodayPage({ goTo, date = diaryToday(), onDateChange, onQuickActi
       </section>
 
       {action.message && <div className="ui-card" role="alert" style={{ padding: "8px 14px" }}><p className="ui-chart-foot" style={{ marginTop: 0, paddingTop: 0 }}>{action.message}</p></div>}
+      {checkNoticeOpen && lastCheck?.ok === false && (
+        <div className="settings-notice update-failure-notice" role="status">
+          <span>上次自动检查更新失败（{lastCheck.at.slice(0, 16).replace("T", " ")}）——网络不通时属正常，可稍后到设置 → 关于与更新重试。</span>
+          <button className="text-button" onClick={() => setCheckNoticeOpen(false)}>知道了</button>
+        </div>
+      )}
       {targetOpen && <TargetGoalModal profile={profile} onClose={() => setTargetOpen(false)} />}
     </div>
   );

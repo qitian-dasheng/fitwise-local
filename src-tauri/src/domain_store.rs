@@ -7,8 +7,12 @@ use std::{collections::HashSet, fs, path::PathBuf};
 use tauri::{AppHandle, Manager};
 
 pub(crate) const STORAGE_NAME: &str = "fitwise-app-state-v1";
-const SINGLETONS: [&str; 1] = ["profile"];
-const COLLECTIONS: [&str; 9] = [
+const SINGLETONS: [&str; 2] = [
+    "profile",
+    // 目录墓碑（0.11.0）：用户删除过的内置目录条目 catalogId，升级不复活。
+    "catalogTombstones",
+];
+pub(crate) const COLLECTIONS: [&str; 9] = [
     "foodDefinitions",
     "foodDefinitionVersions",
     "meals",
@@ -41,6 +45,12 @@ fn database_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(directory.join("fitwise.db"))
 }
 
+/// 目录合并前置：仓库 schema 与信封都已就绪（未初始化的新库跳过合并，等首次命令建库）。
+pub(crate) fn is_repository_ready(connection: &Connection) -> bool {
+    // schema 就绪且信封已初始化（新库/未初始化跳过目录合并，等首次业务命令建库）。
+    load_envelope(connection).is_ok_and(|envelope| envelope.is_some())
+}
+
 pub(crate) fn open_database(app: &AppHandle) -> Result<Connection, String> {
     let path = database_path(app)?;
     let mut connection =
@@ -51,6 +61,13 @@ pub(crate) fn open_database(app: &AppHandle) -> Result<Connection, String> {
     crate::domain_upgrade::upgrade(&mut connection, &path)?;
     // 确保 0014 精简迁移在连接建立时必然执行（不依赖第一个业务命令才触发）。
     ensure_repository_schema(&connection)?;
+    // 内置食材目录合并（0.11.0）：幂等，失败不阻塞启动（stderr 由日志收集）。
+    if is_repository_ready(&connection) {
+        match crate::food_catalog::merge_food_catalog(&mut connection) {
+            Ok(note) => eprintln!("[food-catalog] {note}"),
+            Err(error) => eprintln!("[food-catalog] 目录合并失败（不影响本次启动）：{error}"),
+        }
+    }
     Ok(connection)
 }
 
@@ -144,12 +161,16 @@ pub(crate) fn persist_envelope(
     let mut envelope: Value =
         serde_json::from_str(raw).map_err(|error| format!("状态 JSON 无效：{error}"))?;
     // 0.9.4 兼容：旧启动状态/旧快照缺 pantryItems 时补空数组——新集合不能卡死旧状态的写入路径。
+    // 0.11.0 兼容：目录墓碑单例（SINGLETONS 新成员）对旧信封补空数组。
     if let Some(state) = envelope.get_mut("state").and_then(Value::as_object_mut) {
         for collection in COLLECTIONS {
             state
                 .entry((*collection).to_owned())
                 .or_insert_with(|| Value::Array(Vec::new()));
         }
+        state
+            .entry("catalogTombstones".to_owned())
+            .or_insert_with(|| Value::Array(Vec::new()));
     }
     let persist_version = envelope
         .get("version")
@@ -196,6 +217,10 @@ pub(crate) fn write_transaction(
             .entry((*collection).to_owned())
             .or_insert_with(|| Value::Array(Vec::new()));
     }
+    // 0.11.0 兼容：旧信封缺 catalogTombstones 补空数组（SINGLETONS 新成员）。
+    state
+        .entry("catalogTombstones".to_owned())
+        .or_insert_with(|| Value::Array(Vec::new()));
     transaction
         .execute("DELETE FROM domain_singletons", [])
         .map_err(|error| error.to_string())?;
@@ -272,16 +297,19 @@ fn read_envelope(connection: &Connection) -> Result<Option<String>, String> {
 
     let mut state = Map::new();
     for key in SINGLETONS {
-        let raw: String = connection
+        // 0.11.0：catalogTombstones 是新单例，旧行缺失按空墓碑处理（profile 历史上必存在）。
+        let raw: Option<String> = connection
             .query_row(
                 "SELECT payload_json FROM domain_singletons WHERE key = ?1",
                 [key],
                 |row| row.get(0),
             )
+            .optional()
             .map_err(|error| format!("读取 {key} 失败：{error}"))?;
+        let payload = raw.unwrap_or_else(|| "[]".to_owned());
         state.insert(
             key.into(),
-            serde_json::from_str(&raw).map_err(|error| error.to_string())?,
+            serde_json::from_str(&payload).map_err(|error| error.to_string())?,
         );
     }
     for collection in COLLECTIONS {

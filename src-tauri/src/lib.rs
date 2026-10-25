@@ -1,15 +1,18 @@
+mod ai_collect;
 mod body_commands;
 mod data_diagnostics;
 mod domain_commands;
 mod domain_queries;
 mod domain_store;
 mod domain_upgrade;
+mod food_catalog;
 mod food_library;
 mod meal_corrections;
 mod pantry_commands;
 mod recipe_meal_commands;
 mod recipes;
 mod record_commands;
+mod update_proxy;
 mod workout_commands;
 
 #[cfg(test)]
@@ -31,6 +34,9 @@ pub fn run() {
             domain_store::domain_storage_set,
             domain_store::get_domain_storage_status,
             domain_store::reset_domain_records,
+            ai_collect::ollama_list_models,
+            ai_collect::ollama_draft,
+            update_proxy::get_system_proxy,
             domain_commands::execute_domain_command,
             domain_queries::query_period_summary,
             domain_queries::export_domain_json,

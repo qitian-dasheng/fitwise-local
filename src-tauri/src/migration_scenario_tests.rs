@@ -342,7 +342,11 @@ fn scenario_2_legacy_081_database_upgrade_keeps_core_and_drops_deprecated() {
         collections.contains(&"auditEvents".to_owned()),
         "核心集合 auditEvents 数据丢失"
     );
-    assert_eq!(singleton_keys(&connection), vec!["profile".to_owned()]);
+    // 0.11.0：catalogTombstones 单例（目录墓碑）随合并新增，旧断言同步。
+    assert_eq!(
+        singleton_keys(&connection),
+        vec!["catalogTombstones".to_owned(), "profile".to_owned()]
+    );
     // 核心数据原样保留。
     let envelope: Value =
         serde_json::from_str(&load_envelope(&connection).unwrap().unwrap()).unwrap();

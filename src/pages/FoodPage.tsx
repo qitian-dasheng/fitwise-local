@@ -1,5 +1,5 @@
 import { diaryToday, shiftDiaryDate, type DiaryDateProps } from "../domain/diary";
-import { BookOpen, ChefHat, ChevronLeft, ChevronRight, Library, Plus, UtensilsCrossed } from "lucide-react";
+import { BookOpen, ChefHat, ChevronLeft, ChevronRight, Library, Plus, UtensilsCrossed, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { MealEntry, RecipeVersion, MealType } from "../domain/types";
 import { useAppStore } from "../store/appStore";
@@ -16,6 +16,8 @@ import { latestRecipes } from "../domain/recipes";
 import { recipeShortage } from "../domain/pantry";
 import { MealDiaryTable } from "../components/MealDiaryTable";
 import { BasketBar } from "../components/BasketBar";
+import { readAiCollectSettings } from "../components/AiSettingsModal";
+import { AiDraftModal } from "../components/AiDraftModal";
 import { CopyMealModal } from "../components/CopyMealModal";
 import { mealCopySource, mealLabels, mealTypes, frequentFoods, type FrequentFood, type MealCopySource } from "../domain/meals";
 import { readDiaryShowSodium, writeDiaryShowSodium } from "../domain/preferences";
@@ -37,6 +39,9 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
   const [mealOpen, setMealOpen] = useState(false);
   const [copyTarget, setCopyTarget] = useState<{ type: MealType; source: MealCopySource } | null>(null);
   const [manualMeal, setManualMeal] = useState(false);
+  // 0.11.0 AI 采集：设置里开启后才显示入口；草稿在弹窗内编辑后进待确认篮子。
+  const aiEnabled = readAiCollectSettings().enabled;
+  const [aiOpen, setAiOpen] = useState(false);
   const [initialMealType, setInitialMealType] = useState<MealType>("breakfast");
   const [preselectFoodId, setPreselectFoodId] = useState<string | null>(null);
   function openMeal(type: MealType = "breakfast") { setManualMeal(false); setInitialMealType(type); setPreselectFoodId(null); setMealOpen(true); }
@@ -125,6 +130,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
           <button className="ui-btn food-recipe-btn" aria-label="打开菜谱管理" onClick={() => setRecipeDrawer(true)}>
             <ChefHat size={15} /> <span className="food-recipe-btn-text">菜谱</span>
           </button>
+          {aiEnabled && <button className="ui-btn" onClick={() => setAiOpen(true)}><Sparkles size={15} /> AI 描述</button>}
           <button className="ui-btn" onClick={() => (goTo ? goTo("library") : setLibraryOpen(true))}><Library size={15} /> 食材库</button>
           <button className="ui-btn primary" onClick={() => openMeal()}><Plus size={15} /> 添加食物</button>
         </div>
@@ -188,6 +194,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
       {copyTarget && <CopyMealModal date={today} type={copyTarget.type} source={copyTarget.source} onClose={() => setCopyTarget(null)} />}
       {recipeEditor&&<RecipeEditor copyMode={copyRecipe} recipe={recipeEditor==="new"?undefined:recipeEditor} onClose={()=>setRecipeEditor(null)} onSaved={setSelectedRecipeId}/>}
       {meals.some(m=>m.date===date&&m.status&&m.status!=="active")&&<details className="card meal-correction-history"><summary>查看所选日修订／作废的原始记录</summary>{meals.filter(m=>m.date===date&&m.status&&m.status!=="active").map(m=><article key={m.id}><strong>{m.name} · {m.status==="void"?"已作废":"已修订"}</strong><p>{m.date} · {m.amountLabel} · 原始营养 {nutrientText(m.nutrition, "calories", energyUnit)} {energyUnitLabels[energyUnit]}（参考规格，非重新入账）</p><p>原因：{m.correctionReason}；原记录 ID：{m.id}</p></article>)}</details>}
+      {aiOpen && <AiDraftModal date={date} onClose={() => setAiOpen(false)} />}
       {mealOpen && <><div hidden={manualMeal}><FoodLibraryModal preselectFoodId={preselectFoodId ?? undefined} onClose={() => { setMealOpen(false); setPreselectFoodId(null); }} onManual={() => setManualMeal(true)} onOpenEditor={goTo ? (target) => { useFoodPicker.getState().setEditorTarget(target); goTo("library"); } : undefined} /></div>{manualMeal && <MealModal initialType={initialMealType} initialDate={date} onBack={() => setManualMeal(false)} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onSave={addMeal}/>}</>}
     </div>
   );

@@ -101,6 +101,7 @@ export function writeEnergyUnit(unit: EnergyUnitPref): void {
  * 用户可在设置页关闭。存 localStorage，与能量单位同一纪律：不进 AppState、不写领域库。
  */
 export const UPDATE_SILENT_CHECK_KEY = "qingheng.updates.silent-check";
+const UPDATE_PROXY_MODE_KEY = "qingheng.updates.proxy-mode";
 
 export function readUpdateSilentCheck(): boolean {
   try {
@@ -142,4 +143,19 @@ export function writeTheme(theme: ThemePref): void {
   } catch {
     // 写失败时本次会话的主题照常生效。
   }
+}
+
+export type UpdateProxyMode = "system" | "direct";
+
+/** 更新器代理模式（0.11.0）：跟随系统代理（默认）/ 直连。 */
+export function readUpdateProxyMode(): UpdateProxyMode {
+  try {
+    return localStorage.getItem(UPDATE_PROXY_MODE_KEY) === "direct" ? "direct" : "system";
+  } catch {
+    return "system";
+  }
+}
+
+export function writeUpdateProxyMode(mode: UpdateProxyMode): void {
+  localStorage.setItem(UPDATE_PROXY_MODE_KEY, mode);
 }

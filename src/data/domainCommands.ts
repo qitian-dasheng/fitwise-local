@@ -60,6 +60,7 @@ const stateKeys = [
   "recipes",
   "auditEvents",
   "pantryItems",
+  "catalogTombstones",
 ] as const satisfies readonly (keyof AppState)[];
 
 function serializeBootstrapState(state: AppState) {
