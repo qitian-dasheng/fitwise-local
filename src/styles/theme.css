@@ -30,16 +30,7 @@ body {
   background: var(--surface-sunken);
 }
 
-/* ── 强调色回到唯一彩色：主按钮 = 荧光黄绿填充 ────────────── */
-.button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-  box-shadow: none;
-}
-.button.primary:hover {
-  filter: brightness(0.97);
-}
+/* ── 主按钮：方向 D 起 primary 随主题反色（近黑/近白），旧荧光黄绿覆盖已随 0.5 体系退役 ── */
 
 /* ── 去阴影：扁平层级 ────────────────────────────────────── */
 .collapse-button,
