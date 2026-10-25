@@ -122,3 +122,28 @@ export function writeUpdateSilentCheck(enabled: boolean): void {
     // 写失败时本次会话的开关状态照常生效。
   }
 }
+
+/**
+ * 界面主题（0.9.3 起，方向 D 双令牌层）。light 为默认；dark 依赖 [data-theme="dark"]。
+ * 与其他界面偏好同一纪律：只存 localStorage，不进 AppState、不写领域库、不参与导出。
+ */
+export const THEME_KEY = "qingheng.display.theme";
+
+export type ThemePref = "light" | "dark";
+
+export function readTheme(): ThemePref {
+  try {
+    const raw = window.localStorage.getItem(THEME_KEY);
+    return raw === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
+export function writeTheme(theme: ThemePref): void {
+  try {
+    window.localStorage.setItem(THEME_KEY, theme);
+  } catch {
+    // 写失败时本次会话的主题照常生效。
+  }
+}

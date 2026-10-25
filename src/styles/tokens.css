@@ -96,3 +96,50 @@
   --z-modal: 100;
   --z-popover: 200;
 }
+
+/* ══════════════════════════════════════════════════════════════
+ * 方向 D 令牌层（0.9.3 迁移基准，DESIGN_SYSTEM.md §2）
+ *
+ * 命名空间 --ui-*：与上方旧令牌零冲突。迁移期间旧页面继续用旧令牌（恒浅色），
+ * 迁移完成的组件一律用 --ui-* 并自动获得深色主题（[data-theme="dark"]）。
+ * 全部页面迁完后旧层退役。语义色（ok/warn/danger）只进数据层，不染 chrome。
+ * ══════════════════════════════════════════════════════════════ */
+:root {
+  --ui-bg: #fafafa;          /* 页面底 */
+  --ui-card: #ffffff;        /* 卡片 */
+  --ui-sunken: #f4f4f5;      /* 选中底、表头、次级面 */
+  --ui-ink: #18181b;         /* 主文字（浅主题近黑） */
+  --ui-ink-2: #3f3f46;       /* 次文字 */
+  --ui-muted: #71717a;       /* 辅助说明 */
+  --ui-faint: #a1a1aa;       /* 仅装饰、占位、刻度 */
+  --ui-line: #e4e4e7;        /* 卡片 1px 发丝边框 */
+  --ui-line-2: #d4d4d8;      /* hover 加强边 */
+  --ui-primary: #18181b;     /* 主按钮/当前柱（深色主题反转为近白） */
+  --ui-primary-ink: #fafafa; /* 主色底上的文字 */
+  --ui-primary-hover: #27272a;
+  --ui-ok: #16a34a;  --ui-ok-soft: #f0fdf4;
+  --ui-warn: #b45309; --ui-warn-soft: #fffbeb;
+  --ui-danger: #dc2626;
+  --ui-ring-track: #e4e4e7;  /* 环与条的底轨 */
+  --ui-shadow: 0 1px 2px rgba(24, 24, 27, .04);
+}
+
+[data-theme="dark"] {
+  --ui-bg: #09090b;
+  --ui-card: #18181b;
+  --ui-sunken: #1c1c1f;
+  --ui-ink: #fafafa;
+  --ui-ink-2: #d4d4d8;
+  --ui-muted: #a1a1aa;
+  --ui-faint: #71717a;
+  --ui-line: #27272a;
+  --ui-line-2: #3f3f46;
+  --ui-primary: #fafafa;
+  --ui-primary-ink: #18181b;
+  --ui-primary-hover: #e4e4e7;
+  --ui-ok: #4ade80;  --ui-ok-soft: #052e16;
+  --ui-warn: #fbbf24; --ui-warn-soft: #451a03;
+  --ui-danger: #f87171;
+  --ui-ring-track: #27272a;
+  --ui-shadow: 0 1px 2px rgba(0, 0, 0, .4);
+}

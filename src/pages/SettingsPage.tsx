@@ -13,6 +13,8 @@ import { isTauriRuntime } from "../data/storage";
 import { useEnergyUnit } from "../hooks/useEnergyUnit";
 import { energyUnitLabels, toDisplayEnergy } from "../domain/energyDisplay";
 import type { EnergyUnitPref } from "../domain/preferences";
+import { useTheme } from "../hooks/useTheme";
+import type { ThemePref } from "../domain/preferences";
 
 interface DomainStorageStatus {
   initialized: boolean;
@@ -31,6 +33,7 @@ export function SettingsPage() {
   const [targetForm, setTargetForm] = useState<null | { min: string; target: string; max: string; protein: string; fiber: string; weight: string }>(null);
   const targetAction = useConfirmedAction();
   const [energyUnit, setEnergyUnit] = useEnergyUnit();
+  const [theme, setTheme] = useTheme();
   const auditEventCount = useAppStore((state) => state.auditEvents.length);
   const resetDemo = useAppStore((state) => state.resetDemo);
   const [busy, setBusy] = useState(false);
@@ -101,7 +104,8 @@ export function SettingsPage() {
           <div className="settings-title"><Gauge/><div><h2>显示偏好</h2><p>只影响界面显示；数据库统一以 kcal 存储，录入表单保持 kcal 口径不混排。</p></div></div>
           <div className="form compact-form">
             <label>能量单位<select value={energyUnit} data-testid="energy-unit-select" onChange={(event) => setEnergyUnit(event.target.value as EnergyUnitPref)}><option value="kcal">千卡 kcal（默认）</option><option value="kJ">千焦 kJ</option></select></label>
-            <p className="form-hint">换算系数与标签校验同源：1 kcal = 4.184 kJ。切换后饮食、今日、趋势的显示单位一致；导出与备份不受影响。</p>
+            <label>界面主题<select value={theme} data-testid="theme-select" onChange={(event) => setTheme(event.target.value as ThemePref)}><option value="light">浅色（默认）</option><option value="dark">深色</option></select></label>
+            <p className="form-hint">换算系数与标签校验同源：1 kcal = 4.184 kJ。切换后饮食、今日、趋势的显示单位一致；导出与备份不受影响。主题随 0.9.3 页面迁移逐步覆盖全站。</p>
           </div>
         </section>
         <section className="card settings-section">

@@ -5,6 +5,7 @@ import { useAppStore } from "./store/appStore";
 import { diaryToday } from "./domain/diary";
 import { getStorageFailure, subscribeStorageFailure } from "./data/storage";
 import { useSilentUpdateCheck } from "./hooks/useSilentUpdateCheck";
+import { useTheme } from "./hooks/useTheme";
 import type { MealType } from "./domain/types";
 
 const TodayPage = lazy(() => import("./pages/TodayPage").then((module) => ({ default: module.TodayPage })));
@@ -69,6 +70,8 @@ export default function App() {
   const hydrated = useAppStore.persist.hasHydrated();
   const storageFailure = useSyncExternalStore(subscribeStorageFailure, getStorageFailure);
   const [, forceRender] = useState(0);
+  // 主题（0.9.3 起）：把偏好挂到 <html data-theme>，--ui-* 令牌层随之切换。
+  useTheme();
   // 启动静默检查更新（设置页可关）：失败静默，绝不因更新打扰记录。
   useSilentUpdateCheck();
   useEffect(() => useAppStore.persist.onFinishHydration(() => forceRender((value) => value + 1)), []);
