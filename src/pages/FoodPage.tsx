@@ -4,6 +4,7 @@ import { BookOpen, ChefHat, Library, Plus, ShieldCheck, UtensilsCrossed } from "
 import { useEffect, useMemo, useState } from "react";
 import type { MealEntry, RecipeVersion, MealType } from "../domain/types";
 import { useAppStore } from "../store/appStore";
+import { useFoodPicker } from "../store/foodPicker";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { useConfirmedAction } from "../components/useConfirmedAction";
@@ -23,7 +24,7 @@ import { energyUnitLabels } from "../domain/energyDisplay";
 import { foodUnitLabels } from "../domain/foodLibrary";
 import { nutrientText } from "../domain/nutritionDisplay";
 
-export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, autoOpenMealType, onAutoOpenConsumed }: DiaryDateProps & { autoOpenMeal?: boolean; autoOpenMealType?: MealType; onAutoOpenConsumed?: () => void } = {}) {
+export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, autoOpenMealType, onAutoOpenConsumed, goTo }: DiaryDateProps & { autoOpenMeal?: boolean; autoOpenMealType?: MealType; onAutoOpenConsumed?: () => void; goTo?: (page: string) => void } = {}) {
   const [correction,setCorrection]=useState<{meal:MealEntry;mode:"edit"|"void"}|null>(null);
   const [recipeEditor,setRecipeEditor]=useState<RecipeVersion|"new"|null>(null);
   const [selectedRecipeId,setSelectedRecipeId]=useState("");
@@ -37,7 +38,8 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
   const [copyTarget, setCopyTarget] = useState<{ type: MealType; source: MealCopySource } | null>(null);
   const [manualMeal, setManualMeal] = useState(false);
   const [initialMealType, setInitialMealType] = useState<MealType>("breakfast");
-  function openMeal(type: MealType = "breakfast") { setManualMeal(false); setInitialMealType(type); setMealOpen(true); }
+  const [preselectFoodId, setPreselectFoodId] = useState<string | null>(null);
+  function openMeal(type: MealType = "breakfast") { setManualMeal(false); setInitialMealType(type); setPreselectFoodId(null); setMealOpen(true); }
   // 今日页「吃了什么」直达：按带来的餐次打开，而不是固定早餐；打开后立刻回报，避免重复触发。
   useEffect(() => {
     if (!autoOpenMeal) return;
@@ -45,6 +47,17 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
     setMealOpen(true);
     onAutoOpenConsumed?.();
   }, [autoOpenMeal, autoOpenMealType, onAutoOpenConsumed]);
+  // 食材库页建档归来的回程票：自动打开选择器并预选新食物，篮子仍在跨页 store。
+  useEffect(() => {
+    const picker = useFoodPicker.getState();
+    if (picker.returnTicket) {
+      const foodId = picker.returnTicket;
+      picker.setReturnTicket(null);
+      setPreselectFoodId(foodId);
+      setManualMeal(false);
+      setMealOpen(true);
+    }
+  }, []);
   function toggleSodium(visible: boolean) { setShowSodium(visible); writeDiaryShowSodium(visible); }
   const [energyUnit] = useEnergyUnit();
   const meals = useAppStore((state) => state.meals);
@@ -71,7 +84,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
 
   return (
     <div className="page food-page">
-      <PageHeader eyebrow="实际摄入" title="饮食日记" description="新食物确认一次规格，以后选择食物、填写吃了多少，自动计算营养。" action={<div className="card-heading-actions"><button className="button primary" onClick={() => openMeal()}><Plus size={17} /> 添加食物</button><button className="button secondary" onClick={() => setLibraryOpen(true)}><Library size={17} /> 食材库管理</button></div>} />
+      <PageHeader eyebrow="实际摄入" title="饮食日记" description="新食物确认一次规格，以后选择食物、填写吃了多少，自动计算营养。" action={<div className="card-heading-actions"><button className="button primary" onClick={() => openMeal()}><Plus size={17} /> 添加食物</button><button className="button secondary" onClick={() => (goTo ? goTo("library") : setLibraryOpen(true))}><Library size={17} /> 食材库</button></div>} />
       <DiaryDateControl date={date} onChange={onDateChange}/>
       <p className="form-hint">补录或新增餐食会把该日重新标为待核对，请在日报再次确认完成。</p>
       <MealDiaryTable
@@ -149,7 +162,7 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
       {copyTarget && <CopyMealModal date={today} type={copyTarget.type} source={copyTarget.source} onClose={() => setCopyTarget(null)} />}
       {recipeEditor&&<RecipeEditor copyMode={copyRecipe} recipe={recipeEditor==="new"?undefined:recipeEditor} onClose={()=>setRecipeEditor(null)} onSaved={setSelectedRecipeId}/>}
       {meals.some(m=>m.date===date&&m.status&&m.status!=="active")&&<details className="card meal-correction-history"><summary>查看所选日修订／作废的原始记录</summary>{meals.filter(m=>m.date===date&&m.status&&m.status!=="active").map(m=><article key={m.id}><strong>{m.name} · {m.status==="void"?"已作废":"已修订"}</strong><p>{m.date} · {m.amountLabel} · 原始营养 {nutrientText(m.nutrition, "calories", energyUnit)} {energyUnitLabels[energyUnit]}（参考规格，非重新入账）</p><p>原因：{m.correctionReason}；原记录 ID：{m.id}</p></article>)}</details>}
-      {mealOpen && <><div hidden={manualMeal}><FoodLibraryModal initialType={initialMealType} initialDate={date} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onManual={() => setManualMeal(true)} /></div>{manualMeal && <MealModal initialType={initialMealType} initialDate={date} onBack={() => setManualMeal(false)} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onSave={addMeal}/>}</>}
+      {mealOpen && <><div hidden={manualMeal}><FoodLibraryModal initialType={initialMealType} initialDate={date} onRecorded={onDateChange} preselectFoodId={preselectFoodId ?? undefined} onClose={() => { setMealOpen(false); setPreselectFoodId(null); }} onManual={() => setManualMeal(true)} onOpenEditor={goTo ? (target) => { useFoodPicker.getState().setEditorTarget(target); goTo("library"); } : undefined} /></div>{manualMeal && <MealModal initialType={initialMealType} initialDate={date} onBack={() => setManualMeal(false)} onRecorded={onDateChange} onClose={() => setMealOpen(false)} onSave={addMeal}/>}</>}
     </div>
   );
 }
