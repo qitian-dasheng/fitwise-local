@@ -4,6 +4,7 @@ import { Component, lazy, Suspense, useEffect, useLayoutEffect, useState, useSyn
 import { useAppStore } from "./store/appStore";
 import { diaryToday } from "./domain/diary";
 import { getStorageFailure, subscribeStorageFailure } from "./data/storage";
+import { useSilentUpdateCheck } from "./hooks/useSilentUpdateCheck";
 import type { MealType } from "./domain/types";
 
 const TodayPage = lazy(() => import("./pages/TodayPage").then((module) => ({ default: module.TodayPage })));
@@ -68,6 +69,8 @@ export default function App() {
   const hydrated = useAppStore.persist.hasHydrated();
   const storageFailure = useSyncExternalStore(subscribeStorageFailure, getStorageFailure);
   const [, forceRender] = useState(0);
+  // 启动静默检查更新（设置页可关）：失败静默，绝不因更新打扰记录。
+  useSilentUpdateCheck();
   useEffect(() => useAppStore.persist.onFinishHydration(() => forceRender((value) => value + 1)), []);
   useLayoutEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });

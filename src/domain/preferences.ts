@@ -99,3 +99,26 @@ export function writeEnergyUnit(unit: EnergyUnitPref): void {
     // 写不进去也要让本次会话的单位照常生效。
   }
 }
+
+/**
+ * 启动时静默检查更新（0.9.3 起）。默认开：更新检查是本应用唯一的网络行为（README 隐私声明同口径），
+ * 用户可在设置页关闭。存 localStorage，与能量单位同一纪律：不进 AppState、不写领域库。
+ */
+export const UPDATE_SILENT_CHECK_KEY = "qingheng.updates.silent-check";
+
+export function readUpdateSilentCheck(): boolean {
+  try {
+    // 显式写 0 才算关；从未设置 = 默认开。
+    return window.localStorage.getItem(UPDATE_SILENT_CHECK_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+export function writeUpdateSilentCheck(enabled: boolean): void {
+  try {
+    window.localStorage.setItem(UPDATE_SILENT_CHECK_KEY, enabled ? "1" : "0");
+  } catch {
+    // 写失败时本次会话的开关状态照常生效。
+  }
+}

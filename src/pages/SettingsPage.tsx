@@ -8,6 +8,7 @@ import { targetFieldsOf, validateTargetProfileInput } from "../domain/targets";
 import type { TargetProfileInput } from "../domain/types";
 import { DataExportPanel } from "../components/DataExportPanel";
 import { RuntimeDiagnostics } from "../components/RuntimeDiagnostics";
+import { UpdatePanel } from "../components/UpdatePanel";
 import { isTauriRuntime } from "../data/storage";
 import { useEnergyUnit } from "../hooks/useEnergyUnit";
 import { energyUnitLabels, toDisplayEnergy } from "../domain/energyDisplay";
@@ -110,6 +111,7 @@ export function SettingsPage() {
           {upgradeReport && <p className="form-hint">升级对账：{upgradeReport.reconciled ? "记录与营养一致" : "需要复核"}{upgradeReport.backupPath ? `。升级前本地明文安全副本：${upgradeReport.backupPath}` : "。首次初始化，无旧数据库需要备份。"}</p>}
           <DataExportPanel/>
         </section>
+        <UpdatePanel/>
       </div>
       <section className="danger-zone card"><div><h3>重置本地记录</h3><p>清除全部饮食、体重/腰围/体脂、运动、打卡记录、审计事件与命令回执；保留食材库与营养版本、引用有效的菜谱、个人目标与显示偏好（能量单位/钠开关/趋势区间）。重置不可撤销，建议先导出 JSON 备份。</p></div><button className="button danger" disabled={busy} onClick={async () => { if (!confirm("确定重置本地记录？将清除全部饮食、身体、运动、打卡记录与命令回执；保留食材库、引用有效的菜谱、个人目标与显示偏好。建议先导出 JSON 备份。")) return; setBusy(true); try { const summary = await resetDemo(); const kept = `保留食材库 ${summary.keptFoodDefinitions} 项、营养版本 ${summary.keptFoodDefinitionVersions} 个、菜谱 ${summary.keptRecipes} 道、个人目标与显示偏好`; const cleared = `清除饮食 ${summary.clearedMeals} 条、身体记录 ${summary.clearedMeasurements} 条、运动 ${summary.clearedWorkouts} 条、打卡 ${summary.clearedCheckIns} 条、审计 ${summary.clearedAuditEvents} 条、命令回执 ${summary.clearedCommandReceipts} 条`; const dropped = summary.droppedRecipes.length > 0 ? `；剔除失效菜谱 ${summary.droppedRecipes.length} 道（${summary.droppedRecipes.join("、")}）` : ""; setMessage(`本地记录已重置：${kept}；${cleared}${dropped}。`); } catch (cause) { setMessage(String(cause)); } finally { setBusy(false); } }}><RotateCcw size={16}/> 重置</button></section>
     </div>
