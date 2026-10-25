@@ -10,7 +10,8 @@ const collections = ["foodDefinitions", "foodDefinitionVersions", "meals", "chec
 
 export function captureWindowSnapshot(state: AppState) {
   return {
-    app: "Fitwise Local", schemaVersion: 12, persistVersion: 4,
+    // 快照内容与 SQLite 领域库同形态：schemaVersion 必须跟随 user_version（Rust 导出实读 PRAGMA，前端兜底只能在此同步）。
+    app: "Fitwise Local", schemaVersion: 14, persistVersion: 4,
     source: "window_snapshot_unverified", exportedAt: new Date().toISOString(),
     warning: "当前窗口快照，不代表数据库已保存；不含附件原件。恢复前须核对差异并另行确认。",
     profile: state.profile,
