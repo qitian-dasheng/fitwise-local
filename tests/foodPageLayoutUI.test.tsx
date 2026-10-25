@@ -36,8 +36,8 @@ it("renders the cooking card as a single compact row (0.9.4 压一行)", async (
 
   const recipeBtn = host.querySelector(".food-recipe-btn") as HTMLButtonElement;
   expect(recipeBtn).not.toBeNull();
-  expect(recipeBtn.textContent).toContain("菜谱");
-  expect(recipeBtn.textContent).toContain(initialState.recipes[0].name);
+  // 第四轮：按钮只留「菜谱」二字，菜名收进抽屉。
+  expect(recipeBtn.textContent?.trim()).toBe("菜谱");
 });
 
 it("keeps recipe management inside a drawer that closes on Escape", async () => {
@@ -52,15 +52,15 @@ it("keeps recipe management inside a drawer that closes on Escape", async () => 
   const drawer = host.querySelector(".drawer")!;
   expect(drawer).not.toBeNull();
   expect(drawer.getAttribute("aria-modal")).toBe("true");
-  expect(drawer.querySelector('select[aria-label="选择标准菜谱"]')).not.toBeNull();
+  expect(drawer.querySelector('.recipe-list')).not.toBeNull();
   expect([...drawer.querySelectorAll("button")].some((b) => b.textContent?.trim() === "新建菜谱")).toBe(true);
 
   await act(async () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
   });
   expect(host.querySelector(".drawer")).toBeNull();
-  // 抽屉关闭后页头菜谱按钮仍在，选择结果保留在主页面上。
-  expect(host.querySelector(".food-recipe-btn")!.textContent).toContain(initialState.recipes[0].name);
+  // 抽屉关闭后页头菜谱按钮仍在（选择状态由抽屉内部保留，按钮只留「菜谱」二字）。
+  expect(host.querySelector(".food-recipe-btn")!.textContent?.trim()).toBe("菜谱");
 });
 
 it("collapses the drawer before opening the recipe editor so only one overlay is visible", async () => {

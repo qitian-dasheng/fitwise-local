@@ -312,7 +312,8 @@ it("says so plainly when the range has no waist measurement", async () => {
   });
   const cards = [...host.querySelectorAll(".metric-card")].map((item) => item.textContent ?? "");
   const waist = cards.find((text) => text.includes("区间腰围变化"))!;
-  expect(waist).toContain("区间内未量");
+  // 0.9.4 第四轮：数值位改「—」避免五字折行撑高卡片；文案进 note。
+  expect(waist).toContain("—");
   expect(waist).toContain("在「身体」页记一次腰围");
 });
 

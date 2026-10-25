@@ -274,7 +274,7 @@ export function TrendsPage({
           label="区间腰围变化"
           value={
             metrics.waist === null
-              ? "区间内未量"
+              ? "—"
               : metrics.waist.change === null
                 ? formatCm(metrics.waist.latest)
                 : girthDeltaText(metrics.waist.change, " cm")
@@ -288,7 +288,7 @@ export function TrendsPage({
           }
           note={
             metrics.waist === null
-              ? "在「身体」页记一次腰围"
+              ? (embedded ? "区间内没有腰围记录" : "在「身体」页记一次腰围")
               : metrics.waist.change === null
                 ? `${metrics.waist.latestDate.slice(5)} 只有一次`
                 : `最新 ${formatCm(metrics.waist.latest)}${

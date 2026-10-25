@@ -121,8 +121,8 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
             <input type="date" aria-label="查看日期" value={date} onChange={(event) => event.target.value && onDateChange?.(event.target.value)} style={{ all: "unset", cursor: "pointer", font: "inherit", color: "var(--ui-ink-2)" }} />
             <button className="ui-navbtn" aria-label="后一天" disabled={date >= diaryToday()} onClick={() => onDateChange?.(shiftDiaryDate(date, 1))}><ChevronRight size={15} /></button>
           </div>
-          <button className="ui-btn food-recipe-btn" aria-label={recipe ? `打开菜谱管理（当前 ${recipe.name}）` : "打开菜谱管理"} onClick={() => setRecipeDrawer(true)}>
-            <ChefHat size={15} /> <span className="food-recipe-btn-text">{recipe ? `菜谱 · ${recipe.name}` : "菜谱"}</span>
+          <button className="ui-btn food-recipe-btn" aria-label="打开菜谱管理" onClick={() => setRecipeDrawer(true)}>
+            <ChefHat size={15} /> <span className="food-recipe-btn-text">菜谱</span>
           </button>
           <button className="ui-btn" onClick={() => (goTo ? goTo("library") : setLibraryOpen(true))}><Library size={15} /> 食材库</button>
           <button className="ui-btn primary" onClick={() => openMeal()}><Plus size={15} /> 添加食物</button>

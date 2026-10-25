@@ -121,11 +121,13 @@ function PantryEntryModal({ onClose, action, onSaved }: { onClose: () => void; a
   const definitions = useAppStore((state) => state.foodDefinitions);
   const pantryItems = useAppStore((state) => state.pantryItems);
   const [form, setForm] = useState({ foodDefinitionId: "", quantity: "", unit: "g" as FoodUnit, expiresAt: "", lowStockThreshold: "", note: "" });
-  const candidates = useMemo(
-    () => definitions.filter((item) => item.archived !== true && !pantryItems.some((entry) => entry.foodDefinitionId === item.id)),
-    [definitions, pantryItems],
-  );
+  // 第三轮：全部未归档食材可选——已入柜的走「累加模式」（单位锁定，只填增量），不再把已入柜食材挡在外面。
+  const candidates = useMemo(() => definitions.filter((item) => item.archived !== true), [definitions]);
   const target = candidates.find((item) => item.id === form.foodDefinitionId) ?? candidates[0];
+  const existingEntry = useMemo(
+    () => pantryItems.find((item) => item.foodDefinitionId === target?.id),
+    [pantryItems, target],
+  );
   // 候选集异步就绪后把默认选中补上（初值留空避免渲染期写 store）。
   useEffect(() => {
     if (!form.foodDefinitionId && target) setForm((current) => ({ ...current, foodDefinitionId: target.id }));
@@ -146,10 +148,14 @@ function PantryEntryModal({ onClose, action, onSaved }: { onClose: () => void; a
           const payload = {
             foodDefinitionId: target.id,
             delta: quantity,
-            unit: form.unit,
-            ...(form.expiresAt ? { expiresAt: form.expiresAt } : {}),
-            ...(form.lowStockThreshold ? { lowStockThreshold: Number(form.lowStockThreshold) } : {}),
-            ...(form.note.trim() ? { note: form.note.trim() } : {}),
+            unit: existingEntry ? existingEntry.unit : form.unit,
+            ...(existingEntry
+              ? {}
+              : {
+                  ...(form.expiresAt ? { expiresAt: form.expiresAt } : {}),
+                  ...(form.lowStockThreshold ? { lowStockThreshold: Number(form.lowStockThreshold) } : {}),
+                  ...(form.note.trim() ? { note: form.note.trim() } : {}),
+                }),
           };
           const result = await action.run(JSON.stringify(payload), (id) => useAppStore.getState().pantryAdjust(payload, id));
           if (!result.error) onSaved(target.name);
@@ -177,19 +183,23 @@ function PantryEntryModal({ onClose, action, onSaved }: { onClose: () => void; a
             </span>
           </label>
           <div className="form-grid">
-            <label><span>数量</span><input type="number" required min="0" step="0.01" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} placeholder="例如 500" /></label>
-            <label><span>单位</span>
-              <select value={form.unit} onChange={(event) => setForm({ ...form, unit: event.target.value as FoodUnit })}>
-                {UNIT_OPTIONS.map((unit) => <option key={unit} value={unit}>{foodUnitLabels[unit]}</option>)}
+            <label><span>{existingEntry ? "入库数量（累加到现有存量）" : "数量"}</span><input type="number" required min="0" step="0.01" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} placeholder="例如 500" /></label>
+            <label><span>单位{existingEntry ? "（柜内既有，锁定）" : ""}</span>
+              <select value={existingEntry ? existingEntry.unit : form.unit} disabled={!!existingEntry} onChange={(event) => setForm({ ...form, unit: event.target.value as FoodUnit })}>
+                {(existingEntry ? [existingEntry.unit] : UNIT_OPTIONS).map((unit) => <option key={unit} value={unit}>{foodUnitLabels[unit]}</option>)}
               </select>
             </label>
           </div>
-          <div className="form-grid">
-            <label><span>到期日（可空）</span><input type="date" value={form.expiresAt} onChange={(event) => setForm({ ...form, expiresAt: event.target.value })} /></label>
-            <label><span>低存量提醒线（可空）</span><input type="number" min="0" step="0.01" value={form.lowStockThreshold} onChange={(event) => setForm({ ...form, lowStockThreshold: event.target.value })} placeholder="低于它就提醒补货" /></label>
-          </div>
-          <label><span>备注（可空）</span><input maxLength={80} value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="例如 冰箱冷藏" /></label>
-          <p className="form-hint">单位入库后不可再改（增减必须同单位）；换算请交给食材库换算器，食物柜不做隐式换算。</p>
+          {existingEntry ? (
+            <p className="form-hint">柜内已有 {existingEntry.quantity} {foodUnitLabels[existingEntry.unit]}{existingEntry.lowStockThreshold !== undefined ? `（提醒线 ${existingEntry.lowStockThreshold}）` : ""}。本次入库直接累加；要改提醒线/到期日/备注，请用列表条目上的编辑按钮。</p>
+          ) : (<>
+            <div className="form-grid">
+              <label><span>到期日（可空）</span><input type="date" value={form.expiresAt} onChange={(event) => setForm({ ...form, expiresAt: event.target.value })} /></label>
+              <label><span>低存量提醒线（可空）</span><input type="number" min="0" step="0.01" value={form.lowStockThreshold} onChange={(event) => setForm({ ...form, lowStockThreshold: event.target.value })} placeholder="低于它就提醒补货" /></label>
+            </div>
+            <label><span>备注（可空）</span><input maxLength={80} value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="例如 冰箱冷藏" /></label>
+            <p className="form-hint">单位入库后不可再改（增减必须同单位）；换算请交给食材库换算器，食物柜不做隐式换算。</p>
+          </>)}
           {action.message && <p className="form-error" role="alert">{action.message}</p>}
           <div className="button-row">
             <button className="button primary" type="submit" disabled={action.busy}>{action.busy ? "正在保存…" : "入库"}</button>

@@ -82,11 +82,17 @@ it("historical recipe picker keeps the selected version and only permits copy or
   expect([...host.querySelectorAll("button")].filter(b=>["新建菜谱","修订当前菜谱","另存为新菜谱"].includes(b.textContent?.trim()??""))).toHaveLength(0);
   await act(async()=>(host.querySelector(".food-recipe-btn") as HTMLButtonElement).click());
   expect(host.querySelector(".drawer")!.textContent).toContain("管理菜谱");
-  const picker=()=>host.querySelector<HTMLSelectElement>('select[aria-label="选择标准菜谱"]')!;
-  expect(picker().textContent).not.toContain("（历史）");
-  await act(async()=>input("菜谱管理：显示历史版本").click());await select(picker(),old.id);
-  expect(host.textContent).toContain("正在复用历史 v1");expect(button("修订当前菜谱").disabled).toBe(true);
-  await act(async()=>button("另存为新菜谱").click());
+  const itemOf=(id:string)=>[...host.querySelectorAll(".recipe-list-item")].find(b=>b.querySelector("strong")?.textContent===[old,newer].find(r=>r.id===id)?.name) as HTMLButtonElement;
+  // 默认只显示最新版（v2）；历史 badge 只在勾选后出现。
+  expect([...host.querySelectorAll(".recipe-list-item")].map(b=>b.querySelector("strong")?.textContent)).toEqual(["新版配方"]);
+  // 第四轮：历史版本开关收进列表工具行（文案「历史版本」）。
+  await act(async()=>(host.querySelector<HTMLInputElement>(".recipe-history-toggle input")!).click());
+  await act(async()=>itemOf(old.id).click());
+    // 第四轮：历史复用提示为通用文案（卡片显示 v1（历史））。
+  expect(host.textContent).toContain("正在复用历史版本");
+  expect(host.textContent).toContain("（历史）");
+  expect(button("修订").disabled).toBe(true);
+  await act(async()=>button("另存").click());
   expect(host.querySelector(".drawer")).toBeNull();
   expect(host.textContent).toContain("另存历史配方");expect(input("菜谱名称").value).toBe(old.name+"（副本）");
 });
