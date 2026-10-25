@@ -102,8 +102,11 @@ export function FoodEditor({ item, action, onSaved, onCancel, layout = "modal" }
             {conversionFields}
           </div>
         </div>
-        {confirmRow}
-        <button className="button primary wide" type="submit" disabled={action.busy || !confirmed}>{action.busy ? "正在保存…" : "保存营养资料"}</button>
+        <div className="editor-footer">
+          {confirmRow}
+          <button className="button primary" type="submit" disabled={action.busy || !confirmed}>{action.busy ? "正在保存…" : "保存营养资料"}</button>
+          {!confirmed && !action.busy && <p className="form-hint">勾选左侧确认框后即可保存；无论表单多长，这一条始终停在页面底部。</p>}
+        </div>
       </>
     ) : (
       <>

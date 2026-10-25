@@ -161,6 +161,8 @@ h3 { margin-bottom: 6px; font-size: 16px; }
 .mini-progress { grid-column: 1 / -1; height: 4px; border-radius: 4px; background: var(--line-soft); overflow: hidden; }.mini-progress i { display: block; height: 100%; background: var(--green); }
 .weight-target { display: flex; justify-content: space-between; margin-top: 17px; color: var(--muted); font-size: 11px; }.weight-target b { color: var(--green); }
 .chart-small { height: 190px; margin-top: 10px; }
+/* 图表容器必须有显式高度：ResponsiveContainer 的 100% 高度在 auto 父容器里解析为 0，图表以 0×0 静默渲染（0.9.2 验收图表空白的根因）。 */
+.chart-large { height: 280px; margin-top: 10px; }
 .empty-chart { display: flex; height: 100%; align-items: center; justify-content: center; flex-direction: column; gap: 10px; color: #9ba49f; font-size: 11px; }
 
 .content-grid { display: grid; grid-template-columns: minmax(520px, 1.35fr) minmax(320px, .75fr); gap: 18px; margin-top: 18px; }
@@ -591,6 +593,10 @@ button.calendar-cell:focus-visible { outline: 2px solid var(--green); outline-of
 .editor-columns { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr); gap: 24px; align-items: start; }
 .editor-col { display: flex; flex-direction: column; gap: 12px; }
 .editor-col .form-grid { margin: 0; }
+/* 建档表单的保存条：勾选确认 + 保存按钮吸底，两栏再长也不落出屏幕（0.9.2 验收"找不到保存"的修复）。 */
+.editor-footer { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding: 13px 16px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface); box-shadow: 0 -8px 22px rgba(31, 41, 35, .07); }
+.editor-footer .checkbox-label { flex: 1 1 300px; margin: 0; }
+.editor-footer .form-error, .editor-footer .form-hint { flex-basis: 100%; margin: 0; }
 .nutrient-grid label:first-child input { font-weight: 600; }
 .food-library-page .library-notice[role="status"] { margin: 8px 0; }
 @media (max-width: 900px) { .editor-columns { grid-template-columns: 1fr; } }
