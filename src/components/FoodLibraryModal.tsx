@@ -6,6 +6,7 @@ import { calculateFoodPortion, findFoodItem, foodBasisLabels, foodUnitLabels, nu
 import { missingNutrientKeys, summarizeMeals } from "../domain/calculations";
 import { totalNutrient } from "../domain/nutritionDisplay";
 import { nutrientKeys, type FoodLibraryItem, type FoodMealInput, type MealEntry, type FoodUnit, type NutritionFacts } from "../domain/types";
+import { lastPortionForVersion } from "../domain/meals";
 import { useAppStore } from "../store/appStore";
 import { useFoodPicker } from "../store/foodPicker";
 import { Modal } from "./Modal";
@@ -30,6 +31,7 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
   const basket = useFoodPicker((picker) => picker.basket);
   const setBasket = useFoodPicker((picker) => picker.setBasket);
   const [editingBasket, setEditingBasket] = useState<number | null>(null);
+  const [lastHint, setLastHint] = useState("");
   const [editing, setEditing] = useState<FoodLibraryItem | "new" | null>(null);
   const [identity, setIdentity] = useState<FoodLibraryItem | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -57,7 +59,20 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
   }
 
   function choose(item: FoodLibraryItem) {
-    setSelected(item); setQuantity(String(item.version.basis.quantity)); setUnit(item.version.basis.unit); action.setMessage("");
+    setSelected(item);
+    // 记餐提速：有历史就按「上次吃了多少」预填；上次用的单位必须是本版本仍允许的单位。
+    const last = lastPortionForVersion(state.meals, item.version.id);
+    const allowedUnits = [item.version.basis.unit, ...item.version.conversions.map((conversion) => conversion.unit)];
+    if (last && allowedUnits.includes(last.unit)) {
+      setQuantity(String(last.quantity));
+      setUnit(last.unit);
+      setLastHint(`已按上次预填：${last.quantity} ${foodUnitLabels[last.unit]}（${last.date.slice(5)}）`);
+    } else {
+      setQuantity(String(item.version.basis.quantity));
+      setUnit(item.version.basis.unit);
+      setLastHint("");
+    }
+    action.setMessage("");
   }
 
   // 打开时：预选外部指定的新建食物（回程场景），并剔除篮子里已被修订失效的旧版本条目。
@@ -110,6 +125,7 @@ export function FoodLibraryModal({ onClose, onManual, initialType = "breakfast",
         {selected.per100g && <p className="form-hint">每 100 克：{nutrientLabel(selected.per100g, "calories", 1, displayUnit)} {energyUnitLabels[displayUnit]}，蛋白质 {nutrientLabel(selected.per100g, "protein")} g</p>}
         {selected.per100ml && <p className="form-hint">每 100 毫升：{nutrientLabel(selected.per100ml, "calories", 1, displayUnit)} {energyUnitLabels[displayUnit]}，蛋白质 {nutrientLabel(selected.per100ml, "protein")} g</p>}
         <div className="form-grid"><label><span>{catalogOnly ? "营养换算预览数量（不记餐）" : "实际吃了多少"}</span><input type="number" min="0" step="any" aria-label="摄入数量" value={quantity} onChange={(event) => setQuantity(event.target.value)}/></label><label><span>单位</span><select aria-label="摄入单位" value={unit} onChange={(event) => setUnit(event.target.value as FoodUnit)}>{[selected.version.basis.unit, ...selected.version.conversions.map((conversion) => conversion.unit)].map((value) => <option key={value} value={value}>{foodUnitLabels[value]}</option>)}</select></label></div>
+        {lastHint && <p className="form-hint">{lastHint}，改过就按你填的为准。</p>}
         {preview.loading && <p className="form-hint">正在换算…</p>}{preview.error && <p className="form-error" role="alert">{preview.error}</p>}
         {preview.data && <><NutritionPreview facts={preview.data.nutrition} energyUnit={displayUnit}/>{!catalogOnly&&<button className="button secondary wide" disabled={action.busy || basket.length >= 50} onClick={() => { if (!request || !preview.data) return; const facts = preview.data.nutrition; setBasket((items) => [...items, { ...request, name: selected.definition.name, facts }]); setNotice(`已把 ${selected.definition.name} 加入待确认餐食，可继续选择其他食物。`); }}><Plus size={15}/> 加入本餐</button>}</>}
         <p className="form-hint">缺少“个／份／包装”换算时，先修订规格；生重、熟重及可食部分分别建档。</p>

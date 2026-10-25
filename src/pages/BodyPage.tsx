@@ -101,6 +101,20 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
   const toTarget = latest !== null ? latest - profile.targetWeightKg : null;
   const waist = latestCircumference(measurements, "waistCm", date);
   const bodyFat = latestCircumference(measurements, "bodyFatPercent", date);
+  // 围度/体脂各自的迷你趋势：按日取最新值，只画有记录的区间（0.4.10 缺口补齐）。
+  const circumferenceSeries = (key: "waistCm" | "bodyFatPercent") => {
+    const byDate = new Map<string, { createdAt: string; value: number }>();
+    for (const item of measurements) {
+      if (item.date > date || item.status === "void" || item.status === "superseded") continue;
+      const value = item[key];
+      if (typeof value !== "number") continue;
+      const current = byDate.get(item.date);
+      if (!current || item.createdAt >= current.createdAt) byDate.set(item.date, { createdAt: item.createdAt, value });
+    }
+    return [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, entry]) => ({ date: day.slice(5), value: entry.value }));
+  };
+  const waistSeries = circumferenceSeries("waistCm");
+  const fatSeries = circumferenceSeries("bodyFatPercent");
 
   return (
     <div className="page body-page">
@@ -328,6 +342,55 @@ export function BodyPage({ date = diaryToday(), onDateChange }: DiaryDateProps =
           <p className="form-hint" role="alert">趋势读取失败，图示为本地缓存数据；重新打开本页可重试。</p>
         )}
       </section>
+
+      {(waistSeries.length > 0 || fatSeries.length > 0) && (
+        <div className="girth-grid">
+          {waistSeries.length > 0 && (
+            <section className="card chart-card girth-card">
+              <div className="card-heading compact">
+                <div>
+                  <p className="eyebrow">按日最新一次</p>
+                  <h2>腰围趋势</h2>
+                </div>
+                <span className="status-pill neutral">最新 {formatCm(waist!.latest)}</span>
+              </div>
+              <div className="chart-large girth-chart">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={waistSeries}>
+                    <CartesianGrid vertical={false} stroke="#e8ebe5" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} />
+                    <YAxis domain={["dataMin - 1", "dataMax + 1"]} axisLine={false} tickLine={false} />
+                    <Tooltip />
+                    <Area type="monotone" dataKey="value" name="腰围 cm" stroke="#2c5a7c" strokeWidth={2.5} fill="none" dot={{ r: 2 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          )}
+          {fatSeries.length > 0 && (
+            <section className="card chart-card girth-card">
+              <div className="card-heading compact">
+                <div>
+                  <p className="eyebrow">按日最新一次</p>
+                  <h2>体脂趋势</h2>
+                </div>
+                <span className="status-pill neutral">最新 {formatPercent(bodyFat!.latest)}</span>
+              </div>
+              <div className="chart-large girth-chart">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={fatSeries}>
+                    <CartesianGrid vertical={false} stroke="#e8ebe5" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} />
+                    <YAxis domain={["dataMin - 1", "dataMax + 1"]} axisLine={false} tickLine={false} />
+                    <Tooltip />
+                    <Area type="monotone" dataKey="value" name="体脂 %" stroke="#8a6100" strokeWidth={2.5} fill="none" dot={{ r: 2 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          )}
+        </div>
+      )}
 
       <WeightHistoryTable
         measurements={measurements}

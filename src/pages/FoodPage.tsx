@@ -17,11 +17,11 @@ import { RecipeMealDraftModal } from "../components/RecipeMealDraftModal";
 import { latestRecipes } from "../domain/recipes";
 import { MealDiaryTable } from "../components/MealDiaryTable";
 import { CopyMealModal } from "../components/CopyMealModal";
-import { mealCopySource, mealLabels, mealTypes, type MealCopySource } from "../domain/meals";
+import { mealCopySource, mealLabels, mealTypes, frequentFoods, type FrequentFood, type MealCopySource } from "../domain/meals";
 import { readDiaryShowSodium, writeDiaryShowSodium } from "../domain/preferences";
 import { useEnergyUnit } from "../hooks/useEnergyUnit";
 import { energyUnitLabels } from "../domain/energyDisplay";
-import { foodUnitLabels } from "../domain/foodLibrary";
+import { calculateFoodPortion, foodUnitLabels } from "../domain/foodLibrary";
 import { nutrientText } from "../domain/nutritionDisplay";
 
 export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, autoOpenMealType, onAutoOpenConsumed, goTo }: DiaryDateProps & { autoOpenMeal?: boolean; autoOpenMealType?: MealType; onAutoOpenConsumed?: () => void; goTo?: (page: string) => void } = {}) {
@@ -62,8 +62,34 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
   const [energyUnit] = useEnergyUnit();
   const meals = useAppStore((state) => state.meals);
   const recipes = useAppStore((state) => state.recipes);
+  const foodDefinitions = useAppStore((state) => state.foodDefinitions);
+  const foodDefinitionVersions = useAppStore((state) => state.foodDefinitionVersions);
   const addMeal = useAppStore((state) => state.addMeal);
   const today = date;
+  // 常吃榜：近 30 天频次 Top 8；一键按上次份量直接进待确认篮子（目标：常吃饭 3 次点击记完）。
+  const frequent = useMemo(
+    () => frequentFoods(meals, foodDefinitions, foodDefinitionVersions, today),
+    [meals, foodDefinitions, foodDefinitionVersions, today],
+  );
+  function quickAddFrequent(food: FrequentFood) {
+    const last = food.lastPortion;
+    if (last) {
+      try {
+        const preview = calculateFoodPortion(food.version, last.quantity, last.unit);
+        useFoodPicker.getState().setBasket((items) => [
+          ...items,
+          { foodVersionId: food.version.id, quantity: last.quantity, unit: last.unit, name: food.definition.name, facts: preview.nutrition },
+        ]);
+        setManualMeal(false);
+        setPreselectFoodId(null);
+        setMealOpen(true);
+        return;
+      } catch { /* 换算失败（如上次单位已不可用）退回预选路径，不猜数值 */ }
+    }
+    setManualMeal(false);
+    setPreselectFoodId(food.definition.id);
+    setMealOpen(true);
+  }
   // 每个餐次能照搬哪一天：只在目标日期之前、同餐次、仍然有效的记录里取最近一天。
   const copySources = useMemo(
     () =>
@@ -87,6 +113,25 @@ export function FoodPage({ date = diaryToday(), onDateChange, autoOpenMeal, auto
       <PageHeader eyebrow="实际摄入" title="饮食日记" description="新食物确认一次规格，以后选择食物、填写吃了多少，自动计算营养。" action={<div className="card-heading-actions"><button className="button primary" onClick={() => openMeal()}><Plus size={17} /> 添加食物</button><button className="button secondary" onClick={() => (goTo ? goTo("library") : setLibraryOpen(true))}><Library size={17} /> 食材库</button></div>} />
       <DiaryDateControl date={date} onChange={onDateChange}/>
       <p className="form-hint">补录或新增餐食会把该日重新标为待核对，请在日报再次确认完成。</p>
+      {frequent.length > 0 && (
+        <div className="frequent-bar card" aria-label="常吃食物">
+          <span className="frequent-title">常吃</span>
+          <div className="frequent-chips">
+            {frequent.map((food) => (
+              <button
+                key={food.definition.id}
+                type="button"
+                className="frequent-chip"
+                title={food.lastPortion ? `按上次 ${food.lastPortion.quantity} ${foodUnitLabels[food.lastPortion.unit]} 加入篮子` : "打开选择器选择份量"}
+                onClick={() => quickAddFrequent(food)}
+              >
+                {food.definition.name}
+                {food.lastPortion && <small>{food.lastPortion.quantity}{foodUnitLabels[food.lastPortion.unit]}</small>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <MealDiaryTable
         date={today}
         entries={meals}

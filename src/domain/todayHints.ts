@@ -6,10 +6,12 @@
  * 所以把三个副标题全部改成从真实记录算出来的状态，文案只是状态的渲染结果。
  */
 
-import type { BodyMeasurement, MealEntry, MealType, WorkoutSession } from "./types";
+import type { BodyMeasurement, DailyCheckIn, MealEntry, MealType, WorkoutSession } from "./types";
 import { mealLabels, nextMealSlot } from "./meals";
 import { latestActiveWorkout } from "./workouts";
 import { dailyRepresentatives } from "./body";
+import { shiftDiaryDate } from "./diary";
+import { activeMeals } from "./calculations";
 
 /** 训练名称在副标题里的显示上限；课程名可写 80 字，超长会把整行挤没。 */
 const WORKOUT_NAME_HINT_LIMIT = 8;
@@ -61,4 +63,67 @@ export function bodyActionHint(measurements: BodyMeasurement[], date: string, to
   const sameDay = dailyRepresentatives(measurements).find((item) => item.date === date);
   if (sameDay) return `已记 ${sameDay.weightKg.toFixed(1)} kg`;
   return date === today ? "今晨还没称重" : "所选日没有称重";
+}
+
+export interface CalorieBudget {
+  /** no-records：还没有任何记录；partial：仍有未知热量；known：热量全部已知；over：已超上限。 */
+  status: "no-records" | "partial" | "known" | "over";
+  consumedKnown: number;
+  /** 至少还能吃（到区间下限）；仅 known 状态有值。 */
+  remainingLow: number | null;
+  /** 至多还能吃（到区间上限）；known/partial 有值。 */
+  remainingHigh: number | null;
+  overBy: number | null;
+}
+
+/**
+ * 「还能吃多少」：从热量区间推导的当日预算。这是用户最关心的可执行数字。
+ * 仍有未知热量时只能给上界——未知食物只会让实际摄入更多，不能假装下界已知。
+ */
+export function calorieBudget(
+  consumedKnown: number,
+  coverageCalories: number,
+  daily: { min: number; target: number; max: number },
+  hasAnyMeal: boolean,
+): CalorieBudget {
+  if (!hasAnyMeal) {
+    return { status: "no-records", consumedKnown: 0, remainingLow: null, remainingHigh: null, overBy: null };
+  }
+  const over = consumedKnown - daily.max;
+  if (over > 0) {
+    return { status: "over", consumedKnown, remainingLow: null, remainingHigh: 0, overBy: Math.round(over) };
+  }
+  const remainingHigh = Math.round(daily.max - consumedKnown);
+  if (coverageCalories < 100) {
+    return { status: "partial", consumedKnown, remainingLow: null, remainingHigh, overBy: null };
+  }
+  return {
+    status: "known",
+    consumedKnown,
+    remainingLow: Math.max(0, Math.round(daily.min - consumedKnown)),
+    remainingHigh,
+    overBy: null,
+  };
+}
+
+/**
+ * 连续记录天数：一天里「有有效餐食或已确认完成」即算记录过。
+ * 今天还没记不打断连击——从昨天往回数；今天记了则从今天数起。
+ */
+export function recordStreak(meals: MealEntry[], checkIns: DailyCheckIn[], today: string): number {
+  const recorded = new Set<string>();
+  for (const entry of activeMeals(meals)) {
+    if (entry.date <= today) recorded.add(entry.date);
+  }
+  for (const check of checkIns) {
+    if (check.complete && check.date <= today) recorded.add(check.date);
+  }
+  if (!recorded.size) return 0;
+  let cursor = recorded.has(today) ? today : shiftDiaryDate(today, -1);
+  let streak = 0;
+  while (recorded.has(cursor)) {
+    streak += 1;
+    cursor = shiftDiaryDate(cursor, -1);
+  }
+  return streak;
 }

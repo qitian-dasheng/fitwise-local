@@ -594,3 +594,20 @@ button.calendar-cell:focus-visible { outline: 2px solid var(--green); outline-of
 .nutrient-grid label:first-child input { font-weight: 600; }
 .food-library-page .library-notice[role="status"] { margin: 8px 0; }
 @media (max-width: 900px) { .editor-columns { grid-template-columns: 1fr; } }
+
+/* ── 0.9.2 今日页预算行/餐次条 + 饮食页常吃栏 ───────────────────── */
+.budget-line { margin: 2px 0 10px; font-size: 13px; color: var(--ink-600, #4a514c); }
+.budget-line[data-status="over"] { color: #a33a2b; font-weight: 600; }
+.meal-progress { height: 4px; border-radius: 999px; background: var(--line-soft, #eff1ed); margin-top: 6px; overflow: hidden; }
+.meal-progress i { display: block; height: 100%; border-radius: 999px; background: var(--green, #276a53); opacity: 0.55; }
+.frequent-bar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; margin: 0 0 14px; }
+.frequent-title { font-size: 12px; color: var(--muted, #6f776f); flex-shrink: 0; letter-spacing: 0.06em; }
+.frequent-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.frequent-chip { border: 1px solid var(--border, #e4e7e2); border-radius: 999px; padding: 5px 12px; background: #fff; font-size: 13px; cursor: pointer; display: inline-flex; align-items: baseline; gap: 6px; }
+.frequent-chip:hover { border-color: var(--green, #276a53); color: var(--green, #276a53); }
+.frequent-chip small { color: var(--muted, #6f776f); font-size: 11px; }
+
+/* ── 0.9.2 身体页围度/体脂迷你趋势 ─────────────────────────────── */
+.girth-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.girth-card .girth-chart { height: 150px; }
+@media (max-width: 900px) { .girth-grid { grid-template-columns: 1fr; } }
