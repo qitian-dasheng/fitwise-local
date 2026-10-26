@@ -213,7 +213,7 @@ npm run tauri build                         # 产出 NSIS exe + .sig（MSI 自 0
 2. **删大目录用 robocopy**：`robocopy <空目录> <目标> /MIR /NFL /NDL /NJH /NJS /NC /NS /NP /R:0 /W:0` 再删空壳，比 `Remove-Item -Recurse` 快 5–10 倍。robocopy 退出码 0–7 都算成功，≥8 才是失败。删 5 万文件 / 55 GB 实测耗时 **29 分钟**。
 3. **`Start-Process -Verb RunAs` 可能被安全策略拦截**，需要管理员的操作可能只能交用户手跑。
 4. **不要用命令行 / 自动化启动生产 exe 做持久化验证**。历史上出现过：工具上下文读到的 AppData 路径是**另一套较小的数据库**，与用户正常入口打开的不是同一份文件视图。验证必须通过 Windows Explorer / 开始菜单由用户亲自打开。
-5. **沙箱代理**：AI 会话环境可能注入 `HTTP_PROXY=http://127.0.0.1:8480`（由 `sandbox-cli.exe` 提供）。用户自开 PowerShell 不继承该变量。曾出现 `schannel: server closed abruptly` 的瞬时失败，重试即好——**不要据此改 git 或系统 TLS 配置**。
+5. **沙箱代理**：AI 会话环境可能注入 `HTTP_PROXY=http://127.0.0.1:8480`（由 `sandbox-cli.exe` 提供）。用户自开 PowerShell 不继承该变量。曾出现 `schannel: server closed abruptly` 的瞬时失败，重试即好——**不要据此改 git 或系统 TLS 配置**。2026-10-26 又遇到连续失败（`Empty reply from server` → `CONNECT tunnel failed, response 502`），**且 unset 代理后直连不通**（沙箱内必须走代理）；此时改走用户本机代理可立即成功：`git -c http.proxy=http://127.0.0.1:7897 push origin main`。
 6. **PowerShell 5.1 读无 BOM 的 `.ps1` 按 ANSI 解码**：写脚本时保持纯 ASCII，否则中文乱码。
 7. **中文文件名与 GitHub**：Release 附件会被净化成 ASCII，且**净化结果不等于** `latest.json` 里写的资产名。上传前必须**手动**重命名为 `FitwiseLocal_X.Y.Z_x64-setup.exe`（`.sig` 同名），否则 updater 的 URL 会 404。
 8. **1420 落在 Windows 保留端口段**：本机 `netsh int ipv4 show excludedportrange protocol=tcp` 显示 **1344–1443** 被 Hyper-V/WSL 预留，vite 配置的 1420 绑不上（EACCES，`strictPort: true` 直接失败）。浏览器复查用 `npx vite --host 127.0.0.1 --port 5173`（5199 亦可，但历史进程可能占着）。
