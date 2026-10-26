@@ -15,7 +15,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const srPath = resolve(here, "sr-legacy/FoodData_Central_sr_legacy_food_json_2021-10-28.json");
 const catalogPath = resolve(here, "../../src-tauri/resources/food-catalog.json");
 const NUTRIENT_UNITS = { calories: "kcal", protein: "g", carbohydrates: "g", fat: "g", fiber: "g", sugar: "g", sodium: "mg" };
-const CATALOG_VERSION = 1;
+const CATALOG_VERSION = 2;
 
 if (!existsSync(srPath)) {
   console.error(`缺少 ${srPath}；先运行：node scripts/build-food-catalog/fetch-dataset.mjs`);
@@ -89,7 +89,9 @@ for (const [fdcId, meta] of Object.entries(manifest)) {
       id: `${definitionId}:v1`,
       foodId: definitionId,
       version: 1,
-      basis: { quantity: 100, unit: "g", measurementBasis: "edible" },
+      // basis 只允许 quantity / unit：Rust 侧 Basis 是 deny_unknown_fields，
+      // measurementBasis 属于 definition 层（可食部口径），写进 basis 会让整个食材库反序列化失败。
+      basis: { quantity: 100, unit: "g" },
       conversions: [],
       energyUnit: "kcal",
       labelNutrients: Object.fromEntries(Object.entries(values).filter(([, value]) => typeof value === "number")),
@@ -99,6 +101,21 @@ for (const [fdcId, meta] of Object.entries(manifest)) {
       confirmedAt: now,
     },
   });
+}
+
+/**
+ * 形状守卫：Rust 侧 Basis 是 deny_unknown_fields，只接受 quantity / unit。
+ * 历史上 basis 里多写了一个 measurementBasis，导致食材库整页反序列化报错，
+ * 这里在构建期直接拦住。
+ */
+for (const item of items) {
+  const keys = Object.keys(item.version.basis).sort().join(",");
+  if (keys !== "quantity,unit") {
+    throw new Error(`basis 形状非法（${keys}）：${item.name}；只允许 quantity,unit`);
+  }
+  if (item.definition.measurementBasis !== "edible") {
+    throw new Error(`definition 缺少 measurementBasis=edible：${item.name}`);
+  }
 }
 
 const categories = {};

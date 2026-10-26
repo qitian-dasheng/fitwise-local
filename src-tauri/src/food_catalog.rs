@@ -90,6 +90,26 @@ pub(crate) fn merge_food_catalog(connection: &mut Connection) -> Result<String, 
             .or_insert_with(|| Value::Array(Vec::new()));
     }
 
+    // 修复历史构建写入的非法 basis 形状：Rust 侧 Basis 是 deny_unknown_fields，
+    // 只允许 quantity/unit；早期目录在 basis 里多写了 measurementBasis，
+    // 会让食材库整页反序列化失败。已合并条目因幂等跳过不会被重写，
+    // 所以必须在每次合并时原地清理一次（无非法字段时不做任何改动）。
+    let mut repaired = 0usize;
+    if let Some(versions) = state
+        .get_mut("foodDefinitionVersions")
+        .and_then(Value::as_array_mut)
+    {
+        for version in versions.iter_mut() {
+            if let Some(basis) = version.get_mut("basis").and_then(Value::as_object_mut) {
+                let before = basis.len();
+                basis.retain(|key, _| key == "quantity" || key == "unit");
+                if basis.len() != before {
+                    repaired += 1;
+                }
+            }
+        }
+    }
+
     // 先收集既有 catalogId（不可变借用），再做插入（可变借用），避免借用冲突。
     let existing_catalog_ids: std::collections::HashSet<String> = state
         .get("foodDefinitions")
@@ -141,10 +161,6 @@ pub(crate) fn merge_food_catalog(connection: &mut Connection) -> Result<String, 
             entry.insert("category".into(), json!(item.category));
             entry.insert("archived".into(), json!(false));
             entry.insert("createdAt".into(), json!(now));
-            eprintln!(
-                "[debug] insert {}",
-                definition["id"].as_str().unwrap_or("?")
-            );
             definitions.push(definition);
             inserted += 1;
         }
@@ -183,7 +199,7 @@ pub(crate) fn merge_food_catalog(connection: &mut Connection) -> Result<String, 
         .commit()
         .map_err(|error| format!("提交目录合并事务失败：{error}"))?;
     Ok(format!(
-        "目录 v{catalog_version} 合并完成，新增 {inserted} 项。"
+        "目录 v{catalog_version} 合并完成，新增 {inserted} 项，修复 {repaired} 项。"
     ))
 }
 
