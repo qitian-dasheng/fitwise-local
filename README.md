@@ -31,7 +31,7 @@ Windows 本地优先的个人营养 / 饮食 / 体重 / 运动记录桌面应用
 
 ## 安装与升级
 
-- **0.10.0 → 0.11.0**：应用内自动更新（设置 → 关于与更新 → 检查更新）。
+- **0.10.0 → 0.11.0**：应用内自动更新（设置 → 关于与更新 → 检查更新）。注意 0.10.0 客户端只认官方端点（镜像随 0.11.0 才生效），若因网络失败请从 Release 手动下载 exe。
 - **0.9.x → 0.11.0**：从 Release 下载 exe 安装；0.9.2 的 MSI 需先在「设置 → 应用」卸载（卸载不会删除记录数据）。
 - 升级前建议冷备份 `%APPDATA%\cn.fitwise.local\` 整目录，**应用须完全退出**（WAL 模式下运行中拷贝会丢最后几条记录）。
 
@@ -59,8 +59,8 @@ Windows 本地优先的个人营养 / 饮食 / 体重 / 运动记录桌面应用
 
 ```bash
 npm install
-npm run dev          # 浏览器预览（默认 1420；若本机 1420 被 Hyper-V/WSL 保留端口段占用，
-                     # 改用 npx vite --host 127.0.0.1 --port 5199）
+npm run dev          # 浏览器预览。注意 1420 落在 Windows 保留端口段 1344-1443，本机必然绑定失败；
+                     # 改用 npx vite --host 127.0.0.1 --port 5173
 npm run test         # vitest（含 docsGuard / designGuard / stylesGuard 守卫）
 npx tsc -b
 cd src-tauri && cargo test

@@ -1,5 +1,8 @@
 # 轻衡项目记忆（权威交接）
 
+> ⚠️ **历史快照（2026-10-22，停在 0.9.0）**。当前事实以根目录 `START_HERE.md` 为准。
+> 2026-10-26 整理：`docs/history/PLAN_NEXT_0.6-0.9.md` 与 `docs/history/ROADMAP_0.5.md` 已归档到本目录，本文中的旧路径引用已改指归档文件。
+
 更新时间：2026-10-22（Asia/Shanghai，0.9.0 精简手术自动化收口）
 
 适用对象：Codex、WorkBuddy、DeepSeek Harness 及其他后续开发助手。
@@ -13,19 +16,19 @@
 - **保留的核心**：今日/饮食/身体/运动 + 设置（工具组唯一项）；趋势并入身体页（`TrendsPage embedded`，`#trends` 深链落 `body`）；菜谱降级为「营养与分量参考」（`RecipeEditor` 只编食材版本/数量/单位，`recipes.rs` 输出 `nutritionQuantity/nutritionUnit`，前端显示带 `amount/unit` 旧档回退）；三态营养、单位换算、版本不可变、幂等回执、审计、明文 JSON 导出全部不减配。
 - **数据库**：新增 `migrations/0014_drop_deprecated.sql`（DROP 22 表 + 4 视图 + 2 索引 + DELETE 8 废弃集合 + aiSettings 单例）；门闩 `PRAGMA user_version`（`<13` 重放 0001–0013，`<14` 跑 0014 后置 14）；0001–0013 文件一字未改；0002 的 ALTER 加了「`prepared_batches` 表存在才跑」守卫（表被 0014 删后不可重放）；运行期视图 `domain_active_meal_projection`（0009）不在删除清单。
 - **测试**：`tsc -b` 0 错误；vitest 30 文件 244 项全过；cargo test 81 项全过（新增 `src/migration_scenario_tests.rs` 三场景：全新空库 / 0.8.1 升级 / 升级后重启）；clippy `-D warnings`、fmt、生产构建全过。删 7 个废弃测试文件 + 21 个内联废弃测试；`styles.css` 268 → 193 类（动态类名 `gauge-${tone}`/`note-${level}` 复核后保留）。
-- **文档**：`FINAL_PRODUCT_PLAN.md` 原地修订（范围收敛）；`REVIEW_0.9.0.md` 新建（执行记录 + 10 项安装版点验清单）；`design/PLAN_NEXT.md` 增 F 段；窗口标题去 AI 字样。
+- **文档**：`FINAL_PRODUCT_PLAN.md` 原地修订（范围收敛）；`REVIEW_0.9.0.md` 新建（执行记录 + 10 项安装版点验清单）；`docs/history/PLAN_NEXT_0.6-0.9.md` 增 F 段；窗口标题去 AI 字样。
 - **状态**：自动化收口完成，**待用户安装版点验**（清单见 REVIEW_0.9.0.md 第 7 节）。下一阶段候选：本地 Ollama 自然语言录入（中文理解/食物数量识别优先）、深色主题、M2.5 组件拆分、备份扩展。
 
 ## 0. 0.5 设计阶段（2026-10-22，M0–M2 已完成）
 
 - **M0**：仓库迁至 `%USERPROFILE%/Projects/ai-fitness-platform`；误建的 Obsidian 库 `A\` 已删除并从 obsidian.json 注销。
-- **M1**：`design/DESIGN_SYSTEM.md`（规则，不抄数值）、`design/ROADMAP_0.5.md`（M0–M4 与 M3 修正）、`design/prototype/`（模板 + 生成器 `npm run design:build`）。
+- **M1**：`design/DESIGN_SYSTEM.md`（规则，不抄数值）、`docs/history/ROADMAP_0.5.md`（M0–M4 与 M3 修正）、`design/prototype/`（模板 + 生成器 `npm run design:build`）。
 - **M1.5**：导航 9→5（今日/饮食/身体/运动/计划 + 工具组）；今日行动台（吃/练/称，food/workout 直达开表单）；库存归饮食、趋势归身体；AI 助手改 Ctrl+K 浮层；`src/domain/navigation.ts` + 守卫测试；移除 react-router-dom。
 - **M2**：`src/styles/theme.css` 旧变量重映射全量换肤（绿色退场转近黑、阴影清零、语义色对齐、侧栏深墨底）；字号下限 11px（移动端导航 10px 例外已登记）；溢出清扫（pill/eyebrow/badge nowrap+ellipsis）；计划页表格化（删三卡/幽灵数字/覆盖进度条/两张占位卡，来源胶囊 演示/已选）；深链 `#food` 等；scoped 设计守卫 4 条（`tests/designGuard.test.ts`，全局守卫随 M2.5 旧样式退役启用）。
 - **0.6.1 已由用户安装验收通过（2026-10-22）**；过程中沉淀两条自动化点验教训：①Esc 不被 WebView2 消费，点验脚本要点 × 关弹窗；②共用桌面自动化必须先断言前台窗口（固化进 `tools/acceptance_qh.py`）。
 - **0.6.2 已出包待验收（2026-10-22，提交 `65eb7e0`）**：①今日页「补记一笔」hint 真实状态化（`todayHints.ts` + `nextMealSlot`；food 直达按待记餐次开表单）；②标签交叉校验 `label_checks.rs`（能量上限 950 kcal/100g、Atwater 容差 25%、NRV% 容差 35%、规格量级守卫；接入 `preview_form`，返回新增 `declaredKcal`）；③点验脚本固化（前台断言 + 坐标范围校验）。前端 287 项（+12）+ Rust 138 项（+11）全过；clippy `-D warnings` 过。MSI 8,409,088 B，SHA-256 `536C42B6…AFA99ED`。评审与点验清单见 `REVIEW_0.6.2.md`。**无数据库迁移，schema 仍 v12。**
 - **M3 修正**：菜单来源 = 用户问 AI、AI 推荐。M3 = 授权摘要导出 + AI 菜单草稿导入通道（外部 Agent 只能建草稿、应用内确认），本地确定性算法后置；表格形态与来源胶囊（演示/AI 草稿/已选）两种来源通用。
-- **待排期（用户提出，优先级由用户定）**：①设置页能量单位显示开关（kcal/kJ，默认 kcal，复用 `label_checks::energy_to_kcal`）；②标签预览 UI 补 NRV% 输入位（校验接口已留：`run_all(..., nrv, ...)`，暂传空表跳过）。**→ 两项已于 0.7.0（M3）完成。完整排期（0.6.3 → M3，含判据）见 `design/PLAN_NEXT.md`（2026-10-22 起为唯一排期来源）。**
+- **待排期（用户提出，优先级由用户定）**：①设置页能量单位显示开关（kcal/kJ，默认 kcal，复用 `label_checks::energy_to_kcal`）；②标签预览 UI 补 NRV% 输入位（校验接口已留：`run_all(..., nrv, ...)`，暂传空表跳过）。**→ 两项已于 0.7.0（M3）完成。完整排期（0.6.3 → M3，含判据）见 `docs/history/PLAN_NEXT_0.6-0.9.md`（2026-10-22 起为唯一排期来源）。**
 
 ## 0.8 阶段管理规则与 0.7.0（M3，2026-10-22）
 
@@ -174,7 +177,7 @@ npm run tauri build
 
 ## 8. 已批准的下一实施顺序
 
-> 2026-10-22 更新：0.5 设计阶段之后的下一阶段排期以 [design/PLAN_NEXT.md](design/PLAN_NEXT.md) 为准（0.6.1 → 0.6.2 → 0.6.3 → M3）；本节保留 0.4.x 的历史实施顺序。
+> 2026-10-22 更新：0.5 设计阶段之后的下一阶段排期以 [PLAN_NEXT_0.6-0.9.md](PLAN_NEXT_0.6-0.9.md) 为准（0.6.1 → 0.6.2 → 0.6.3 → M3）；本节保留 0.4.x 的历史实施顺序。
 
 1. `0.4.6-A`：库存实重/盘点纠错 + 饮食单项更正/作废 + P0 保护补丁一起收口。**已完成并安装验收（出包 0.4.6）。**
 2. `0.4.6-B1` → 出包 **0.4.7**：FatSecret 信息结构的轻衡风格饮食明细（三层 + 7 列 + 钠开关）+ 手工记餐补齐四项。**已随 0.4.8 覆盖安装验收。**

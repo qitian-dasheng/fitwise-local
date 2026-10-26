@@ -26,17 +26,18 @@
 | 仓库 | 本机克隆目录（仓库根 = README 所在目录；公开仓库不再写绝对路径） |
 | 远端 | `https://github.com/qitian-dasheng/fitwise-local.git`（公开） |
 | 当前分支 | `main`（0.11.0 提交与发布收尾均在此）；`dev/0.9.4` 已合并同步 0.11.0；`main` 与 `origin/main` 同步 |
-| 工作树 | 干净；仅 `GITHUB_RELEASE_REVIEW.md` 未跟踪（**故意不提交**，是 0.9.0 时期的旧审查报告；它计入 docsGuard 的根目录 md 配额） |
-| tag | `v0.8.1-fallback`、`v0.9.0`–`v0.9.3`、`v0.10.0`（均已推送）；`v0.11.0` 验收通过后打 |
-| Release | **轻衡 0.10.0**（Latest，exe+.sig+latest.json）、轻衡 0.9.3（exe）、轻衡 0.9.2（MSI 保留作回退）、更早归档 |
+| 工作树 | 干净（无未跟踪文件）；0.9.0 时期的旧审查报告已归档到 `D:\FitwiseBackup\docs-archive\` 并移出仓库 |
+| tag | `v0.8.1-fallback`、`v0.9.0`–`v0.9.3`、`v0.10.0`（均已推送）；`v0.11.0` 随本次发布打并推送 |
+| Release | **轻衡 0.11.0**（Latest，exe+.sig+latest.json）、轻衡 0.10.0（exe）、轻衡 0.9.3（exe）、轻衡 0.9.2（MSI 保留作回退）、更早归档 |
 | 版本号一致性 | 五处同步（package.json / tauri.conf.json / Cargo.toml / Cargo.lock / 本文件），由 `tests/docsGuard.test.ts` 冻结 |
 | 数据库 schema | **v14**（`PRAGMA user_version`，14 个迁移 `0001`–`0014`）。**0.9.2 起均为零迁移版本**（食物柜与内置食材目录都走 JSON 信封，非 SQL 表） |
 | 领域持久化格式 | **v4** |
+| 内置目录版本 | **catalogVersion 3**（235 项 / 八大类；`src-tauri/resources/food-catalog.json` 编译期嵌入，合并时按版本号幂等） |
 | 已安装版本 | 0.10.0（NSIS exe，按用户安装；此后经应用内自动更新升级） |
 | 数据目录 | `%APPDATA%\cn.fitwise.local\`（当前仅 `fitwise.db`，约 300 KB） |
 | 测试规模 | Rust **124** 项 / 前端 **327** 项（含 docsGuard/designGuard/stylesGuard 守卫） |
 | 安装包归档 | `D:\FitwiseBackup\installers\`（历代 MSI/exe 与验收记录哈希） |
-| 文档结构 | 根目录 md 共 6 份（跟踪 5 份 + 未跟踪的 `GITHUB_RELEASE_REVIEW.md`），已达 docsGuard 上限；新增文档只能进 `docs/` |
+| 文档结构 | 根目录 md 共 5 份（全部已跟踪），距 docsGuard 上限 6 尚有 1 个余量；新增文档只能进 `docs/` |
 
 **0.9.1 发布时的一个关键事实**：发布的 MSI 就是用户实际安装验收过的那一个二进制（`SHA-256 = cdebbe1796908a0d1bad67e178c150e14059aa99d2016a308fee62a7b008b1bd`，7,114,752 B）。Rust + WiX **不是可复现构建**，重新构建会产生不同哈希。若将来需要重新发版，请在发布说明里更新哈希，不要声称"同一构建"。
 
@@ -64,7 +65,8 @@
 
 - 不删除 tag、Release、历史提交、既有 MSI。
 - 不 force push；不重写历史（除非用户明确要求并为转公开做准备）。
-- 发布前确认：版本号四处一致 → 测试全绿 → MSI 哈希与验收记录一致。
+- 发布前确认：版本号**五处**一致 → 测试全绿 → **exe 的 SHA-256 与发布记录一致** → `latest.json` 的 `signature` 与 `.sig` **逐字相等**。
+- **转公开或大版本发布前做一次只读审查**：git 全历史扫 `.db/.sqlite/.exe/.zip` 与凭据、本机绝对路径（方法见 2026-10-23 审查报告，已归档到 `D:\FitwiseBackup\docs-archive\GITHUB_RELEASE_REVIEW_0.9.0.md`）。
 
 ### 2.4 已明确排除、不要重新引入
 
@@ -88,21 +90,21 @@
 | 目录 | 内容 |
 |---|---|
 | `pages/` | 7 页：`TodayPage` `FoodPage` `BodyPage` `WorkoutPage` `TrendsPage`(嵌于身体页) `SettingsPage` `FoodLibraryPage`(0.9.2 新增，工具分组) |
-| `components/` | 16 个：食材库弹窗、菜谱编辑/管理抽屉、菜谱入餐草稿、照搬弹窗、各类更正弹窗、营养环、日历、趋势仪表等 |
-| `domain/` | 17 个纯逻辑模块：`nutritionDisplay` `foodLibrary` `meals` `body` `workouts` `review` `diary` `preferences` `navigation` `todayHints` `energyDisplay` `privacy` `resetState` `recipes` `seed` `time` `calculations` |
+| `components/` | **28 个**：食材库弹窗、菜谱编辑/管理抽屉、菜谱入餐草稿、照搬弹窗、各类更正弹窗、营养环、日历、趋势仪表、AI 采集（设置/草稿）弹窗、更新面板、食物柜面板等 |
+| `domain/` | **20 个**纯逻辑模块：`nutritionDisplay` `foodLibrary` `meals` `body` `workouts` `review` `diary` `preferences` `navigation` `todayHints` `energyDisplay` `privacy` `resetState` `recipes` `seed` `time` `calculations` `targets` `pantry` `types` |
 | `store/appStore.ts` | 前端状态与领域动作入口（zustand） |
 | `data/` | `domainCommands`（命令构造）、`domainQueries`、`foodLibrary`、`storage`（桌面/浏览器适配） |
 | `styles/` | `tokens` `theme` `base` `fonts` + `styles.css` |
 
 ### 3.2 后端 `src-tauri/src/`
 
-**功能模块（15）**：`domain_commands`（命令白名单与分发）、`domain_store`（SQLite 仓库、迁移门闩）、`domain_queries`（投影查询、JSON 导出）、`domain_upgrade`（升级快照/对账/回滚）、`food_library`、`food_management`（在 `food_library.rs` 内）、`food_catalog`（内置目录解析与启动幂等合并）、`ai_collect`（本机 Ollama 客户端与草稿校验）、`update_proxy`（系统代理读取）、`meal_corrections`、`recipe_meal_commands`、`recipes`、`record_commands`、`body_commands`、`workout_commands`、`data_diagnostics`
+**功能模块（16）**：`domain_commands`（命令白名单与分发）、`domain_store`（SQLite 仓库、迁移门闩）、`domain_queries`（投影查询、JSON 导出）、`domain_upgrade`（升级快照/对账/回滚）、`food_library`、`food_management`（在 `food_library.rs` 内）、`food_catalog`（内置目录解析与启动幂等合并）、`ai_collect`（本机 Ollama 客户端与草稿校验）、`update_proxy`（系统代理读取）、`pantry_commands`（食物柜）、`meal_corrections`、`recipe_meal_commands`、`recipes`、`record_commands`、`body_commands`、`workout_commands`、`data_diagnostics`
 
-**测试接线（重要，2026-10-25 纠正）**：独立的 `*_tests.rs` 文件由 `domain_commands.rs` 内 `mod tests { include!("xxx_tests.rs"); ... }` **include! 宏**接入（六个文件：body/workout/meal_copy/recipe_meal/food_management/upgrade_compat + 0.9.2 新增 target_profile），共享 `connection()/request()/bootstrap()` 辅助函数；`lib.rs` 只声明 `domain_reset_tests` 与 `migration_scenario_tests` 两个独立 mod。**新增命令测试：建独立 `xxx_tests.rs` 文件 + 在 include! 列表追加一行**，不要往 lib.rs 加 mod（会被当成孤儿忽略——曾因此误判删除，编译器救回，见 git 历史 2337fe5/5ff7210）。
+**测试接线（重要，2026-10-26 复核）**：`domain_commands.rs` 内 `mod tests { include!("xxx_tests.rs"); ... }` 以 **include! 宏**接入 **8 个**测试文件（body / meal_copy / workout / recipe_meal / pantry / food_management / upgrade_compat / target_profile），共享 `connection()/request()/bootstrap()` 辅助函数；另有 `ai_collect.rs` 与 `food_catalog.rs` 各带 1 个独立测试文件，**全项目合计 10 个** `*_tests.rs`。`lib.rs` 只声明 `domain_reset_tests` 与 `migration_scenario_tests` 两个独立 mod。**新增命令测试：建独立 `xxx_tests.rs` 文件 + 在 include! 列表追加一行**，不要往 lib.rs 加 mod（会被当成孤儿忽略——曾因此误判删除，编译器救回，见 git 历史 2337fe5/5ff7210）。
 
 ### 3.3 命令通道（三层，必须同步改）
 
-Tauri 命令只有 **16 个**（`lib.rs::generate_handler`）。真正的业务命令走 `execute_domain_command`，其 `commandKind` 白名单当前 **27** 种，包括：
+Tauri 命令只有 **16 个**（`lib.rs::generate_handler`）。真正的业务命令走 `execute_domain_command`，其 `commandKind` 白名单当前 **28** 种，包括：
 
 ```
 add_meal  revise_meal  void_meal  copy_meal  record_food_meal  record_recipe_meal
@@ -111,6 +113,7 @@ add_workout  revise_workout  void_workout  undo_workout_correction  restore_void
 save_food_definition  revise_food_definition  set_food_archived  delete_food
 correct_food_identity  set_food_favorite
 save_recipe_version  set_checkin  set_day_complete  set_target_profile
+pantry_adjust  pantry_update_item  pantry_delete_item
 ```
 
 **新增一个命令必须同一次提交改四处**：
@@ -136,12 +139,12 @@ save_recipe_version  set_checkin  set_day_complete  set_target_profile
 工具链（已验证，无需完整 Visual Studio IDE）：VS Code、Rust stable `x86_64-pc-windows-msvc`、VS 2022 Build Tools（VCTools）、Windows SDK、WebView2。
 
 ```powershell
-npm test                                    # vitest，预期 269 通过 / 34 文件
+npm test                                    # vitest，预期 327 通过 / 44 文件
 npm run build                               # tsc -b + vite build，预期 0 错误
-cargo test --manifest-path src-tauri/Cargo.toml        # 预期 102 通过
+cargo test --manifest-path src-tauri/Cargo.toml        # 预期 124 通过
 cargo fmt  --manifest-path src-tauri/Cargo.toml -- --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-npm run tauri build                         # 产出 MSI + NSIS，约 4 分钟
+npm run tauri build                         # 产出 NSIS exe + .sig（MSI 自 0.9.3 起退役），约 4 分钟
 ```
 
 **重要**：首次构建前若 `src-tauri/target` 已被清空，release 全量编译需要 **20–40 分钟**（2026-10-25 该目录曾被清理以回收 55.6 GB）。
@@ -176,10 +179,9 @@ npm run tauri build                         # 产出 MSI + NSIS，约 4 分钟
 
 ### 版本路线（2026-10-26 起以 docs/ROADMAP.md 为准）
 
-- **0.10.1（修订版，攒批中）**：更新器代理跟随 + 静默失败提示 + 日常反馈修复。
+- **0.11.0（已发布）**：大功能版——内置食材目录（235 项 / 八大类，USDA SR Legacy 单源，人工收录制不自动上传）+ AI 采集通道（本机 Ollama，草稿不入账）+ 更新器网络三件套（代理跟随/失败提示/错误详情）+ 镜像后备。原 0.10.1 与 0.12.0 已并入本版。零迁移。
 - **0.10.0（已交付）**：实机反馈六项修复 + 食物柜轻量版（第 11 节）+ OBS-010 菜谱餐次分组 + 分离式记餐 + 深色根治与一屏化。零迁移。
-- **0.11.0（已批准）**：常见食材库内置目录（人工收录制，不自动上传）。
-- **0.12.0**：AI 采集通道（本地 Ollama 优先，草稿不入账）。
+- **0.12.x**：仅剩 Keep 截图誊抄、食材拍照/条码（OCR 评估）。
 - **1.0.0**：正式里程碑（数据格式稳定+公开兼容承诺）。
 
 完整排期、候选池与明确不做清单见 **docs/ROADMAP.md**（路线图唯一出处，随版本维护）。
@@ -193,13 +195,12 @@ npm run tauri build                         # 产出 MSI + NSIS，约 4 分钟
 | 文档 | 位置 | 状态 |
 |---|---|---|
 | `START_HERE.md` | 根目录 | ✅ 唯一权威接手文档（含 OBS 台账唯一权威版） |
-| `README.md` | 根目录 | ✅ 0.9.2 重写为当前能力 |
-| `DAILY_USAGE.md` | 根目录 | ✅ 0.9.2 重写为当前流程 |
+| `README.md` | 根目录 | ✅ 0.11.0 重写为当前能力（原为空文件） |
+| `DAILY_USAGE.md` | 根目录 | ✅ 0.11.0 更新（内置目录 / AI 采集 / 设置页五行） |
 | `AGENTS.md` | 根目录 | ✅ 纪律 + 文档政策（不新建根目录文档；发布三件套） |
 | `THIRD_PARTY_NOTICES.md` | 根目录 | ✅ 静态声明 |
 | `docs/releases/v0.9.1.md` 等 | docs/releases/ | ✅ 每版一份发布记录（含升级验收） |
-| `docs/history/PROJECT_MEMORY.md` 等 | docs/history/ | ⚠️ 仅历史；PROJECT_MEMORY 停在 0.9.0（schema v12 描述已失效） |
-| `GITHUB_RELEASE_REVIEW.md` | 根目录（未跟踪） | ⚠️ 仅历史，故意不提交 |
+| `docs/history/PROJECT_MEMORY.md`、`PLAN_NEXT_0.6-0.9.md`、`ROADMAP_0.5.md` | docs/history/ | ⚠️ 仅历史；PROJECT_MEMORY 停在 0.9.0（schema v12 描述已失效） |
 | 《轻衡问题台账与版本处理总览.md》 | 项目外（WorkBuddy） | ⚠️ 已废弃；以本文件 §5 为准 |
 
 **发布三件套（写进 AGENTS.md 的政策）**：`docs/releases/vX.Y.Z.md` 一份记录 + 刷新本文件「当前事实」+ DAILY_USAGE（用户可见行为变化时）。开发过程中不再新建报告类文档。
@@ -214,7 +215,10 @@ npm run tauri build                         # 产出 MSI + NSIS，约 4 分钟
 4. **不要用命令行 / 自动化启动生产 exe 做持久化验证**。历史上出现过：工具上下文读到的 AppData 路径是**另一套较小的数据库**，与用户正常入口打开的不是同一份文件视图。验证必须通过 Windows Explorer / 开始菜单由用户亲自打开。
 5. **沙箱代理**：AI 会话环境可能注入 `HTTP_PROXY=http://127.0.0.1:8480`（由 `sandbox-cli.exe` 提供）。用户自开 PowerShell 不继承该变量。曾出现 `schannel: server closed abruptly` 的瞬时失败，重试即好——**不要据此改 git 或系统 TLS 配置**。
 6. **PowerShell 5.1 读无 BOM 的 `.ps1` 按 ANSI 解码**：写脚本时保持纯 ASCII，否则中文乱码。
-7. **中文文件名与 GitHub**：Release 附件会被净化成 ASCII。上传时用 `FitwiseLocal_0.9.x_x64_zh-CN.msi` 作为实际文件名，中文名放 label（`gh release create TAG "path#label"`）。
+7. **中文文件名与 GitHub**：Release 附件会被净化成 ASCII，且**净化结果不等于** `latest.json` 里写的资产名。上传前必须**手动**重命名为 `FitwiseLocal_X.Y.Z_x64-setup.exe`（`.sig` 同名），否则 updater 的 URL 会 404。
+8. **1420 落在 Windows 保留端口段**：本机 `netsh int ipv4 show excludedportrange protocol=tcp` 显示 **1344–1443** 被 Hyper-V/WSL 预留，vite 配置的 1420 绑不上（EACCES，`strictPort: true` 直接失败）。浏览器复查用 `npx vite --host 127.0.0.1 --port 5173`（5199 亦可，但历史进程可能占着）。
+9. **serde 静默丢字段**：`food_library::search_state` 把定义反序列化成 `Definition` 结构体再序列化返回，**结构体没声明的字段会被静默丢弃**。已栽三次：`catalogId`（徽标与分组失效）、`category`、`sourceRef`（来源悬浮失效）。新增任何要在前端展示的定义字段，必须同步加进 `Definition` 并补一条搜索投影守卫测试。
+10. **思考型模型必须关思考**：qwen3.x 默认先生成上千字 `thinking`，既慢又会吃掉 `num_predict` 预算导致正文为空（实测 4b：开思考 28.7 秒且正文空；`"think": false` 后 0.4 秒、三条全出）。另：`qwen3.6:35b-a3b-q4_K_M` 在本机无论带不带该参数都返回 500（模型加载失败，非应用缺陷），验收用 qwen3.5:4b/9b 或 gemma4:e2b。
 
 ---
 
@@ -237,7 +241,7 @@ npm run tauri build                         # 产出 MSI + NSIS，约 4 分钟
 2. 四处版本号是否一致（`package.json`、`Cargo.toml`、`tauri.conf.json`、`Cargo.lock`）。
 3. 你是否确认 schema 为 v14、迁移共 14 个、命令白名单与第 3.3 节一致。
 4. 你理解的下一步最小改动是什么，**不会触碰**哪些数据范围，打算跑哪些测试。
-5. 若发现本文件与代码不一致，**列出证据并先更新本文件**，不要静默假设。
+5. 若发现本文件与代码不一致，**列出证据并先更新本文件**，不要静默假设；排查时先对照 §7 的已知陷阱（保留端口段 / serde 丢字段 / 思考型模型）。
 
 ---
 
