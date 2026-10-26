@@ -14,3 +14,7 @@ build-logs/
 
 # 设计样张是生成物（node scripts/build-prototype.mjs 产出，含内联字体，约 4.6 MB）
 design/prototype/index.html
+
+# USDA SR Legacy 全量数据包（约 200 MB，由 fetch-dataset.mjs 按需下载，不入库）
+scripts/build-food-catalog/sr-legacy/
+scripts/build-food-catalog/sr-legacy.zip

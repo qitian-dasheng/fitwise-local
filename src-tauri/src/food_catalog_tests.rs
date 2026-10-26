@@ -112,7 +112,9 @@ fn merge_is_idempotent_and_respects_user_edits_and_tombstones() {
     assert!(note2.contains("跳过"));
     let envelope2 = load_envelope(&connection).unwrap().unwrap();
     let root2: Value = serde_json::from_str(&envelope2).unwrap();
-    assert_eq!(catalog_definitions(&root2["state"]).len(), 69);
+    // 计数按目录实际条目数推导（目录会随版本扩充，不写死数字）：全部条目减去 1 个墓碑。
+    let (_, items2) = parse_catalog().unwrap();
+    assert_eq!(catalog_definitions(&root2["state"]).len(), items2.len() - 1);
 }
 
 #[test]

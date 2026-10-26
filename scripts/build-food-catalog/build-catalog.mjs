@@ -25,22 +25,30 @@ const manifest = JSON.parse(readFileSync(resolve(here, "manifest.json"), "utf8")
 const data = JSON.parse(readFileSync(srPath, "utf8"));
 const byId = new Map(data.SRLegacyFoods.map((item) => [String(item.fdcId), item]));
 
+/**
+ * USDA 每个食物带两条 "Energy" 营养（一条 kcal、一条 kJ），仅按名称匹配会随机取到 kJ，
+ * 导致能量值虚高约 4.18 倍且单位仍标 kcal。因此能量必须按 unitName 精确锁定 kcal；
+ * 只有 kJ 的条目宁可标 unknown，也不做换算（遵守"不做任何推算"）。
+ */
 const NUTRIENT_MAP = {
-  calories: /^energy$/i,
-  protein: /^protein$/i,
-  carbohydrates: /^carbohydrate, by difference$/i,
-  fat: /^total lipid \(fat\)$/i,
-  fiber: /^fiber, total dietary$/i,
-  sugar: /^sugars, total including nlea$/i,
-  sodium: /^sodium, na$/i,
+  calories: { name: /^energy$/i, unit: "kcal" },
+  protein: { name: /^protein$/i },
+  carbohydrates: { name: /^carbohydrate, by difference$/i },
+  fat: { name: /^total lipid \(fat\)$/i },
+  fiber: { name: /^fiber, total dietary$/i },
+  sugar: { name: /^sugars, total including nlea$/i },
+  sodium: { name: /^sodium, na$/i },
 };
 
 function extractNutrients(food) {
   const found = {};
   for (const entry of food.foodNutrients ?? []) {
     const name = entry.nutrient?.name ?? "";
-    for (const [key, regex] of Object.entries(NUTRIENT_MAP)) {
-      if (regex.test(name) && entry.amount !== null && entry.amount !== undefined) found[key] = entry.amount;
+    const unitName = (entry.nutrient?.unitName ?? "").toLowerCase();
+    for (const [key, spec] of Object.entries(NUTRIENT_MAP)) {
+      if (!spec.name.test(name)) continue;
+      if (spec.unit && unitName !== spec.unit) continue;
+      if (entry.amount !== null && entry.amount !== undefined) found[key] = entry.amount;
     }
   }
   return found;
@@ -95,6 +103,28 @@ for (const [fdcId, meta] of Object.entries(manifest)) {
 
 const categories = {};
 for (const item of items) categories[item.category] = (categories[item.category] ?? 0) + 1;
+
+/**
+ * 能量单位回归守卫：USDA 同时给 kcal 与 kJ 两条 Energy，取错会让数值虚高约 4.18 倍。
+ * 用已知条目区间 + 非油脂上限双重断言，构建期就失败，而不是等到用户看到离谱热量。
+ */
+const ENERGY_SANITY = { 鸡蛋: [130, 160], 全脂牛奶: [50, 75], 橄榄油: [860, 910], 香蕉: [80, 100] };
+for (const [name, [low, high]] of Object.entries(ENERGY_SANITY)) {
+  const item = items.find((entry) => entry.name === name);
+  if (!item) throw new Error(`能量守卫：目录缺少样例条目「${name}」`);
+  const value = item.version.nutrition.calories.value;
+  if (typeof value !== "number" || value < low || value > high) {
+    throw new Error(`能量守卫失败：「${name}」为 ${value} kcal，超出 [${low}, ${high}]，疑似把 kJ 当成 kcal。`);
+  }
+}
+const outliers = items.filter(
+  (item) => item.category !== "油脂调味" && item.version.nutrition.calories.value > 950,
+);
+if (outliers.length) {
+  throw new Error(
+    `能量守卫：非油脂条目能量异常偏高（疑似 kJ）：${outliers.map((item) => `${item.name}=${item.version.nutrition.calories.value}`).join("、")}`,
+  );
+}
 
 mkdirSync(dirname(catalogPath), { recursive: true });
 writeFileSync(catalogPath, JSON.stringify({ catalogVersion: CATALOG_VERSION, generatedAt: now, dataSource: "USDA FoodData Central SR Legacy（公有领域）", items }, null, 1) + "\n");
