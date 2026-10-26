@@ -110,7 +110,7 @@ export function SettingsPage() {
         <SettingsRow
           icon={<ShieldCheck size={17} />}
           title="关于与更新"
-          summary={isTauri() ? (version ? `当前版本 ${version} · 更新检查是唯一网络行为` : "读取版本中…") : "浏览器预览 · 无桌面更新能力"}
+          summary={isTauri() ? (version ? `当前版本 ${version} · 外网仅更新检查` : "读取版本中…") : "浏览器预览 · 无桌面更新能力"}
           onClick={() => setOpenRow("update")}
         />
         <SettingsRow

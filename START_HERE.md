@@ -12,31 +12,31 @@
 |---|---|
 | 是什么 | Windows 本地优先的个人营养/饮食/体重/运动记录桌面应用。无账号、无云端、无遥测，数据全在本机 SQLite |
 | 技术栈 | Tauri 2 + React 19 + TypeScript 5.7 + Rust + SQLite（rusqlite） |
-| 当前版本 | **0.11.0 开发中**（大功能版：权威双源食材目录 + AI 采集通道 + 更新器网络三件套 + 镜像；基线 0.10.0 已发 Release） |
+| 当前版本 | **0.11.0 待验收**（大功能版：235 项内置食材目录 + AI 采集通道 + 更新器网络三件套 + 镜像；基线 0.10.0 已发 Release） |
 | 产品原则 | 事实可追溯、确定性计算、本地隐私、错误可纠正。**不是**聊天机器人式建议 |
 | 医疗边界 | 只做健康管理，不诊断、不治疗、不提供极端热量控制 |
 | 你该做的第一件事 | 不要编码。先按第 9 节写"接手报告" |
 
 ---
 
-## 1. 当前事实（2026-10-26 · 0.11.0 开发轮）
+## 1. 当前事实（2026-10-26 · 0.11.0 待验收轮）
 
 | 项 | 值 |
 |---|---|
 | 仓库 | 本机克隆目录（仓库根 = README 所在目录；公开仓库不再写绝对路径） |
 | 远端 | `https://github.com/qitian-dasheng/fitwise-local.git`（公开） |
-| 当前分支 | `dev/0.9.4`（分支名沿用立项号；0.10.0/0.11.0 全部工作在此）；`main` 与 origin 同步于 0.10.0 发布态 |
-| 工作树 | 干净；仅 `GITHUB_RELEASE_REVIEW.md` 未跟踪（**故意不提交**，是 0.9.0 时期的旧审查报告） |
+| 当前分支 | `main`（0.11.0 提交与发布收尾均在此）；`dev/0.9.4` 已合并同步 0.11.0；`main` 与 `origin/main` 同步 |
+| 工作树 | 干净；仅 `GITHUB_RELEASE_REVIEW.md` 未跟踪（**故意不提交**，是 0.9.0 时期的旧审查报告；它计入 docsGuard 的根目录 md 配额） |
 | tag | `v0.8.1-fallback`、`v0.9.0`–`v0.9.3`、`v0.10.0`（均已推送）；`v0.11.0` 验收通过后打 |
-| Release | **轻衡 0.9.3**（Latest，exe+.sig+latest.json）、轻衡 0.9.2（MSI 保留作回退）、更早归档 |
-| 版本号一致性 | 基线 0.9.1；0.9.2 发布时四处同步升级并须通过 `tests/docsGuard.test.ts`（含 START_HERE 版本声明） |
-| 数据库 schema | **v14**（`PRAGMA user_version`，14 个迁移 `0001`–`0014`）。**0.9.2/0.9.3/0.10.0 均为零迁移版本**（0.10.0 食物柜为 JSON 信封新集合 `pantryItems`，非 SQL 表） |
+| Release | **轻衡 0.10.0**（Latest，exe+.sig+latest.json）、轻衡 0.9.3（exe）、轻衡 0.9.2（MSI 保留作回退）、更早归档 |
+| 版本号一致性 | 五处同步（package.json / tauri.conf.json / Cargo.toml / Cargo.lock / 本文件），由 `tests/docsGuard.test.ts` 冻结 |
+| 数据库 schema | **v14**（`PRAGMA user_version`，14 个迁移 `0001`–`0014`）。**0.9.2 起均为零迁移版本**（食物柜与内置食材目录都走 JSON 信封，非 SQL 表） |
 | 领域持久化格式 | **v4** |
-| 已安装版本 | 0.9.3（NSIS exe，按用户安装；0.9.4 起经应用内自动更新升级） |
+| 已安装版本 | 0.10.0（NSIS exe，按用户安装；此后经应用内自动更新升级） |
 | 数据目录 | `%APPDATA%\cn.fitwise.local\`（当前仅 `fitwise.db`，约 300 KB） |
-| 测试规模 | Rust **112** 项 / 前端 **323+** 项（含 docsGuard/designGuard/stylesGuard 守卫；以 0.9.4 全量为准） |
-| 安装包归档 | `D:\FitwiseBackup\installers\`（0.9.0 与 0.9.1 的 MSI，哈希与验收记录一致） |
-| 文档结构 | 根目录跟踪 md 仅 5 份（README / START_HERE / DAILY_USAGE / AGENTS / THIRD_PARTY_NOTICES）；发布记录 `docs/releases/`，历史文档 `docs/history/`；docsGuard 冻结上限 |
+| 测试规模 | Rust **121** 项 / 前端 **327** 项（含 docsGuard/designGuard/stylesGuard 守卫） |
+| 安装包归档 | `D:\FitwiseBackup\installers\`（历代 MSI/exe 与验收记录哈希） |
+| 文档结构 | 根目录 md 共 6 份（跟踪 5 份 + 未跟踪的 `GITHUB_RELEASE_REVIEW.md`），已达 docsGuard 上限；新增文档只能进 `docs/` |
 
 **0.9.1 发布时的一个关键事实**：发布的 MSI 就是用户实际安装验收过的那一个二进制（`SHA-256 = cdebbe1796908a0d1bad67e178c150e14059aa99d2016a308fee62a7b008b1bd`，7,114,752 B）。Rust + WiX **不是可复现构建**，重新构建会产生不同哈希。若将来需要重新发版，请在发布说明里更新哈希，不要声称"同一构建"。
 
@@ -96,13 +96,13 @@
 
 ### 3.2 后端 `src-tauri/src/`
 
-**功能模块（12）**：`domain_commands`（命令白名单与分发）、`domain_store`（SQLite 仓库、迁移门闩）、`domain_queries`（投影查询、JSON 导出）、`domain_upgrade`（升级快照/对账/回滚）、`food_library`、`food_management`（在 `food_library.rs` 内）、`meal_corrections`、`recipe_meal_commands`、`recipes`、`record_commands`、`body_commands`、`workout_commands`、`data_diagnostics`
+**功能模块（15）**：`domain_commands`（命令白名单与分发）、`domain_store`（SQLite 仓库、迁移门闩）、`domain_queries`（投影查询、JSON 导出）、`domain_upgrade`（升级快照/对账/回滚）、`food_library`、`food_management`（在 `food_library.rs` 内）、`food_catalog`（内置目录解析与启动幂等合并）、`ai_collect`（本机 Ollama 客户端与草稿校验）、`update_proxy`（系统代理读取）、`meal_corrections`、`recipe_meal_commands`、`recipes`、`record_commands`、`body_commands`、`workout_commands`、`data_diagnostics`
 
 **测试接线（重要，2026-10-25 纠正）**：独立的 `*_tests.rs` 文件由 `domain_commands.rs` 内 `mod tests { include!("xxx_tests.rs"); ... }` **include! 宏**接入（六个文件：body/workout/meal_copy/recipe_meal/food_management/upgrade_compat + 0.9.2 新增 target_profile），共享 `connection()/request()/bootstrap()` 辅助函数；`lib.rs` 只声明 `domain_reset_tests` 与 `migration_scenario_tests` 两个独立 mod。**新增命令测试：建独立 `xxx_tests.rs` 文件 + 在 include! 列表追加一行**，不要往 lib.rs 加 mod（会被当成孤儿忽略——曾因此误判删除，编译器救回，见 git 历史 2337fe5/5ff7210）。
 
 ### 3.3 命令通道（三层，必须同步改）
 
-Tauri 命令只有 **13 个**（`lib.rs::generate_handler`）。真正的业务命令走 `execute_domain_command`，其 `commandKind` 白名单当前 **27** 种，包括：
+Tauri 命令只有 **16 个**（`lib.rs::generate_handler`）。真正的业务命令走 `execute_domain_command`，其 `commandKind` 白名单当前 **27** 种，包括：
 
 ```
 add_meal  revise_meal  void_meal  copy_meal  record_food_meal  record_recipe_meal

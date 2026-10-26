@@ -8,7 +8,7 @@ import { isTauriRuntime } from "../data/storage";
 
 /**
  * 设置页「关于与更新」卡：当前版本、手动检查更新（下载→验签→安装→重启），
- * 以及启动静默检查的开关与代理模式。更新检查是本应用唯一的外网行为（README 隐私声明同口径）。
+ * 以及启动静默检查的开关与代理模式。外网仅用于更新检查，AI 采集只连接本机 Ollama（README 隐私声明同口径）。
  * 浏览器预览（非 Tauri）显示不可用说明，不伪装成功。
  */
 export function UpdatePanel() {
@@ -84,7 +84,7 @@ export function UpdatePanel() {
   return (
     <div>
       {/* 0.9.4 起挂在设置页弹窗里，卡片壳与标题由 Modal 提供。 */}
-      <p className="form-hint">更新包带签名校验；更新检查是本应用唯一的外网网络行为。</p>
+      <p className="form-hint">更新包带签名校验；外网仅用于更新检查，AI 采集只连接本机 Ollama。</p>
       <div className="form">
         <label>当前版本<input readOnly value={desktop ? (version || "读取中…") : "浏览器预览（无桌面更新能力）"} /></label>
         <label>代理模式<select value={proxyMode} disabled={!desktop} onChange={(event) => { const mode = event.target.value as UpdateProxyMode; setProxyMode(mode); writeUpdateProxyMode(mode); }}>
