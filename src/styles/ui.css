@@ -131,7 +131,8 @@ body { background: var(--ui-bg); }
 .app-shell .sidebar nav button { color: var(--ui-muted); }
 .app-shell .sidebar nav button:hover { color: var(--ui-ink); background: var(--ui-sunken); }
 .app-shell .sidebar nav button.active { color: var(--ui-ink); background: var(--ui-sunken); font-weight: 600; }
-.app-shell .sidebar .nav-tool-label { color: var(--ui-faint); }
+.app-shell .sidebar .nav-tool-label { color: var(--ui-faint); padding: 12px 13px 2px 45px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; }
+@media (max-width: 720px) { .app-shell .sidebar .nav-tool-label { display: none; } }
 .app-shell .sidebar .brand strong { color: var(--ui-ink); }
 .app-shell .sidebar .brand span { color: var(--ui-faint); }
 .app-shell .sidebar .brand-mark { background: var(--ui-primary); color: var(--ui-primary-ink); border-radius: 9px; }

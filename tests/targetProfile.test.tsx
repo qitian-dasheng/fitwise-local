@@ -1,7 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { SettingsPage } from "../src/pages/SettingsPage";
+import { TodayPage } from "../src/pages/TodayPage";
 import { initialState } from "../src/domain/seed";
 import { useAppStore } from "../src/store/appStore";
 import { validateTargetProfileInput } from "../src/domain/targets";
@@ -36,6 +36,8 @@ const button = (text: string) =>
   [...host.querySelectorAll("button")].find((item) => item.textContent?.includes(text)) as HTMLButtonElement;
 const input = (label: string) =>
   [...host.querySelectorAll("label")].find((item) => item.textContent?.includes(label))?.querySelector("input") as HTMLInputElement;
+/** 0.11.0 起目标是今日页单一入口：按钮只有图标，按 aria-label 定位。 */
+const targetButton = () => host.querySelector('[aria-label="个人目标"]') as HTMLButtonElement;
 
 async function fill(element: HTMLInputElement, value: string) {
   await act(async () => {
@@ -54,10 +56,10 @@ it("validates the target mirror with the same rules as Rust", () => {
   expect(validateTargetProfileInput(valid).payload).toEqual(valid);
 });
 
-it("edits targets from the settings page and keeps an audit trail", async () => {
-  await act(async () => { root.render(<SettingsPage />); });
-  // 0.9.4 设置行 + 弹窗：先开「个人目标」弹窗，再进编辑表单。
-  await act(async () => button("个人目标").click());
+it("edits targets from the today page and keeps an audit trail", async () => {
+  await act(async () => { root.render(<TodayPage goTo={() => {}} />); });
+  // 0.11.0 起「个人目标」只有今日页一个入口（设置页重复入口已移除）。
+  await act(async () => targetButton().click());
   expect(host.querySelector(".modal")).not.toBeNull();
   await act(async () => button("编辑目标").click());
   expect(input("热量下限 kcal").value).toBe("1700");
@@ -71,15 +73,15 @@ it("edits targets from the settings page and keeps an audit trail", async () => 
   const details = (events[0].payload as { details: { before: { proteinTargetG: number }; after: { proteinTargetG: number } } }).details;
   expect(details.before.proteinTargetG).toBe(100);
   expect(details.after.proteinTargetG).toBe(120);
-  // 保存成功后编辑表单收起，弹窗内展示新值；设置行摘要同步。
+  // 保存成功后编辑表单收起，弹窗内展示新值；今日页蛋白质目标同步。
   expect(host.querySelector("form")).toBeNull();
   expect(host.textContent).toContain("120 g / 25 g");
-  expect(host.textContent).toContain("蛋白 120 g");
+  expect(host.textContent).toContain("目标 120");
 });
 
 it("rejects a disordered range client-side without touching the store", async () => {
-  await act(async () => { root.render(<SettingsPage />); });
-  await act(async () => button("个人目标").click());
+  await act(async () => { root.render(<TodayPage goTo={() => {}} />); });
+  await act(async () => targetButton().click());
   await act(async () => button("编辑目标").click());
   await fill(input("热量下限 kcal"), "2000");
   await act(async () => host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));

@@ -44,8 +44,8 @@ it("设置页不再提供能量单位/主题选择器（显示偏好卡已删除
   await render(<SettingsPage />);
   expect(host.querySelector('[data-testid="energy-unit-select"]')).toBeNull();
   expect(host.querySelector('[data-testid="theme-select"]')).toBeNull();
-  const profile = useAppStore.getState().profile;
-  expect(host.textContent).toContain(`${profile.dailyCalories.min}–${profile.dailyCalories.max} kcal`);
+  // 0.11.0：个人目标从设置页移除，今日页为单一入口（此处钉死，防止重复入口回流）。
+  expect(host.textContent).not.toContain("个人目标");
 });
 
 it("遗留的 kJ 偏好被忽略：饮食页各处始终以 kcal 显示", async () => {

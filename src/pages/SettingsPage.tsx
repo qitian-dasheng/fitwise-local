@@ -1,10 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
-import { Activity, Bot, ChevronRight, Database, HardDrive, RotateCcw, ShieldCheck } from "lucide-react";
+import { Activity, Bot, ChevronRight, HardDrive, RotateCcw, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAppStore } from "../store/appStore";
 import { Modal } from "../components/Modal";
-import { TargetGoalModal } from "../components/TargetGoalModal";
 import { AiSettingsModal } from "../components/AiSettingsModal";
 import { DataExportPanel } from "../components/DataExportPanel";
 import { RuntimeDiagnostics } from "../components/RuntimeDiagnostics";
@@ -22,7 +21,7 @@ interface DomainStorageStatus {
 
 const isTauri = isTauriRuntime;
 
-type SettingsRowKey = "target" | "data" | "update" | "diagnostics" | "reset" | "ai";
+type SettingsRowKey = "data" | "update" | "diagnostics" | "reset" | "ai";
 
 /** 0.9.4 设置行：图标 + 标题 + 当前值摘要，点击弹窗承载原卡片全部内容。 */
 function SettingsRow({
@@ -41,8 +40,6 @@ function SettingsRow({
 }
 
 export function SettingsPage() {
-  const profile = useAppStore((state) => state.profile);
-  const setTargetProfile = useAppStore((state) => state.setTargetProfile);
   const auditEventCount = useAppStore((state) => state.auditEvents.length);
   const resetDemo = useAppStore((state) => state.resetDemo);
   const [busy, setBusy] = useState(false);
@@ -90,12 +87,6 @@ export function SettingsPage() {
       {message && <div className="ui-card settings-notice" role="status">{message}</div>}
       <div className="ui-card settings-menu">
         <SettingsRow
-          icon={<Database size={17} />}
-          title="个人目标"
-          summary={`目标体重 ${profile.targetWeightKg} kg · ${profile.dailyCalories.min}–${profile.dailyCalories.max} kcal · 蛋白 ${profile.proteinTargetG} g`}
-          onClick={() => setOpenRow("target")}
-        />
-        <SettingsRow
           icon={<Bot size={17} />}
           title="AI 采集"
           summary="用 Ollama 从自然语言生成饮食草稿（默认关闭，仅本机）"
@@ -127,8 +118,6 @@ export function SettingsPage() {
           onClick={() => { setResetAck(false); setOpenRow("reset"); }}
         />
       </div>
-
-      {openRow === "target" && <TargetGoalModal profile={profile} onClose={() => setOpenRow(null)} />}
 
       {aiSettingsOpen && <AiSettingsModal onClose={() => setAiSettingsOpen(false)} />}
       {openRow === "data" && (
