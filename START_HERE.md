@@ -33,7 +33,7 @@
 | 数据库 schema | **v14**（`PRAGMA user_version`，14 个迁移 `0001`–`0014`）。**0.9.2 起均为零迁移版本**（食物柜与内置食材目录都走 JSON 信封，非 SQL 表） |
 | 领域持久化格式 | **v4** |
 | 内置目录版本 | **catalogVersion 3**（235 项 / 八大类；`src-tauri/resources/food-catalog.json` 编译期嵌入，合并时按版本号幂等） |
-| 已安装版本 | 0.10.0（NSIS exe，按用户安装；此后经应用内自动更新升级） |
+| 已安装版本 | **0.11.0**（2026-10-26 经 0.10.0 → 0.11.0 应用内自动更新实测升级，安装目录 `%LOCALAPPDATA%\轻衡\`） |
 | 数据目录 | `%APPDATA%\cn.fitwise.local\`（当前仅 `fitwise.db`，约 300 KB） |
 | 测试规模 | Rust **124** 项 / 前端 **327** 项（含 docsGuard/designGuard/stylesGuard 守卫） |
 | 安装包归档 | `D:\FitwiseBackup\installers\`（历代 MSI/exe 与验收记录哈希） |
