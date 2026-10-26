@@ -16,6 +16,9 @@
 .library-search { flex: 1; position: relative; }
 .library-search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--ui-muted); }
 .library-search input { padding-left: 38px !important; }
+/* 数量摘要与分组标题：让"共多少项、多少是内置"一眼可见。 */
+.library-count { color: var(--ui-faint); font-size: 12px; white-space: nowrap; }
+.library-group-head { margin: 14px 0 6px; color: var(--ui-faint); font-size: 12px; font-weight: 600; letter-spacing: 0.02em; }
 .library-tabs { flex-wrap: wrap; margin-bottom: 10px; }
 .library-tabs button { border: 1px solid var(--ui-line); border-radius: 10px; padding: 8px 12px; background: var(--ui-card); color: var(--ui-muted); }
 .library-tabs button.active { background: var(--ui-sunken); color: var(--ui-ink); border-color: var(--ui-ink); font-weight: 600; }

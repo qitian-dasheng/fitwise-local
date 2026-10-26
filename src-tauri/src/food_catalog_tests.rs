@@ -159,6 +159,45 @@ fn catalog_versions_deserialize_into_domain_basis() {
 }
 
 #[test]
+fn search_results_keep_catalog_marker_for_badges() {
+    // 回归守卫：search_state 会把定义反序列化成 Definition 再序列化返回，
+    // 未在结构体声明的字段会被静默丢弃——曾导致「内置」徽标与分组全部消失。
+    let mut connection = connection();
+    // 空库（无个人食材）→ 合并后搜索结果应全部来自内置目录。
+    let mut state = Map::new();
+    state.insert("profile".into(), json!({"name":"test"}));
+    for collection in COLLECTIONS {
+        state.insert((*collection).to_owned(), json!([]));
+    }
+    crate::domain_store::persist_envelope(
+        &mut connection,
+        STORAGE_NAME,
+        &serde_json::to_string(&json!({"state":state,"version":4})).unwrap(),
+    )
+    .unwrap();
+    merge_once(&mut connection);
+
+    let envelope = load_envelope(&connection).unwrap().unwrap();
+    let root: Value = serde_json::from_str(&envelope).unwrap();
+    let state: Map<String, Value> = root["state"].as_object().unwrap().clone();
+    let (_, catalog) = parse_catalog().unwrap();
+    let items = crate::food_library::search_state(&state, "", "all").unwrap();
+    assert_eq!(items.len(), catalog.len(), "搜索结果数量应与目录条目一致");
+    for item in &items {
+        assert!(
+            item["definition"]["catalogId"].is_string(),
+            "catalogId 在搜索投影中被丢弃：{}",
+            item["definition"]["name"]
+        );
+        assert!(
+            item["definition"]["category"].is_string(),
+            "category 在搜索投影中被丢弃：{}",
+            item["definition"]["name"]
+        );
+    }
+}
+
+#[test]
 fn merge_repairs_legacy_basis_with_extra_field() {
     // 已合并过旧目录的库不会被幂等逻辑重写，合并时必须原地清理非法字段。
     let mut connection = connection();

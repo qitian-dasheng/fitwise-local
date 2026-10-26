@@ -170,14 +170,21 @@ pub(crate) fn generate_draft(base: &str, model: &str, description: &str) -> Resu
 
 // ── Tauri 命令 ──────────────────────────────────────────────
 
+// Tauri 的**同步**命令跑在主线程，而这里用的是 `reqwest::blocking`（最长 120 秒）。
+// 同步命令会直接把窗口卡成「未响应」——实测在 35B 模型上必现。
+// 因此两条命令都改成 async，并把阻塞调用丢进 spawn_blocking，主线程只等结果。
 #[tauri::command]
-pub fn ollama_list_models(base: String) -> Result<Vec<String>, String> {
-    list_ollama_models(&base)
+pub async fn ollama_list_models(base: String) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || list_ollama_models(&base))
+        .await
+        .map_err(|error| format!("Ollama 请求线程异常：{error}"))?
 }
 
 #[tauri::command]
-pub fn ollama_draft(base: String, model: String, description: String) -> Result<Value, String> {
-    generate_draft(&base, &model, &description)
+pub async fn ollama_draft(base: String, model: String, description: String) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || generate_draft(&base, &model, &description))
+        .await
+        .map_err(|error| format!("Ollama 请求线程异常：{error}"))?
 }
 
 #[cfg(test)]

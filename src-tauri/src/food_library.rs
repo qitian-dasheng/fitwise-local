@@ -81,6 +81,13 @@ struct Definition {
     #[serde(default)]
     archived: bool,
     created_at: String,
+    /// 内置目录来源标记（0.11.0）。必须显式声明：`search_state` 会把定义反序列化成本结构
+    /// 再序列化返回，未声明的字段会被静默丢弃，前端就判不出「内置」、分组也失效。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    catalog_id: Option<String>,
+    /// 内置目录分类（主食谷物/蛋奶/…），同样必须显式保留。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    category: Option<String>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -376,6 +383,9 @@ pub(crate) fn apply(
                     favorite: false,
                     archived: false,
                     created_at: now.clone(),
+                    // 新建/副本一律不带目录标记（内置食材被修改 = 生成个人副本）。
+                    catalog_id: None,
+                    category: None,
                 };
                 array_mut(state, "foodDefinitions")?
                     .push(serde_json::to_value(definition).map_err(|error| error.to_string())?);
@@ -623,7 +633,9 @@ pub(crate) fn search_state(
                     .cmp(&right["definition"]["id"].as_str())
             })
     });
-    results.truncate(100);
+    // 上限只作防御：内置目录 235 项，原来的 100 会把「全部」硬截断，
+    // 用户既看不到全部条目、也发现不了少了东西。本地 IPC 传 1000 项仍很轻。
+    results.truncate(1000);
     Ok(results)
 }
 

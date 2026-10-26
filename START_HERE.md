@@ -34,7 +34,7 @@
 | 领域持久化格式 | **v4** |
 | 已安装版本 | 0.10.0（NSIS exe，按用户安装；此后经应用内自动更新升级） |
 | 数据目录 | `%APPDATA%\cn.fitwise.local\`（当前仅 `fitwise.db`，约 300 KB） |
-| 测试规模 | Rust **123** 项 / 前端 **327** 项（含 docsGuard/designGuard/stylesGuard 守卫） |
+| 测试规模 | Rust **124** 项 / 前端 **327** 项（含 docsGuard/designGuard/stylesGuard 守卫） |
 | 安装包归档 | `D:\FitwiseBackup\installers\`（历代 MSI/exe 与验收记录哈希） |
 | 文档结构 | 根目录 md 共 6 份（跟踪 5 份 + 未跟踪的 `GITHUB_RELEASE_REVIEW.md`），已达 docsGuard 上限；新增文档只能进 `docs/` |
 

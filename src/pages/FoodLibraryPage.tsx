@@ -127,6 +127,16 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
       {notice && <p className="library-notice" role="status">{notice}</p>}
       <div className="library-toolbar">
         <label className="library-search"><Search size={17}/><input aria-label="搜索食物或品牌" placeholder={mode === "pantry" ? "搜索柜内食材名称或品牌" : "搜索食物名称或品牌"} value={query} onChange={(event) => setQuery(event.target.value)}/></label>
+        {/* 数量摘要：让"库里到底有多少、其中多少是内置"一眼可见。 */}
+        {mode !== "pantry" && !search.loading && (() => {
+          const catalogCount = search.items.filter((item) => item.definition.catalogId !== undefined).length;
+          const personalCount = search.items.length - catalogCount;
+          return (
+            <span className="library-count" role="status">
+              共 {search.items.length} 项{search.items.length > 0 ? `（个人 ${personalCount} · 内置 ${catalogCount}）` : ""}
+            </span>
+          );
+        })()}
       </div>
       <div className="library-tabs" role="group" aria-label="食材筛选">
         {/* 已归档分组只在确有归档食材时出现（归档是「被引用食材的软删除」，无归档时隐藏减少占位）。 */}
@@ -170,11 +180,19 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
               )}
             </div>
           );
-              const nodes: React.ReactNode[] = personal.map((item) => renderItem(item));
-              if (personal.length > 0 && catalog.length > 0) {
-                nodes.push(<p key="catalog-group-head" className="library-group-head">内置目录（数据来自权威营养资料库，修改会生成个人副本）</p>);
+              // 个人食材与内置目录各带分组标题：即使没有个人食材，内置目录也有明确表头，
+              // 避免"两种来源混在一起分不清"。
+              const nodes: React.ReactNode[] = [];
+              if (personal.length > 0) {
+                if (catalog.length > 0) {
+                  nodes.push(<p key="personal-group-head" className="library-group-head">我的食材</p>);
+                }
+                nodes.push(...personal.map((item) => renderItem(item)));
               }
-              nodes.push(...catalog.map((item) => renderItem(item)));
+              if (catalog.length > 0) {
+                nodes.push(<p key="catalog-group-head" className="library-group-head">内置目录（数据来自权威营养资料库，修改会生成个人副本）</p>);
+                nodes.push(...catalog.map((item) => renderItem(item)));
+              }
               return nodes;
           })()}</> : (
             <div className="library-empty">
