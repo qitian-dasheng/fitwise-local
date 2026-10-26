@@ -59,7 +59,8 @@ Windows 本地优先的个人营养 / 饮食 / 体重 / 运动记录桌面应用
 
 ```bash
 npm install
-npm run dev          # 浏览器预览 http://localhost:1420（无桌面能力：无更新检查、无 AI 采集）
+npm run dev          # 浏览器预览（默认 1420；若本机 1420 被 Hyper-V/WSL 保留端口段占用，
+                     # 改用 npx vite --host 127.0.0.1 --port 5199）
 npm run test         # vitest（含 docsGuard / designGuard / stylesGuard 守卫）
 npx tsc -b
 cd src-tauri && cargo test
