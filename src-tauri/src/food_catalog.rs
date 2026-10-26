@@ -110,6 +110,30 @@ pub(crate) fn merge_food_catalog(connection: &mut Connection) -> Result<String, 
         }
     }
 
+    // 回填来源标记：早期合并没有写入 sourceRef，而幂等逻辑会跳过已存在条目，
+    // 只能在这里按 catalogId 从目录补一次（只补缺失，不覆盖用户改动）。
+    let source_by_catalog: std::collections::HashMap<&str, &Value> = items
+        .iter()
+        .map(|item| (item.catalog_id.as_str(), &item.source_ref))
+        .collect();
+    if let Some(definitions) = state
+        .get_mut("foodDefinitions")
+        .and_then(Value::as_array_mut)
+    {
+        for definition in definitions.iter_mut() {
+            let Some(catalog_id) = definition["catalogId"].as_str().map(str::to_owned) else {
+                continue;
+            };
+            if definition.get("sourceRef").is_some() {
+                continue;
+            }
+            if let Some(source) = source_by_catalog.get(catalog_id.as_str()) {
+                definition["sourceRef"] = (*source).clone();
+                repaired += 1;
+            }
+        }
+    }
+
     // 先收集既有 catalogId（不可变借用），再做插入（可变借用），避免借用冲突。
     let existing_catalog_ids: std::collections::HashSet<String> = state
         .get("foodDefinitions")
@@ -159,6 +183,8 @@ pub(crate) fn merge_food_catalog(connection: &mut Connection) -> Result<String, 
             entry.insert("activeVersionId".into(), json!(item.version["id"]));
             entry.insert("catalogId".into(), json!(item.catalog_id));
             entry.insert("category".into(), json!(item.category));
+            // 来源出处（库名 + FDC 编号 + 英文原名）：前端悬浮提示直接读这里。
+            entry.insert("sourceRef".into(), item.source_ref.clone());
             entry.insert("archived".into(), json!(false));
             entry.insert("createdAt".into(), json!(now));
             definitions.push(definition);

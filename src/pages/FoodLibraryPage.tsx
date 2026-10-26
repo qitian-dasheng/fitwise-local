@@ -156,9 +156,10 @@ export function FoodLibraryPage({ goTo }: { goTo?: (page: string) => void } = {}
             <div key={item.definition.id}>
               <div className="library-item">
                 <div className="library-select">
-                  <strong>{item.definition.name}{item.definition.catalogId !== undefined && <span className="ui-badge flat catalog-badge">内置</span>}</strong>
+                  {/* 来源悬浮：内置条目把库名 + FDC 编号 + 英文原名挂在名称上（原生 title）。 */}
+                  <strong title={(() => { const s = item.definition.sourceRef; return s ? `来源：${s.database} · FDC ${s.fdcId} · ${s.description}` : undefined; })()}>{item.definition.name}{item.definition.catalogId !== undefined && <span className="ui-badge flat catalog-badge" title={(() => { const s = item.definition.sourceRef; return s ? `来源：${s.database} · FDC ${s.fdcId} · ${s.description}` : "内置目录条目"; })()}>内置</span>}</strong>
                   <span>{item.definition.brand || "无品牌"} · {foodBasisLabels[item.definition.measurementBasis]}</span>
-                  <small>每 {item.version.basis.quantity}{foodUnitLabels[item.version.basis.unit]} · {nutrientLabel(item.version.nutrition, "calories", 1, displayUnit)} {energyUnitLabels[displayUnit]} · v{item.version.version}{item.definition.catalogId !== undefined ? " · 来源见悬浮" : ""}</small>
+                  <small>每 {item.version.basis.quantity}{foodUnitLabels[item.version.basis.unit]} · {nutrientLabel(item.version.nutrition, "calories", 1, displayUnit)} {energyUnitLabels[displayUnit]} · v{item.version.version}{item.definition.sourceRef ? " · 来源见悬浮" : ""}</small>
                 </div>
                 <span className="library-item-actions">
                   <button className={`icon-button ${item.definition.favorite ? "favorite" : ""}`} aria-label={`${item.definition.favorite ? "取消收藏" : "收藏"}${item.definition.name}`} disabled={action.busy} onClick={() => { void action.run(`favorite:${item.definition.id}:${!item.definition.favorite}`, (id) => state.setFoodFavorite(item.definition.id, !item.definition.favorite, id)); }}><Star size={17} fill={item.definition.favorite ? "currentColor" : "none"}/></button>

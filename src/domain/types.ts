@@ -49,6 +49,8 @@ export interface FoodDefinition {
   /** 内置目录条目（0.11.0）：catalog-<catalogId>；修改生成个人副本，原条目保留。 */
   catalogId?: string;
   category?: string;
+  /** 内置条目的出处（库名 + FDC 编号 + 英文原名），用于悬浮提示；个人食材无此字段。 */
+  sourceRef?: { database: string; fdcId: number; description: string };
   /** 归档：从日常挑选入口隐藏；历史记录与菜谱快照不受影响。旧数据缺省为未归档。 */
   archived?: boolean;
   createdAt: string;

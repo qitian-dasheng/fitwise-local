@@ -82,7 +82,7 @@ fn merge_is_idempotent_and_respects_user_edits_and_tombstones() {
     let root: Value = serde_json::from_str(&envelope).unwrap();
     let definitions = catalog_definitions(&root["state"]);
     let (catalog_version, items) = parse_catalog().unwrap();
-    assert_eq!(catalog_version, 2);
+    assert_eq!(catalog_version, 3);
     // 期望：全部目录条目（墓碑项 fdc-169282 不插入）——用户修改过的 fdc-167762
     // 以编辑副本形式存在且**保留 catalogId**（编辑不覆盖目录语义），也在计数内。
     let expected = items
@@ -194,6 +194,11 @@ fn search_results_keep_catalog_marker_for_badges() {
             "category 在搜索投影中被丢弃：{}",
             item["definition"]["name"]
         );
+        assert!(
+            item["definition"]["sourceRef"]["fdcId"].is_number(),
+            "sourceRef 在搜索投影中被丢弃：{}",
+            item["definition"]["name"]
+        );
     }
 }
 
@@ -216,7 +221,9 @@ fn merge_repairs_legacy_basis_with_extra_field() {
     .unwrap();
 
     let note = merge_once(&mut connection);
-    assert!(note.contains("修复 1 项"), "{note}");
+    // 修复项包含：非法 basis 字段 + 缺失的 sourceRef 回填（同一条目两处）。
+    assert!(!note.contains("修复 0 项"), "{note}");
+    assert!(note.contains("修复 2 项"), "{note}");
 
     let stored = load_envelope(&connection).unwrap().unwrap();
     let root: Value = serde_json::from_str(&stored).unwrap();
@@ -224,4 +231,15 @@ fn merge_repairs_legacy_basis_with_extra_field() {
     assert!(basis.get("measurementBasis").is_none(), "非法字段未清理：{basis}");
     assert_eq!(basis["quantity"], 100);
     assert_eq!(basis["unit"], "g");
+    // 来源标记回填（早期合并没有写入 sourceRef）。
+    let definition = &root["state"]["foodDefinitions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["catalogId"] == "fdc-167762")
+        .unwrap();
+    assert!(
+        definition["sourceRef"]["fdcId"].is_number(),
+        "sourceRef 未回填：{definition}"
+    );
 }

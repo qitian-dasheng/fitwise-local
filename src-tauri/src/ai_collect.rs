@@ -20,6 +20,40 @@ pub(crate) trait OllamaClient {
 
 pub(crate) struct HttpOllamaClient;
 
+impl HttpOllamaClient {
+    /// 发一次 /api/chat。`send_think_flag` 控制是否带 `"think": false`。
+    fn post(
+        &self,
+        client: &reqwest::blocking::Client,
+        base: &str,
+        model: &str,
+        prompt: &str,
+        send_think_flag: bool,
+    ) -> Result<reqwest::blocking::Response, String> {
+        let mut payload = json!({
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": false,
+            "format": "json",
+            // temperature 0：结构化抽取要确定性；num_predict 防止跑飞；
+            // keep_alive 让模型驻留 30 分钟，避免每次重试都重新加载。
+            "options": {"temperature": 0, "num_predict": 2048},
+            "keep_alive": "30m"
+        });
+        if send_think_flag {
+            // qwen3.x 等思考型模型默认先生成上千字 thinking：既慢，又会吃掉 num_predict
+            // 预算导致正文为空/被截断（实测 qwen3.5-4b-32k：开思考 28.7 秒且正文空，
+            // 关思考 0.4 秒、thinking 0 字符、三条全部输出）。结构化抽取不需要思考过程。
+            payload["think"] = json!(false);
+        }
+        client
+            .post(format!("{base}/api/chat"))
+            .json(&payload)
+            .send()
+            .map_err(|error| format!("Ollama 请求失败（{base}）：{error}"))
+    }
+}
+
 impl OllamaClient for HttpOllamaClient {
     fn chat(&self, base: &str, model: &str, prompt: &str) -> Result<String, String> {
         let base = base.trim_end_matches('/');
@@ -27,19 +61,23 @@ impl OllamaClient for HttpOllamaClient {
             .timeout(std::time::Duration::from_secs(OLLAMA_TIMEOUT_SECS))
             .build()
             .map_err(|error| format!("无法创建 HTTP 客户端：{error}"))?;
-        let response = client
-            .post(format!("{base}/api/chat"))
-            .json(&json!({
-                "model": model,
-                "messages": [{"role": "user", "content": prompt}],
-                "stream": false,
-                "format": "json"
-            }))
-            .send()
-            .map_err(|error| format!("Ollama 请求失败（{base}）：{error}"))?;
-        if !response.status().is_success() {
-            return Err(format!("Ollama 返回错误状态 {}", response.status()));
-        }
+        let first = self.post(&client, base, model, prompt, true)?;
+        let response = if first.status().is_success() {
+            first
+        } else if first.status() == reqwest::StatusCode::BAD_REQUEST {
+            // 只有 400 才意味着「参数不被接受」（个别模型不认识 think），去掉后重试一次。
+            // 5xx 是服务端故障（例如模型加载失败），重试无意义，直接报错。
+            let retry = self.post(&client, base, model, prompt, false)?;
+            if !retry.status().is_success() {
+                return Err(format!("Ollama 返回错误状态 {}", retry.status()));
+            }
+            retry
+        } else {
+            return Err(format!(
+                "Ollama 返回错误状态 {}（模型可能未能加载：内存不足或量化不兼容，可换更小的模型重试）",
+                first.status()
+            ));
+        };
         let body: Value = response
             .json()
             .map_err(|error| format!("Ollama 响应不是 JSON：{error}"))?;
@@ -51,10 +89,14 @@ impl OllamaClient for HttpOllamaClient {
 }
 
 const DRAFT_PROMPT: &str = "\
-你是营养记录助手。从用户的描述中提取每一种食物，输出 JSON 对象：\
-{\"items\":[{\"name\":\"食物名\",\"amountLabel\":\"份量描述\",\"nutrition\":{\"calories\":数字|null,\"protein\":数字|null,\"carbohydrates\":数字|null,\"fat\":数字|null,\"fiber\":数字|null,\"sugar\":数字|null,\"sodium\":数字|null}}]}\
-营养单位固定：千卡/克/克/克/克/克/毫克。只提取用户明确提到或常识上必然包含的食物，不要编造；\
-不确定的营养值填 null。只输出 JSON，不要输出其他文字。\n\n用户描述：";
+你是营养记录助手。用户会用一句话描述一餐吃了什么，你要把描述拆成**逐项**的食物列表。\
+规则：\
+1. 每一种**不同**的食物单独一条，**绝不合并、绝不遗漏**；数量词（一个/一杯/半个/一碗）写进 amountLabel。\
+2. 示例：「早上一个鸡蛋一杯豆浆半个馒头」必须输出 **3 条**：鸡蛋、豆浆、馒头（而不是 1 条）。\
+3. 营养值按**该份量**估算；不确定填 null，不要编造。\
+4. 只输出 JSON，不要任何解释文字。\
+格式：{\"items\":[{\"name\":\"食物名\",\"amountLabel\":\"份量\",\"nutrition\":{\"calories\":数字|null,\"protein\":数字|null,\"carbohydrates\":数字|null,\"fat\":数字|null,\"fiber\":数字|null,\"sugar\":数字|null,\"sodium\":数字|null}}]}\
+营养单位固定：千卡/克/克/克/克/克/毫克。\n\n用户描述：";
 
 /// 列出 Ollama 已装模型（连接测试共用）。
 pub(crate) fn list_ollama_models(base: &str) -> Result<Vec<String>, String> {

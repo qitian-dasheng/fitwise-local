@@ -88,6 +88,9 @@ struct Definition {
     /// 内置目录分类（主食谷物/蛋奶/…），同样必须显式保留。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     category: Option<String>,
+    /// 目录条目的出处（库名 + FDC 编号 + 英文原名）：前端悬浮提示用，同样必须显式保留。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_ref: Option<Value>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -386,6 +389,7 @@ pub(crate) fn apply(
                     // 新建/副本一律不带目录标记（内置食材被修改 = 生成个人副本）。
                     catalog_id: None,
                     category: None,
+                    source_ref: None,
                 };
                 array_mut(state, "foodDefinitions")?
                     .push(serde_json::to_value(definition).map_err(|error| error.to_string())?);

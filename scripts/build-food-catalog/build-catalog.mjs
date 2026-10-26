@@ -15,7 +15,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const srPath = resolve(here, "sr-legacy/FoodData_Central_sr_legacy_food_json_2021-10-28.json");
 const catalogPath = resolve(here, "../../src-tauri/resources/food-catalog.json");
 const NUTRIENT_UNITS = { calories: "kcal", protein: "g", carbohydrates: "g", fat: "g", fiber: "g", sugar: "g", sodium: "mg" };
-const CATALOG_VERSION = 2;
+const CATALOG_VERSION = 3;
 
 if (!existsSync(srPath)) {
   console.error(`缺少 ${srPath}；先运行：node scripts/build-food-catalog/fetch-dataset.mjs`);

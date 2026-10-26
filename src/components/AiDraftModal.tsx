@@ -60,6 +60,7 @@ export function AiDraftModal({ date, onClose }: { date: string; onClose: () => v
           {busy ? <Loader2 size={15} className="animate-spin"/> : <Sparkles size={15}/>} {busy ? "生成中…" : "生成草稿"}
         </button>
         {model && <span className="form-hint">模型 {model}</span>}
+        {busy && <span className="form-hint">本机模型推理中，首次调用需加载模型，可能 30–60 秒；请勿重复点击</span>}
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}
 
