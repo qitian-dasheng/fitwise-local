@@ -17,10 +17,34 @@ if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
 
 const nsisDir = resolve(root, "src-tauri/target/release/bundle/nsis");
 if (!existsSync(nsisDir)) throw new Error(`找不到 ${nsisDir}；先跑 npm run tauri build。`);
-const exe = readdirSync(nsisDir).find((name) => name.endsWith("-setup.exe"));
-if (!exe) throw new Error(`nsis 目录里没有 *-setup.exe：${nsisDir}`);
+// 只认与目标版本号匹配的安装包。nsis 目录会累积多代产物（0.9.2 起），
+// 早期实现用 find() 取目录里第一个 *-setup.exe，结果抓到旧包，
+// 导致 latest.json 里混进上一版的签名（0.11.0 发布轮实际踩中：签的是 0.9.3）。
+const allExe = readdirSync(nsisDir).filter((name) => name.endsWith("-setup.exe"));
+const candidates = allExe.filter((name) => name.includes(version));
+if (candidates.length === 0) {
+  throw new Error(
+    `nsis 目录里没有匹配 ${version} 的 *-setup.exe：${nsisDir}\n现有：${allExe.join("、") || "(空)"}`,
+  );
+}
+if (candidates.length > 1) {
+  throw new Error(`匹配 ${version} 的安装包不止一个，无法确定签名对象：${candidates.join("、")}`);
+}
+const exe = candidates[0];
 const sigFile = exe + ".sig";
-if (!existsSync(resolve(nsisDir, sigFile))) throw new Error(`缺少签名文件 ${sigFile}；确认 TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) 已设置并重建。`);
+const sigPath = resolve(nsisDir, sigFile);
+if (!existsSync(sigPath)) throw new Error(`缺少签名文件 ${sigFile}；确认 TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) 已设置并重建。`);
+
+// 签名自校验：minisign 的 trusted comment 明文写着 file 与 version，
+// 与目标版本不符说明签的不是这个包，直接失败而不是生成一份错清单。
+const signature = readFileSync(sigPath, "utf8").trim();
+const trustedComment = Buffer.from(signature, "base64").toString("utf8").replace(/\s+/g, " ");
+if (!trustedComment.includes(`version:${version}`)) {
+  throw new Error(`签名与版本不匹配：${sigFile} 的 trusted comment 中找不到 version:${version}\n实际：${trustedComment.slice(0, 200)}`);
+}
+if (!trustedComment.includes(exe)) {
+  throw new Error(`签名对应的文件名不是 ${exe}\n实际：${trustedComment.slice(0, 200)}`);
+}
 
 const assetName = `FitwiseLocal_${version}_x64-setup.exe`;
 const manifest = {
@@ -29,7 +53,7 @@ const manifest = {
   pub_date: new Date().toISOString(),
   platforms: {
     "windows-x86_64": {
-      signature: readFileSync(resolve(nsisDir, sigFile), "utf8").trim(),
+      signature,
       url: `https://github.com/${repo}/releases/download/v${version}/${assetName}`,
     },
   },
